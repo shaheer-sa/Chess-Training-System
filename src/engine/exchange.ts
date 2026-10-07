@@ -47,47 +47,64 @@ function tieBreak(a: LegalMove, b: LegalMove): boolean {
   return fromAlgebraic(a.from) < fromAlgebraic(b.from);
 }
 
-function bestExchange(fen: string, targetSquare: Square): SeeResult {
-  const legalMovesResult = getLegalMoves(fen);
-  if (!legalMovesResult.ok) {
-    throw new Error(
-      `Internal invariant violation: getLegalMoves failed during exchange recursion: ${legalMovesResult.error.message}`
-    );
+function bestExchangePos(
+  pos: Chess,
+  targetSqIdx: number,
+  targetRole: Role,
+  targetColor: Color,
+  cache: Map<string, SeeResult>
+): SeeResult {
+  const cacheKey = `${pos.board.occupied.lo}|${pos.board.occupied.hi}|${pos.board.white.lo}|${pos.board.white.hi}|${pos.turn}|${pos.epSquare ?? -1}|${targetRole}`;
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey)!;
   }
 
-  const setupResult = fenOps.parseFen(fen);
-  const pos = Chess.fromSetup(setupResult.unwrap()).unwrap();
   const side = toColor(pos.turn);
-  
   let bestGain = 0;
   let bestLine: ExchangeStep[] = [];
   let bestCapture: LegalMove | null = null;
   
-  const targetSqIdx = fromAlgebraic(targetSquare);
-  if (!pos.board.occupied.has(targetSqIdx)) {
-     return { gain: 0, line: [], move: null };
-  }
-  const targetRole = toRole(pos.board.getRole(targetSqIdx)!);
-  const targetColor = toColor(pos.board.getColor(targetSqIdx)!);
+  const turnSet = pos.turn === 'white' ? pos.board.white : pos.board.black;
+  const epLandingSq = pos.turn === 'white' ? targetSqIdx + 8 : targetSqIdx - 8;
+  const isEpPossible = pos.epSquare !== undefined && pos.epSquare === epLandingSq && targetRole === 'pawn';
 
-  for (const m of legalMovesResult.value) {
-    if (m.promotion && m.promotion !== 'queen') continue;
+  const candidates: LegalMove[] = [];
 
-    let capturesTarget = false;
-    let actualCapturedSquare = m.to;
-
-    if (m.to === targetSquare) {
-      if (m.isCapture) capturesTarget = true;
-    } else if (m.isEnPassant) {
-      const epCapturedIdx = pos.turn === 'white' ? fromAlgebraic(m.to) - 8 : fromAlgebraic(m.to) + 8;
-      if (epCapturedIdx === targetSqIdx) {
-        capturesTarget = true;
-        actualCapturedSquare = toAlgebraic(epCapturedIdx);
+  for (const fromSq of turnSet) {
+    const dests = pos.dests(fromSq);
+    
+    if (dests.has(targetSqIdx)) {
+      const role = toRole(pos.board.getRole(fromSq)!);
+      const isPromo = role === 'pawn' && (targetSqIdx >= 56 || targetSqIdx <= 7);
+      
+      candidates.push({
+        from: toAlgebraic(fromSq),
+        to: toAlgebraic(targetSqIdx),
+        role,
+        promotion: isPromo ? 'queen' : undefined,
+        isCapture: true,
+        isEnPassant: false,
+        isCastling: false,
+      });
+    }
+    
+    if (isEpPossible && dests.has(pos.epSquare!)) {
+      const role = toRole(pos.board.getRole(fromSq)!);
+      if (role === 'pawn' && (fromSq % 8) !== (pos.epSquare! % 8)) {
+        candidates.push({
+          from: toAlgebraic(fromSq),
+          to: toAlgebraic(pos.epSquare!),
+          role: 'pawn',
+          promotion: undefined,
+          isCapture: true,
+          isEnPassant: true,
+          isCastling: false,
+        });
       }
     }
+  }
 
-    if (!capturesTarget) continue;
-
+  for (const m of candidates) {
     const promotionGain = m.promotion === 'queen' ? PIECE_VALUES['queen'] - PIECE_VALUES['pawn'] : 0;
     const capturedValue = getPieceValue(targetRole);
     
@@ -97,10 +114,10 @@ function bestExchange(fen: string, targetSquare: Square): SeeResult {
       to: fromAlgebraic(m.to),
       promotion: m.promotion,
     });
-    const fenAfter = makeFen(posAfter.toSetup());
     const givesCheck = posAfter.isCheck();
 
-    const childResult = bestExchange(fenAfter, m.to);
+    const nextTargetRole = m.promotion === 'queen' ? 'queen' : m.role;
+    const childResult = bestExchangePos(posAfter, fromAlgebraic(m.to), nextTargetRole, side, cache);
     
     const currentGain = capturedValue + promotionGain - childResult.gain;
 
@@ -121,7 +138,7 @@ function bestExchange(fen: string, targetSquare: Square): SeeResult {
         },
         to: m.to,
         captured: {
-          square: actualCapturedSquare,
+          square: toAlgebraic(targetSqIdx),
           role: targetRole,
           color: targetColor,
         },
@@ -133,7 +150,9 @@ function bestExchange(fen: string, targetSquare: Square): SeeResult {
     }
   }
 
-  return { gain: bestGain, line: bestLine, move: bestCapture };
+  const result: SeeResult = { gain: bestGain, line: bestLine, move: bestCapture };
+  cache.set(cacheKey, result);
+  return result;
 }
 
 export function analyzeExchange(fen: string, move: MoveInput): Result<ExchangeReport> {
@@ -165,6 +184,8 @@ export function analyzeExchange(fen: string, move: MoveInput): Result<ExchangeRe
     return { ok: false, error: { code: 'UNSUPPORTED_MOVE_TYPE', message: 'Castling is not supported' } };
   }
 
+  const cache = new Map<string, SeeResult>();
+
   // Calculate materialFromMove
   let materialFromMove = 0;
 
@@ -190,7 +211,16 @@ export function analyzeExchange(fen: string, move: MoveInput): Result<ExchangeRe
   const fenAfter = makeFen(posAfter.toSetup());
 
   const targetSquareForNext = legalMove.to;
-  const seeResult = bestExchange(fenAfter, targetSquareForNext);
+  const targetSqIdxForNext = fromAlgebraic(targetSquareForNext);
+  const targetRoleNext = legalMove.promotion === 'queen' ? 'queen' : legalMove.role;
+
+  const seeResult = bestExchangePos(
+    posAfter,
+    targetSqIdxForNext,
+    targetRoleNext,
+    moverColor,
+    cache
+  );
   const see = materialFromMove - seeResult.gain;
 
   // Compute balanceAfter for the best line
@@ -206,60 +236,82 @@ export function analyzeExchange(fen: string, move: MoveInput): Result<ExchangeRe
   }
 
   const captureOptions = [];
-  const opponentLegalMoves = getLegalMoves(fenAfter);
-  if (opponentLegalMoves.ok) {
-    const oppMoves = opponentLegalMoves.value;
+  
+  const oppTurnSet = posAfter.turn === 'white' ? posAfter.board.white : posAfter.board.black;
+  const oppEpLandingSq = posAfter.turn === 'white' ? targetSqIdxForNext + 8 : targetSqIdxForNext - 8;
+  const oppIsEpPossible = posAfter.epSquare !== undefined && posAfter.epSquare === oppEpLandingSq && targetRoleNext === 'pawn';
+
+  const oppCandidates: LegalMove[] = [];
+
+  for (const fromSq of oppTurnSet) {
+    const dests = posAfter.dests(fromSq);
     
-    for (const oppMove of oppMoves) {
-      if (oppMove.promotion && oppMove.promotion !== 'queen') continue;
-
-      let capturesTarget = false;
-      let actualCapturedSquare = oppMove.to;
-
-      if (oppMove.to === targetSquareForNext) {
-        if (oppMove.isCapture) capturesTarget = true;
-      } else if (oppMove.isEnPassant) {
-        const epIdx = posAfter.turn === 'white' ? fromAlgebraic(oppMove.to) - 8 : fromAlgebraic(oppMove.to) + 8;
-        if (toAlgebraic(epIdx) === targetSquareForNext) {
-          capturesTarget = true;
-          actualCapturedSquare = toAlgebraic(epIdx);
-        }
-      }
-
-      if (capturesTarget) {
-        const childPos = posAfter.clone();
-        childPos.play({
-          from: fromAlgebraic(oppMove.from),
-          to: fromAlgebraic(oppMove.to),
-          promotion: oppMove.promotion,
-        });
-        const childFen = makeFen(childPos.toSetup());
-        
-        const capturedRole = toRole(posAfter.board.getRole(fromAlgebraic(actualCapturedSquare))!);
-        const promoGain = oppMove.promotion === 'queen' ? PIECE_VALUES['queen'] - PIECE_VALUES['pawn'] : 0;
-        const baseGain = getPieceValue(capturedRole) + promoGain;
-        
-        const moverResponse = bestExchange(childFen, oppMove.to);
-        
-        const opponentNetGain = baseGain - moverResponse.gain;
-        const resultForMover = materialFromMove - opponentNetGain;
-
-        captureOptions.push({
-          capturer: {
-            square: oppMove.from,
-            role: oppMove.role,
-            color: toColor(posAfter.turn),
-          },
-          captureSquare: oppMove.to,
-          isEnPassant: oppMove.isEnPassant,
-          promotion: oppMove.promotion,
-          resultForMover,
+    if (dests.has(targetSqIdxForNext)) {
+      const role = toRole(posAfter.board.getRole(fromSq)!);
+      const isPromo = role === 'pawn' && (targetSqIdxForNext >= 56 || targetSqIdxForNext <= 7);
+      
+      oppCandidates.push({
+        from: toAlgebraic(fromSq),
+        to: toAlgebraic(targetSqIdxForNext),
+        role,
+        promotion: isPromo ? 'queen' : undefined,
+        isCapture: true,
+        isEnPassant: false,
+        isCastling: false,
+      });
+    }
+    
+    if (oppIsEpPossible && dests.has(posAfter.epSquare!)) {
+      const role = toRole(posAfter.board.getRole(fromSq)!);
+      if (role === 'pawn' && (fromSq % 8) !== (posAfter.epSquare! % 8)) {
+        oppCandidates.push({
+          from: toAlgebraic(fromSq),
+          to: toAlgebraic(posAfter.epSquare!),
+          role: 'pawn',
+          promotion: undefined,
+          isCapture: true,
+          isEnPassant: true,
+          isCastling: false,
         });
       }
     }
   }
 
-  captureOptions.sort((a, b) => fromAlgebraic(a.capturer.square) - fromAlgebraic(b.capturer.square));
+  for (const oppMove of oppCandidates) {
+    const childPos = posAfter.clone();
+    childPos.play({
+      from: fromAlgebraic(oppMove.from),
+      to: fromAlgebraic(oppMove.to),
+      promotion: oppMove.promotion,
+    });
+    
+    const promoGain = oppMove.promotion === 'queen' ? PIECE_VALUES['queen'] - PIECE_VALUES['pawn'] : 0;
+    const baseGain = getPieceValue(targetRoleNext) + promoGain;
+    
+    const nextTargetRole = oppMove.promotion === 'queen' ? 'queen' : oppMove.role;
+    const moverResponse = bestExchangePos(
+      childPos,
+      fromAlgebraic(oppMove.to),
+      nextTargetRole,
+      toColor(posAfter.turn),
+      cache
+    );
+    
+    const opponentNetGain = baseGain - moverResponse.gain;
+    const resultForMover = materialFromMove - opponentNetGain;
+
+    captureOptions.push({
+      capturer: {
+        square: oppMove.from,
+        role: oppMove.role,
+        color: toColor(posAfter.turn),
+      },
+      captureSquare: oppMove.to,
+      isEnPassant: oppMove.isEnPassant,
+      promotion: oppMove.promotion,
+      resultForMover,
+    });
+  }
 
   return {
     ok: true,
