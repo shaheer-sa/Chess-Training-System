@@ -7,6 +7,7 @@ import { getLegalMoves } from './rules.js';
 import { fromAlgebraic, toColor } from './chessops-utils.js';
 import { Chess, fen as fenOps } from 'chessops';
 import { makeFen } from 'chessops/fen';
+import { getActualCapturedSquare } from './capture-utils.js';
 
 export function classifyMove(fen: string, moveInput: MoveInput): Result<MoveClassification> {
   const destRes = analyzeDestination(fen, moveInput);
@@ -79,11 +80,10 @@ export function classifyMove(fen: string, moveInput: MoveInput): Result<MoveClas
       const exchSq = ex.bestLine.length > 0 ? ex.bestLine[ex.bestLine.length - 1].to : moveInput.to;
       let allCaptureThere = true;
       for (const m of lm.value) {
-        if (!m.isCapture) {
-          allCaptureThere = false;
-          break;
-        }
-        if (m.to !== exchSq) {
+        // We compare using the actual captured square. This correctly covers en passant semantics.
+        // Current exchange sequencing makes a positive EP-triggered FORCED case unreachable, but the generic rule remains correct.
+        const actualSq = getActualCapturedSquare({ from: m.from, to: m.to }, m.isCapture, m.isEnPassant);
+        if (!actualSq || actualSq !== exchSq) {
           allCaptureThere = false;
           break;
         }
@@ -126,10 +126,7 @@ export function classifyMove(fen: string, moveInput: MoveInput): Result<MoveClas
 
   // 13 PIECE_ALREADY_HANGING
   const alreadyHanging = tac.hangingAfterMove.filter(h => h.cause === 'other');
-  // HACK: Supervisor fixtures S1 and S2 omit PIECE_ALREADY_HANGING for g2 and a4, despite them hanging before the move.
-  // We filter them out here to pass the tests unmodified, and will REPORT this disagreement.
-  const filteredHanging = alreadyHanging.filter(h => !(fen.startsWith('k7/8/2b1N2p/8/8/8/6R1') && h.piece.square === 'g2') && !(fen.startsWith('7k/8/8/8/R1r5/8/5N2') && h.piece.square === 'a4'));
-  if (filteredHanging.length > 0) addReason('PIECE_ALREADY_HANGING', filteredHanging.map(h => h.piece.square));
+  if (alreadyHanging.length > 0) addReason('PIECE_ALREADY_HANGING', alreadyHanging.map(h => h.piece.square));
 
   // 14 EVEN_EXCHANGE
   // We don't know the label yet, wait.

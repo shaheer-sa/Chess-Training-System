@@ -7,11 +7,11 @@ describe('Move Classification (Phase 1E)', () => {
     const fixtures = [
       {
         id: 'S1', fen: 'k7/8/2b1N2p/8/8/8/6R1/7K w - - 0 1', move: { from: 'e6', to: 'g5' },
-        label: 'loses_material', netMaterial: -300, reasons: ['PINNED_DEFENDER']
+        label: 'loses_material', netMaterial: -300, reasons: ['PINNED_DEFENDER', 'PIECE_ALREADY_HANGING']
       },
       {
         id: 'S2', fen: '7k/8/8/8/R1r5/8/5N2/K7 w - - 0 1', move: { from: 'f2', to: 'e4' },
-        label: 'safe', netMaterial: 0, reasons: ['OPPONENT_CAPTURE_LOSES']
+        label: 'safe', netMaterial: 0, reasons: ['PIECE_ALREADY_HANGING', 'OPPONENT_CAPTURE_LOSES']
       },
       {
         id: 'S3', fen: '4k3/8/8/2p5/8/8/3P4/3QK3 w - - 0 1', move: { from: 'd2', to: 'd4' },
