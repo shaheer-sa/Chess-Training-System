@@ -299,5 +299,38 @@ describe('Exchange Analysis (Phase 1B)', () => {
       expect(r.bestLine).toHaveLength(1);
       expect(r.bestLine[0].capturer.square).toBe('d1');
     });
+
+    it('King tie-break: lower-value capturer preferred over king', () => {
+      // FEN: 7k/8/8/8/1n6/8/4K3/3R4 b - - 0 1   move: b4d3
+      const res = analyzeExchange('7k/8/8/8/1n6/8/4K3/3R4 b - - 0 1', { from: 'b4', to: 'd3' });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+
+      const r = res.value;
+      expect(r.see).toBe(-300);
+      expect(r.bestLine.map(s => `${s.capturer.square}x${s.to}`)).toEqual(['d1xd3']);
+      expect(r.bestLine[0].capturer.role).toBe('rook');
+      expect(r.captureOptions).toHaveLength(2);
+      expect(r.captureOptions[0].capturer.square).toBe('d1');
+      expect(r.captureOptions[0].resultForMover).toBe(-300);
+      expect(r.captureOptions[1].capturer.square).toBe('e2');
+      expect(r.captureOptions[1].resultForMover).toBe(-300);
+    });
+
+    it('Timing measurement fixture: dense tactical position', () => {
+      // FEN: 3r2bk/3q4/1np2n2/8/1N3N2/1B6/3Q4/3R3K w - - 0 1   move: f4d5
+      const startTime = performance.now();
+      const res = analyzeExchange('3r2bk/3q4/1np2n2/8/1N3N2/1B6/3Q4/3R3K w - - 0 1', { from: 'f4', to: 'd5' });
+      const durationMs = performance.now() - startTime;
+      console.log(`Timing measurement fixture runtime: ${durationMs.toFixed(2)} ms`);
+
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+
+      const r = res.value;
+      expect(r.see).toBe(-300);
+      expect(r.bestLine.map(s => `${s.capturer.square}x${s.to}`)).toEqual(['c6xd5']);
+      expect(r.bestLine[0].capturer.role).toBe('pawn');
+    });
   });
 });

@@ -12,7 +12,15 @@ import {
 import { getLegalMoves } from './rules.js';
 import { fromAlgebraic, toAlgebraic, toRole, toColor } from './chessops-utils.js';
 
-export const PIECE_VALUES: Record<Role, number> = {
+export const PIECE_VALUES: Record<Exclude<Role, 'king'>, number> = {
+  pawn: 100,
+  knight: 300,
+  bishop: 300,
+  rook: 500,
+  queen: 900,
+};
+
+const TIE_BREAK_ORDER: Record<Role, number> = {
   pawn: 100,
   knight: 300,
   bishop: 300,
@@ -21,6 +29,11 @@ export const PIECE_VALUES: Record<Role, number> = {
   king: 10000,
 };
 
+function getPieceValue(role: Role): number {
+  if (role === 'king') return 0;
+  return PIECE_VALUES[role];
+}
+
 interface SeeResult {
   gain: number;
   line: ExchangeStep[];
@@ -28,15 +41,19 @@ interface SeeResult {
 }
 
 function tieBreak(a: LegalMove, b: LegalMove): boolean {
-  const valA = PIECE_VALUES[a.role];
-  const valB = PIECE_VALUES[b.role];
+  const valA = TIE_BREAK_ORDER[a.role];
+  const valB = TIE_BREAK_ORDER[b.role];
   if (valA !== valB) return valA < valB;
   return fromAlgebraic(a.from) < fromAlgebraic(b.from);
 }
 
 function bestExchange(fen: string, targetSquare: Square): SeeResult {
   const legalMovesResult = getLegalMoves(fen);
-  if (!legalMovesResult.ok) return { gain: 0, line: [], move: null };
+  if (!legalMovesResult.ok) {
+    throw new Error(
+      `Internal invariant violation: getLegalMoves failed during exchange recursion: ${legalMovesResult.error.message}`
+    );
+  }
 
   const setupResult = fenOps.parseFen(fen);
   const pos = Chess.fromSetup(setupResult.unwrap()).unwrap();
@@ -72,7 +89,7 @@ function bestExchange(fen: string, targetSquare: Square): SeeResult {
     if (!capturesTarget) continue;
 
     const promotionGain = m.promotion === 'queen' ? PIECE_VALUES['queen'] - PIECE_VALUES['pawn'] : 0;
-    const capturedValue = PIECE_VALUES[targetRole];
+    const capturedValue = getPieceValue(targetRole);
     
     const posAfter = pos.clone();
     posAfter.play({
@@ -157,7 +174,7 @@ export function analyzeExchange(fen: string, move: MoveInput): Result<ExchangeRe
       capturedSqIdx = pos.turn === 'white' ? fromAlgebraic(legalMove.to) - 8 : fromAlgebraic(legalMove.to) + 8;
     }
     const capturedRole = toRole(pos.board.getRole(capturedSqIdx)!);
-    materialFromMove += PIECE_VALUES[capturedRole];
+    materialFromMove += getPieceValue(capturedRole);
   }
 
   if (legalMove.promotion === 'queen') {
@@ -179,7 +196,7 @@ export function analyzeExchange(fen: string, move: MoveInput): Result<ExchangeRe
   // Compute balanceAfter for the best line
   let runningBalance = materialFromMove;
   for (const step of seeResult.line) {
-    const val = PIECE_VALUES[step.captured.role] + (step.promotion === 'queen' ? PIECE_VALUES['queen'] - PIECE_VALUES['pawn'] : 0);
+    const val = getPieceValue(step.captured.role) + (step.promotion === 'queen' ? PIECE_VALUES['queen'] - PIECE_VALUES['pawn'] : 0);
     if (step.side === moverColor) {
       runningBalance += val;
     } else {
@@ -220,7 +237,7 @@ export function analyzeExchange(fen: string, move: MoveInput): Result<ExchangeRe
         
         const capturedRole = toRole(posAfter.board.getRole(fromAlgebraic(actualCapturedSquare))!);
         const promoGain = oppMove.promotion === 'queen' ? PIECE_VALUES['queen'] - PIECE_VALUES['pawn'] : 0;
-        const baseGain = PIECE_VALUES[capturedRole] + promoGain;
+        const baseGain = getPieceValue(capturedRole) + promoGain;
         
         const moverResponse = bestExchange(childFen, oppMove.to);
         
