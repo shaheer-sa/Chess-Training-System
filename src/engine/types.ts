@@ -60,3 +60,29 @@ export interface MoveInput {
   to: Square;
   promotion?: Role;
 }
+
+export interface ExchangeStep {
+  side: Color;
+  capturer: PieceOnSquare;     // capturing piece at its FROM square
+  to: Square;                  // landing square
+  captured: PieceOnSquare;     // removed piece (for en passant: its actual square)
+  promotion?: Role;
+  givesCheck: boolean;
+  balanceAfter: number;        // running net material for the MOVER, starting from materialFromMove
+}
+
+export interface ExchangeReport {
+  fenBefore: string;
+  fenAfter: string;
+  mover: { color: Color; role: Role; from: Square; to: Square; promotion?: Role };
+  materialFromMove: number;
+  see: number;                 // net material for the MOVER, best play
+  bestLine: ExchangeStep[];    // opponent's first capture onward
+  captureOptions: {            // EVERY legal opponent first capture
+    capturer: PieceOnSquare;
+    captureSquare: Square;
+    isEnPassant: boolean;
+    promotion?: Role;
+    resultForMover: number;    // mover's final net material if opponent starts with this capture
+  }[];
+}
