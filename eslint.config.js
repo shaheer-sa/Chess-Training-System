@@ -6,5 +6,16 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     ignores: ['dist/**', 'node_modules/**', '*.log'],
+  },
+  {
+    files: ['src/engine/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['*/app/*', '../../app/*', '../app/*'],
+          message: 'Engine files cannot import from app files.'
+        }]
+      }]
+    }
   }
 );
