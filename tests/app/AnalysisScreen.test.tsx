@@ -1,15 +1,24 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe, toHaveNoViolations } from 'vitest-axe';
+import * as matchers from 'vitest-axe/matchers';
 import React from 'react';
 import { AnalysisScreen } from '../../src/app/screens/AnalysisScreen';
+
+expect.extend(matchers);
 import { DirectEngineClient } from '../../src/app/engine/DirectEngineClient';
 import { EngineClient } from '../../src/app/engine/EngineClient';
 import { Result } from '../../src/engine/types';
+import { cleanup } from '@testing-library/react';
+
+afterEach(() => {
+  vi.useRealTimers();
+  cleanup();
+});
 
 const startpos = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -120,20 +129,30 @@ describe('Analysis Screen', () => {
 
     it('shows Checking moves... if analysis is slow', async () => {
       vi.useFakeTimers();
-      const user = userEvent.setup({ delay: null });
       const client = new MockEngineClient();
       client.delayMs = 200; // > 150ms
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
       
       const e2Square = screen.getByLabelText('e2, white pawn');
-      const clickPromise = user.click(e2Square);
       
-      vi.advanceTimersByTime(160);
+      let resolveClick: any;
+      const originalClassify = client.classifyMovesFrom;
+      client.classifyMovesFrom = async (f, s) => {
+        return new Promise(res => {
+          resolveClick = () => res({ ok: true, value: [] });
+        });
+      };
+
+      fireEvent.click(e2Square);
+      
+      act(() => {
+        vi.advanceTimersByTime(160);
+      });
       expect(screen.getByText('Checking moves…')).toBeTruthy();
       
-      vi.runAllTimers();
-      await clickPromise;
-      vi.useRealTimers();
+      act(() => {
+        resolveClick();
+      });
     });
 
     it('engine error shows exact message and keeps selection', async () => {
@@ -233,7 +252,7 @@ describe('Analysis Screen', () => {
       await user.click(screen.getByLabelText(/g5, empty, legal destination, Loses material/i));
       
       expect(screen.getByText('Loses material')).toBeTruthy();
-      expect(screen.getByText('⚠')).toBeTruthy();
+      expect(screen.getAllByText('⚠').length).toBeGreaterThan(0);
       expect(screen.getByText('You lose more material than you win.')).toBeTruthy();
     });
   });

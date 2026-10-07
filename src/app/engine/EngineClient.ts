@@ -1,4 +1,4 @@
-import { Result, MoveClassification, MoveInput, Square } from '../../engine/types';
+import { Result, MoveClassification, MoveInput, Square } from '../../engine/types.js';
 
 export interface EngineClient {
   classifyMovesFrom(fen: string, from: Square): Promise<Result<MoveClassification[]>>;
