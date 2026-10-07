@@ -2,15 +2,12 @@ import React, { useState } from 'react';
 import { Home } from './screens/Home.js';
 import { Help } from './screens/Help.js';
 import { AnalysisScreen } from './screens/AnalysisScreen.js';
-import { WorkerEngineClient } from './engine/WorkerEngineClient.js';
 
 import { EngineClient } from './engine/EngineClient.js';
 
 export type ScreenName = 'home' | 'help' | 'analysis';
 
-const defaultEngineClient = new WorkerEngineClient();
-
-export const App: React.FC<{ engineClient?: EngineClient }> = ({ engineClient = defaultEngineClient }) => {
+export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) => {
   const [currentScreen, setCurrentScreen] = useState<ScreenName>('home');
   const [initialFen, setInitialFen] = useState<string>('');
 

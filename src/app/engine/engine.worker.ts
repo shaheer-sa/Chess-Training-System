@@ -14,7 +14,7 @@ self.onmessage = (e: MessageEvent) => {
   } catch (error: unknown) {
     self.postMessage({ 
       id, 
-      result: { ok: false, error: { code: 'ILLEGAL_POSITION', message: error instanceof Error ? error.message : 'Unknown error' } } 
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 };

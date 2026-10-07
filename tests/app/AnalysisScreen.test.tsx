@@ -104,7 +104,7 @@ describe('Analysis Screen', () => {
       const a6Square = screen.getByLabelText('a6, empty');
       await user.click(a6Square);
       
-      expect(screen.getByText("That square isn't a legal move for this piece.")).toBeTruthy();
+      expect(screen.getAllByText("That square isn't a legal move for this piece.")[0]).toBeTruthy();
     });
 
     it('piece with no legal moves shows specific message', async () => {
@@ -118,7 +118,7 @@ describe('Analysis Screen', () => {
       await user.click(e1Square);
       
       await waitFor(() => {
-        expect(screen.getByText("This piece has no legal moves.")).toBeTruthy();
+        expect(screen.getAllByText("This piece has no legal moves.")[0]).toBeTruthy();
       });
     });
   });
@@ -175,7 +175,7 @@ describe('Analysis Screen', () => {
       await user.click(e2Square);
       
       await waitFor(() => {
-        expect(screen.getByText("We couldn't analyze this move. Try another square.")).toBeTruthy();
+        expect(screen.getAllByText("We couldn't analyze this move. Try another square.")[0]).toBeTruthy();
       });
     });
 
@@ -243,7 +243,7 @@ describe('Analysis Screen', () => {
       
       await user.click(screen.getByLabelText(/e1, white king/i));
       await waitFor(() => {
-        expect(screen.getByText("This piece has no legal moves.")).toBeTruthy();
+        expect(screen.getAllByText("This piece has no legal moves.")[0]).toBeTruthy();
       });
     });
 

@@ -4,6 +4,7 @@ import { Square } from '../../src/engine/types.js';
 
 class MockWorker {
   onmessage: ((ev: MessageEvent) => void) | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onerror: ((ev: any) => void) | null = null;
   postMessage() {}
   terminate() {}
@@ -14,6 +15,7 @@ global.Worker = MockWorker as any;
 describe('WorkerEngineClient Errors', () => {
   it('exception in worker -> rejects request', async () => {
     const client = new WorkerEngineClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const worker = (client as any).worker as MockWorker;
     
     const promise = client.classifyMove('fen', {from: 'a1', to: 'a2'});
@@ -25,11 +27,13 @@ describe('WorkerEngineClient Errors', () => {
 
   it('worker.onerror -> all pending reject; later requests reject too', async () => {
     const client = new WorkerEngineClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const worker = (client as any).worker as any;
     
     const p1 = client.classifyMove('fen', {from: 'a1', to: 'a2'});
     const p2 = client.classifyMove('fen', {from: 'a2', to: 'a3'});
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     worker.onerror!({ message: 'worker crashed' } as any);
     
     await expect(p1).rejects.toThrow('Worker error');

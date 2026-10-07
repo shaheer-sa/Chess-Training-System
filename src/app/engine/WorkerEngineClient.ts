@@ -5,17 +5,33 @@ export class WorkerEngineClient implements EngineClient {
   private worker: Worker;
   private nextId = 1;
   private pending = new Map<number, { resolve: (res: unknown) => void; reject: (err: unknown) => void }>();
+  private fatalError = false;
 
   constructor() {
     this.worker = new Worker(new URL('./engine.worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (e) => {
-      const { id, result } = e.data;
+      const { id, result, error } = e.data;
       const deferred = this.pending.get(id);
       if (deferred) {
         this.pending.delete(id);
-        deferred.resolve(result);
+        if (error) {
+          deferred.reject(new Error(error));
+        } else {
+          deferred.resolve(result);
+        }
       }
     };
+
+    const handleFatalError = () => {
+      this.fatalError = true;
+      for (const deferred of this.pending.values()) {
+        deferred.reject(new Error("Worker error"));
+      }
+      this.pending.clear();
+    };
+
+    this.worker.onerror = handleFatalError;
+    this.worker.onmessageerror = handleFatalError;
   }
 
   private cache = new Map<string, Result<MoveClassification[]>>();
@@ -40,6 +56,7 @@ export class WorkerEngineClient implements EngineClient {
   }
 
   private postRequest(type: string, payload: unknown): Promise<unknown> {
+    if (this.fatalError) return Promise.reject(new Error("Worker error"));
     return new Promise((resolve, reject) => {
       const id = this.nextId++;
       this.pending.set(id, { resolve, reject });

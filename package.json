@@ -4,10 +4,12 @@
   "description": "Interactive chess training platform focusing on square safety.",
   "type": "module",
   "scripts": {
+    "dev": "vite",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && vite build",
+    "preview": "vite preview",
     "bench": "tsx scripts/bench-exchange.ts"
   },
   "keywords": [

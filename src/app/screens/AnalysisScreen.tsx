@@ -46,15 +46,32 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   const [focusedSquare, setFocusedSquare] = useState<number>(0);
   
   const analyzingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestToken = useRef(0);
 
   useEffect(() => {
+    return () => {
+      if (analyzingTimer.current) clearTimeout(analyzingTimer.current);
+      if (messageTimer.current) clearTimeout(messageTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    requestToken.current++;
+    setSelectedSquare(null);
+    setDestinationSquare(null);
+    setMoves([]);
+    setEngineError(false);
+    
     if (fen) {
       const setup = fenOps.parseFen(fen);
       if (setup.isOk) {
         const posRes = Chess.fromSetup(setup.unwrap());
         if (posRes.isOk) {
-          setPosition(posRes.unwrap());
+          const newPos = posRes.unwrap();
+          setPosition(newPos);
           setValidFen(true);
+          setFlipped(newPos.turn === 'black');
         } else {
           setValidFen(false);
           setPosition(null);
@@ -92,6 +109,14 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     }
 
     if (color === turn) {
+      // F6: tap again to cancel
+      if (selectedSquare === index) {
+        requestToken.current++;
+        setSelectedSquare(null);
+        setDestinationSquare(null);
+        setMoves([]);
+        return;
+      }
       // Select own piece
       setSelectedSquare(index);
       setEngineError(false);
@@ -99,6 +124,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       setMoves([]);
       setAnalyzing(true);
       setShowAnalyzingIndicator(false);
+      const currentToken = ++requestToken.current;
 
       if (analyzingTimer.current) clearTimeout(analyzingTimer.current);
       analyzingTimer.current = setTimeout(() => {
@@ -108,6 +134,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       const algSquare = getSquareName(index) as Square;
       try {
         const res = await engineClient.classifyMovesFrom(fen, algSquare);
+        if (requestToken.current !== currentToken) return;
         if (res.ok) {
           setMoves(res.value);
         } else {
@@ -118,11 +145,14 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
           }
         }
       } catch {
+        if (requestToken.current !== currentToken) return;
         setEngineError(true);
       } finally {
-        setAnalyzing(false);
-        setShowAnalyzingIndicator(false);
-        if (analyzingTimer.current) clearTimeout(analyzingTimer.current);
+        if (requestToken.current === currentToken) {
+          setAnalyzing(false);
+          setShowAnalyzingIndicator(false);
+          if (analyzingTimer.current) clearTimeout(analyzingTimer.current);
+        }
       }
     } else if (selectedSquare !== null) {
       // Selected a destination?
@@ -132,7 +162,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
         setDestinationSquare(index);
       } else {
         setResultMessage("That square isn't a legal move for this piece.");
-        setTimeout(() => setResultMessage(''), 3000);
+        if (messageTimer.current) clearTimeout(messageTimer.current);
+        messageTimer.current = setTimeout(() => setResultMessage(''), 3000);
       }
     }
   };
@@ -150,10 +181,10 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       const currentFile = index & 7;
       let nextRank = currentRank;
       let nextFile = currentFile;
-      if (e.key === 'ArrowUp') nextRank = Math.min(7, currentRank + 1);
-      if (e.key === 'ArrowDown') nextRank = Math.max(0, currentRank - 1);
-      if (e.key === 'ArrowLeft') nextFile = Math.max(0, currentFile - 1);
-      if (e.key === 'ArrowRight') nextFile = Math.min(7, currentFile + 1);
+      if (e.key === 'ArrowUp') nextRank = flipped ? Math.max(0, currentRank - 1) : Math.min(7, currentRank + 1);
+      if (e.key === 'ArrowDown') nextRank = flipped ? Math.min(7, currentRank + 1) : Math.max(0, currentRank - 1);
+      if (e.key === 'ArrowLeft') nextFile = flipped ? Math.min(7, currentFile + 1) : Math.max(0, currentFile - 1);
+      if (e.key === 'ArrowRight') nextFile = flipped ? Math.max(0, currentFile - 1) : Math.min(7, currentFile + 1);
       const nextIndex = (nextRank << 3) | nextFile;
       setFocusedSquare(nextIndex);
       // Wait for render to update tabIndex, then focus
@@ -218,20 +249,20 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
           />
         )}
         {isDestination && !piece && (
-          <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.3)' }} />
+          <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: '#222', border: '2px solid #fff' }} />
         )}
         {(rank === (flipped ? 7 : 0)) && (
-          <div style={{ position: 'absolute', bottom: 2, right: 2, fontSize: '10px', color: isLight ? '#b58863' : '#f0d9b5' }}>
+          <div aria-hidden="true" style={{ position: 'absolute', bottom: 2, right: 2, fontSize: '10px', color: isLight ? '#4a3219' : '#1a1109' }}>
             {getSquareName(index)[0]}
           </div>
         )}
         {(file === (flipped ? 7 : 0)) && (
-          <div style={{ position: 'absolute', top: 2, left: 2, fontSize: '10px', color: isLight ? '#b58863' : '#f0d9b5' }}>
+          <div aria-hidden="true" style={{ position: 'absolute', top: 2, left: 2, fontSize: '10px', color: isLight ? '#4a3219' : '#1a1109' }}>
             {getSquareName(index)[1]}
           </div>
         )}
         {isDestination && piece && (
-          <div style={{ position: 'absolute', width: '100%', height: '100%', border: '4px solid rgba(0,0,0,0.3)', borderRadius: '50%', boxSizing: 'border-box' }} />
+          <div style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid #222', outline: '4px solid #fff', borderRadius: '50%', boxSizing: 'border-box' }} />
         )}
         {isDestination && moveInfo && (
           <div style={{
@@ -261,8 +292,26 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
 
   const selectedDestInfo = destinationSquare !== null ? moves.find(m => m.move.to === getSquareName(destinationSquare)) : null;
 
+  let liveText = '';
+  if (selectedDestInfo) {
+    liveText = `${BADGE_INFO[selectedDestInfo.label].text}. ${BADGE_INFO[selectedDestInfo.label].meaning}`;
+  } else if (engineError) {
+    liveText = "We couldn't analyze this move. Try another square.";
+  } else if (resultMessage) {
+    liveText = resultMessage;
+  } else if (selectedSquare !== null && moves.length === 0 && !analyzing && !engineError) {
+    liveText = "This piece has no legal moves.";
+  } else if (selectedSquare !== null && moves.length > 0 && destinationSquare === null) {
+    liveText = "Tap a square to see why.";
+  } else if (selectedSquare === null && !resultMessage) {
+    liveText = "Tap one of your pieces to check where it can go.";
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
+      <div aria-live="polite" style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+        {liveText}
+      </div>
       <header style={{ padding: '10px', background: '#eee', display: 'flex', justifyContent: 'space-between' }}>
         <strong>Chess Training System</strong>
         {onNavigate && <button onClick={() => onNavigate('home')}>Home</button>}
@@ -281,42 +330,39 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
           </ul>
           <div>
             <input type="text" value={inputFen} onChange={handleFenChange} placeholder="Paste FEN here" style={{ width: '300px' }} />
-            {!validFen && <div style={{ color: 'red' }}>This position isn't valid. Check the FEN.</div>}
+            {!validFen && <div style={{ color: '#333' }}>This position isn't valid. Check the FEN.</div>}
           </div>
         </div>
       )}
 
       {position && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, padding: '10px' }}>
-          <div style={{ flex: '1 1 400px', maxWidth: '600px', margin: '0 auto' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, padding: '4px' }}>
+          <div style={{ flex: '1 1 352px', maxWidth: '600px', margin: '0 auto' }}>
             <div role="grid" aria-label="Chess board" style={{ position: 'relative', width: '100%', paddingBottom: '100%', border: '1px solid #ccc' }}>
               {rows}
             </div>
             
             <div style={{ marginTop: '10px', minHeight: '30px' }}>
-              {resultMessage && <div>{resultMessage}</div>}
-              {selectedSquare === null && !resultMessage && <div>Tap one of your pieces to check where it can go.</div>}
-              {selectedSquare !== null && moves.length === 0 && !analyzing && !engineError && <div>This piece has no legal moves.</div>}
-              {selectedSquare !== null && moves.length > 0 && destinationSquare === null && <div>Tap a square to see why.</div>}
-              {showAnalyzingIndicator && <div>Checking moves…</div>}
-              {engineError && <div>We couldn't analyze this move. Try another square.</div>}
+              <div aria-hidden="true">{liveText}</div>
+              {showAnalyzingIndicator && <div aria-hidden="true">Checking moves…</div>}
             </div>
             
             <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
               <button onClick={() => setFlipped(!flipped)}>Flip Board</button>
+              <button onClick={() => { setFen(''); setInputFen(''); setSelectedSquare(null); setDestinationSquare(null); setMoves([]); }}>Change position</button>
               {onNavigate && <button onClick={() => onNavigate('help')} style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer' }}>What do the labels mean?</button>}
             </div>
           </div>
           
-          <div style={{ flex: '1 1 300px', padding: '20px', background: '#f9f9f9', marginLeft: '10px' }}>
+          <div style={{ flex: '1 1 300px', padding: '20px', background: '#f9f9f9', margin: '4px' }}>
             {selectedDestInfo ? (
-              <div aria-live="polite">
+              <div>
                 <h2>{BADGE_INFO[selectedDestInfo.label].text}</h2>
                 <span style={{ fontSize: '24px' }}>{BADGE_INFO[selectedDestInfo.label].icon}</span>
                 <p>{BADGE_INFO[selectedDestInfo.label].meaning}</p>
               </div>
             ) : (
-              <div>Result panel</div>
+              <div>Results appear here after you choose a destination.</div>
             )}
           </div>
         </div>
