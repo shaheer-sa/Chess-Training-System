@@ -5,7 +5,7 @@ import {
   ExchangeReport,
   ExchangeStep,
   MoveInput,
-  Square,
+  Color,
   Role,
   LegalMove,
 } from './types.js';
@@ -54,7 +54,11 @@ function bestExchangePos(
   targetColor: Color,
   cache: Map<string, SeeResult>
 ): SeeResult {
-  const cacheKey = `${pos.board.occupied.lo}|${pos.board.occupied.hi}|${pos.board.white.lo}|${pos.board.white.hi}|${pos.turn}|${pos.epSquare ?? -1}|${targetRole}`;
+  // Memo is valid ONLY within a single analyzeExchange call: every
+  // position in the tree derives from the root by captures onto one
+  // target square, so non-target squares always hold their original
+  // pieces. Do NOT reuse this cache across calls or for other analyses.
+  const cacheKey = `${pos.board.occupied.lo}|${pos.board.occupied.hi}|${pos.board.white.lo}|${pos.board.white.hi}|${pos.turn}|${pos.epSquare ?? -1}|${targetSqIdx}|${targetRole}`;
   if (cache.has(cacheKey)) {
     return cache.get(cacheKey)!;
   }
