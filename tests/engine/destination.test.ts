@@ -129,5 +129,76 @@ describe('Destination Report (Phase 1A)', () => {
       expect(res.value.geometricAttackers).toEqual([{ square: 'c4', role: 'pawn', color: 'white' }]);
       expect(res.value.geometricDefenders).toEqual([{ square: 'd8', role: 'queen', color: 'black' }]);
     });
+
+    it('Multiple geometric defenders and blocked slider (Black to move)', () => {
+      // Black to move: d5 is defended by Black Knights on c7 and e7.
+      // White rook on a5 attacks d5. White bishop on h1 is blocked from d5 by a white pawn on e4.
+      // FEN: 8/2n1n3/8/R2p4/4P3/8/8/4K2k b - - 0 1
+      const fen = '8/2n1n3/8/R2p4/4P3/8/8/4K2k b - - 0 1';
+      const res = analyzeDestination(fen, { from: 'd5', to: 'd4' });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+      expect(res.value.mover.color).toBe('black');
+      // On d4, does White rook on a5 attack it? No, a5 attacks a4, b4, c4, d4? No, a5 is 5th rank, d4 is 4th rank.
+      // Wait, let's look at the destination d4.
+      // We want multiple defenders on d4, and blocked slider attacking d4.
+      // White bishop on a1 attacks d4. Blocked by white pawn on c3. (a1, b2, c3, d4).
+      // Black Knights on b5, f5 defend d4.
+      // Black pawn on d5 moves to d4.
+      // Black king on h8. White king on e1.
+      // FEN: 7k/8/8/1n3n2/8/2P5/3P4/B3K3 b - - 0 1 -> move d5 to d4. (Wait, black pawn is on d5).
+      // FEN: 7k/8/8/1n1p1n2/8/2P5/8/B3K3 b - - 0 1. move d5 to d4.
+      const fen2 = '7k/8/8/1n1p1n2/8/2P5/8/B3K3 b - - 0 1';
+      const res2 = analyzeDestination(fen2, { from: 'd5', to: 'd4' });
+      expect(res2.ok).toBe(true);
+      if (!res2.ok) return;
+      expect(res2.value.geometricDefenders.sort((a,b) => a.square.localeCompare(b.square))).toEqual([
+        { square: 'b5', role: 'knight', color: 'black' },
+        { square: 'f5', role: 'knight', color: 'black' }
+      ]);
+      // Bishop on a1 is blocked by c3 pawn. The pawn itself attacks d4, but the bishop does not.
+      expect(res2.value.geometricAttackers).toEqual([{ square: 'c3', role: 'pawn', color: 'white' }]);
+    });
+
+    it('Black candidate move into capture and recapture (Black to move)', () => {
+      // Black plays e5xf4. White pawn on g3 recaptures f4.
+      // FEN: 4k3/8/8/4p3/5P2/6P1/8/4K3 b - - 0 1
+      const fen = '4k3/8/8/4p3/5P2/6P1/8/4K3 b - - 0 1';
+      const res = analyzeDestination(fen, { from: 'e5', to: 'f4' });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+      expect(res.value.mover.color).toBe('black');
+      expect(res.value.legalCaptures).toHaveLength(1);
+      expect(res.value.legalCaptures[0].capturer.square).toBe('g3');
+      expect(res.value.legalCaptures[0].captureSquare).toBe('f4');
+    });
+
+    it('Returns INVALID_FEN error for malformed FEN', () => {
+      const res = analyzeDestination('invalid fen', { from: 'e2', to: 'e4' });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error.code).toBe('INVALID_FEN');
+      }
+    });
+
+    it('Returns ILLEGAL_MOVE error for illegal candidate move', () => {
+      // e2 to e5 is an illegal pawn move
+      const fen = '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1';
+      const res = analyzeDestination(fen, { from: 'e2', to: 'e5' });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error.code).toBe('ILLEGAL_MOVE');
+      }
+    });
+
+    it('Returns ILLEGAL_MOVE error for move by wrong side', () => {
+      // White to move, but trying to move Black pawn on d7
+      const fen = '4k3/3p4/8/8/8/8/4P3/4K3 w - - 0 1';
+      const res = analyzeDestination(fen, { from: 'd7', to: 'd5' });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error.code).toBe('ILLEGAL_MOVE');
+      }
+    });
   });
 });
