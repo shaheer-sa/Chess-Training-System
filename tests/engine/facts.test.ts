@@ -51,7 +51,8 @@ describe('Position Facts (Phase 1C)', () => {
     it('Two pins at once (one per color)', () => {
       // White rook on e1 pins Black knight on e5 to Black king on e8.
       // Black rook on d8 pins White bishop on d4 to White queen on d1.
-      const fen = '3rk3/8/8/4n3/3B4/8/8/3RQ3 w - - 0 1';
+      // We need a White king somewhere safe, e.g. a1.
+      const fen = '3rk3/8/8/4n3/3B4/8/8/K2QR3 w - - 0 1';
       const result = getPositionFacts(fen);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -72,8 +73,8 @@ describe('Position Facts (Phase 1C)', () => {
     });
 
     it('A piece between slider and king that belongs to the SLIDER\'s side (must NOT count as a pin)', () => {
-      // Black rook e8, Black knight e4, White king e1
-      const fen = '4r3/8/8/8/4n3/8/8/4K3 w - - 0 1';
+      // Black rook e8, Black knight e4, White king e1. Need Black king.
+      const fen = '4r2k/8/8/8/4n3/8/8/4K3 w - - 0 1';
       const result = getPositionFacts(fen);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -81,8 +82,8 @@ describe('Position Facts (Phase 1C)', () => {
     });
 
     it('Two pieces between slider and king (must NOT count as a pin)', () => {
-      // Black rook e8, White knight e5, White bishop e4, White king e1
-      const fen = '4r3/8/8/4N3/4B3/8/8/4K3 w - - 0 1';
+      // Black rook e8, White knight e5, White bishop e4, White king e1. Need Black king.
+      const fen = '4r2k/8/8/4N3/4B3/8/8/4K3 w - - 0 1';
       const result = getPositionFacts(fen);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -92,7 +93,7 @@ describe('Position Facts (Phase 1C)', () => {
     it('kingZones: king in a corner (zone size 4) and in the center (zone 9), with correct enemyAttackers', () => {
       // White king a1 (corner). Black rook c2 attacks a2, b2.
       // Black king e5 (center). White knight d3 attacks e5, c5, e1, f2, f4, b4, b2. White bishop g3 attacks e5, f4.
-      const fen = '8/8/8/4k3/8/3N2B1/2r5/K7 w - - 0 1';
+      const fen = '8/8/8/4k3/8/3N2B1/2r5/K7 b - - 0 1';
       const result = getPositionFacts(fen);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -116,8 +117,8 @@ describe('Position Facts (Phase 1C)', () => {
     });
 
     it('inCheck/checkers including a double check', () => {
-      // Black king e8 checked by White rook e1 and White knight d6
-      const fen = '4k3/8/3N4/8/8/8/8/4R3 b - - 0 1';
+      // Black king e8 checked by White rook e1 and White knight d6. White King safe on a1.
+      const fen = '4k3/8/3N4/8/8/8/8/K3R3 b - - 0 1';
       const result = getPositionFacts(fen);
       expect(result.ok).toBe(true);
       if (!result.ok) return;

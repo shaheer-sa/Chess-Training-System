@@ -34,7 +34,7 @@ function getPieceValue(role: Role): number {
   return PIECE_VALUES[role];
 }
 
-interface SeeResult {
+export interface SeeResult {
   gain: number;
   line: ExchangeStep[];
   move: LegalMove | null;
@@ -47,7 +47,7 @@ function tieBreak(a: LegalMove, b: LegalMove): boolean {
   return fromAlgebraic(a.from) < fromAlgebraic(b.from);
 }
 
-function bestExchangePos(
+export function bestExchangePos(
   pos: Chess,
   targetSqIdx: number,
   targetRole: Role,
