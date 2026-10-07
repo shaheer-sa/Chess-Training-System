@@ -462,36 +462,33 @@ describe('Analysis Screen', () => {
       });
     });
     it('R2: selected-destination indicator is dashed #1a1a1a', async () => {
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       const client = new MockEngineClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client.classifyMovesFrom = async () => ({ ok: true, value: [{ move: { from: 'e2', to: 'e4' }, label: 'safe' } as any] });
       const { container } = render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
       
-      const e2Square = screen.getByLabelText('e2, white pawn');
-      fireEvent.click(e2Square);
+      fireEvent.click(screen.getByLabelText('e2, white pawn'));
       
-      await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      
-      const e4Square = screen.getByLabelText('e4, empty (legal destination)');
+      const e4Square = await screen.findByLabelText(/e4, empty, legal destination/i);
       fireEvent.click(e4Square);
       
       const indicator = container.querySelector('[style*="dashed"]');
       expect(indicator).toBeTruthy();
-      expect(indicator?.getAttribute('style')).toContain('dashed #1a1a1a');
-      expect(indicator?.getAttribute('style')).not.toContain('solid #fff');
+      expect(indicator?.getAttribute('style')).toMatch(/dashed (#1a1a1a|rgb\(26, 26, 26\))/i);
+      expect(indicator?.getAttribute('style')).not.toMatch(/solid (#fff|rgb\(255, 255, 255\))/i);
     });
 
     it('R3: Esc fully cancels selection', async () => {
-      const user = userEvent.setup();
       const client = new MockEngineClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client.classifyMovesFrom = async () => ({ ok: true, value: [{ move: { from: 'e2', to: 'e4' }, label: 'safe' } as any] });
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
       
-      await user.click(screen.getByLabelText('e2, white pawn'));
-      expect(screen.getByLabelText('e4, empty (legal destination)')).toBeTruthy();
+      fireEvent.click(screen.getByLabelText('e2, white pawn'));
       
-      await user.keyboard('{Escape}');
+      expect(await screen.findByLabelText(/e4, empty, legal destination/i)).toBeTruthy();
+      
+      fireEvent.keyDown(window, { key: 'Escape' });
       
       const allLabels = screen.queryAllByLabelText(/legal destination/);
       expect(allLabels.length).toBe(0);
@@ -499,6 +496,7 @@ describe('Analysis Screen', () => {
 
     it('R4: tap-again while pending cancels indicator', async () => {
       vi.useFakeTimers();
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
       let resolvePromise: (value: any) => void;
       const client: EngineClient = {
         classifyMovesFrom: () => new Promise((resolve) => { resolvePromise = resolve; }),
@@ -526,6 +524,7 @@ describe('Analysis Screen', () => {
 
     it('R4: Change position while pending cancels indicator', async () => {
       vi.useFakeTimers();
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
       let resolvePromise: (value: any) => void;
       const client: EngineClient = {
         classifyMovesFrom: () => new Promise((resolve) => { resolvePromise = resolve; }),

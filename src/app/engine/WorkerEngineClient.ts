@@ -42,12 +42,14 @@ export class WorkerEngineClient implements EngineClient {
       this.cache.clear();
       this.currentCacheFen = fen;
     }
-    const cacheKey = from;
+    const cacheKey = `${fen}|${from}`;
     if (this.cache.has(cacheKey)) {
       return this.cache.get(cacheKey)!;
     }
     const result = await this.postRequest('classifyMovesFrom', { fen, from }) as Result<MoveClassification[]>;
-    this.cache.set(cacheKey, result);
+    if (this.currentCacheFen === fen) {
+      this.cache.set(cacheKey, result);
+    }
     return result;
   }
 

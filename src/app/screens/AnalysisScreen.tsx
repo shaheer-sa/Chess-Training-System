@@ -56,12 +56,28 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     };
   }, []);
 
-  useEffect(() => {
+  const resetSelection = () => {
     requestToken.current++;
     setSelectedSquare(null);
     setDestinationSquare(null);
     setMoves([]);
+    setResultMessage('');
     setEngineError(false);
+    setAnalyzing(false);
+    setShowAnalyzingIndicator(false);
+    if (analyzingTimer.current) clearTimeout(analyzingTimer.current);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') resetSelection();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    resetSelection();
     
     if (fen) {
       const setup = fenOps.parseFen(fen);
@@ -111,10 +127,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     if (color === turn) {
       // F6: tap again to cancel
       if (selectedSquare === index) {
-        requestToken.current++;
-        setSelectedSquare(null);
-        setDestinationSquare(null);
-        setMoves([]);
+        resetSelection();
         return;
       }
       // Select own piece
@@ -234,7 +247,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
           left: `${(flipped ? 7 - file : file) * 12.5}%`,
           top: `${(flipped ? rank : 7 - rank) * 12.5}%`,
           boxSizing: 'border-box',
-          border: isSelected ? '3px solid #333' : isSelectedDest ? '3px solid #fff' : 'none',
+          border: isSelected ? '3px solid #333' : isSelectedDest ? '3px dashed #1a1a1a' : 'none',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
@@ -262,7 +275,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
           </div>
         )}
         {isDestination && piece && (
-          <div style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid #222', outline: '4px solid #fff', borderRadius: '50%', boxSizing: 'border-box' }} />
+          <div style={{ position: 'absolute', width: '90%', height: '90%', border: '3px dashed #1a1a1a', borderRadius: '50%', boxSizing: 'border-box' }} />
         )}
         {isDestination && moveInfo && (
           <div style={{
@@ -325,7 +338,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
           <h3>Select a position</h3>
           <ul>
             {SAMPLES.map((s, i) => (
-              <li key={i}><button onClick={() => setFen(s.fen)}>{s.name}</button></li>
+              <li key={i}><button onClick={() => { resetSelection(); setFen(s.fen); }}>{s.name}</button></li>
             ))}
           </ul>
           <div>
@@ -338,7 +351,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       {position && (
         <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, padding: '4px' }}>
           <div style={{ flex: '1 1 352px', maxWidth: '600px', margin: '0 auto' }}>
-            <div role="grid" aria-label="Chess board" style={{ position: 'relative', width: '100%', paddingBottom: '100%', border: '1px solid #ccc' }}>
+            <div role="grid" aria-label="Chess board" style={{ position: 'relative', width: '100%', paddingBottom: '100%', border: '1px solid #ccc', boxSizing: 'border-box' }}>
               {rows}
             </div>
             
@@ -349,7 +362,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
             
             <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
               <button onClick={() => setFlipped(!flipped)}>Flip Board</button>
-              <button onClick={() => { setFen(''); setInputFen(''); setSelectedSquare(null); setDestinationSquare(null); setMoves([]); }}>Change position</button>
+              <button onClick={() => { resetSelection(); setFen(''); setInputFen(''); }}>Change position</button>
               {onNavigate && <button onClick={() => onNavigate('help')} style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer' }}>What do the labels mean?</button>}
             </div>
           </div>
