@@ -174,13 +174,19 @@ describe('Tactical Report (Phase 1C)', () => {
     });
 
     it('Error passthrough: invalid FEN, illegal move, castling candidate', () => {
-      expect(analyzeTactics('invalid', { from: 'e2', to: 'e4' }).ok).toBe(false);
+      const res1 = analyzeTactics('invalid', { from: 'e2', to: 'e4' });
+      expect(res1.ok).toBe(false);
+      if (!res1.ok) expect(res1.error.code).toBe('INVALID_FEN');
       
       const fen = '4k3/8/8/8/8/8/8/4K3 w - - 0 1';
-      expect(analyzeTactics(fen, { from: 'e2', to: 'e4' }).ok).toBe(false); // illegal move
+      const res2 = analyzeTactics(fen, { from: 'e2', to: 'e4' });
+      expect(res2.ok).toBe(false);
+      if (!res2.ok) expect(res2.error.code).toBe('ILLEGAL_MOVE');
 
       const fenCastle = 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1';
-      expect(analyzeTactics(fenCastle, { from: 'e1', to: 'g1' }).ok).toBe(false); // castling
+      const res3 = analyzeTactics(fenCastle, { from: 'e1', to: 'g1' });
+      expect(res3.ok).toBe(false);
+      if (!res3.ok) expect(res3.error.code).toBe('UNSUPPORTED_MOVE_TYPE');
     });
   });
 });
