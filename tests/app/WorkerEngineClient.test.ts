@@ -4,11 +4,42 @@ import { Square } from '../../src/engine/types.js';
 
 class MockWorker {
   onmessage: ((ev: MessageEvent) => void) | null = null;
+  onerror: ((ev: any) => void) | null = null;
   postMessage() {}
   terminate() {}
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 global.Worker = MockWorker as any;
+
+describe('WorkerEngineClient Errors', () => {
+  it('exception in worker -> rejects request', async () => {
+    const client = new WorkerEngineClient();
+    const worker = (client as any).worker as MockWorker;
+    
+    const promise = client.classifyMove('fen', {from: 'a1', to: 'a2'});
+    // Simulate error response
+    worker.onmessage!({ data: { id: 1, error: 'fake error' } } as MessageEvent);
+    
+    await expect(promise).rejects.toThrow('fake error');
+  });
+
+  it('worker.onerror -> all pending reject; later requests reject too', async () => {
+    const client = new WorkerEngineClient();
+    const worker = (client as any).worker as any;
+    
+    const p1 = client.classifyMove('fen', {from: 'a1', to: 'a2'});
+    const p2 = client.classifyMove('fen', {from: 'a2', to: 'a3'});
+    
+    worker.onerror!({ message: 'worker crashed' } as any);
+    
+    await expect(p1).rejects.toThrow('Worker error');
+    await expect(p2).rejects.toThrow('Worker error');
+    
+    // later requests should also reject immediately
+    const p3 = client.classifyMove('fen', {from: 'a1', to: 'b1'});
+    await expect(p3).rejects.toThrow('Worker error');
+  });
+});
 
 describe('WorkerEngineClient Cache', () => {
   it('caches the same fen and from square', async () => {

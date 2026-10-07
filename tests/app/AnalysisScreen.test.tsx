@@ -278,4 +278,135 @@ describe('Analysis Screen', () => {
       (expect(results) as unknown as { toHaveNoViolations: () => void }).toHaveNoViolations();
     });
   });
+
+  describe('Phase 2B.6 Fixes', () => {
+    it('F1: stale results - only latest request badges are shown', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
+      const client = new MockEngineClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let resolveA: any, resolveB: any;
+      client.classifyMovesFrom = vi.fn().mockImplementation(async (fen, sq) => {
+        if (sq === 'e2') return new Promise(r => resolveA = () => r({ ok: true, value: [{ move: { from: 'e2', to: 'e3' }, label: 'safe', reasons: [] }] }));
+        if (sq === 'd2') return new Promise(r => resolveB = () => r({ ok: true, value: [{ move: { from: 'd2', to: 'd3' }, label: 'safe', reasons: [] }] }));
+        return { ok: true, value: [] };
+      });
+      render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      
+      await user.click(screen.getByLabelText(/e2, white pawn/i)); // A
+      await user.click(screen.getByLabelText(/d2, white pawn/i)); // B
+      
+      await act(async () => {
+        resolveB();
+      });
+      await act(async () => {
+        resolveA();
+      });
+      
+      // Only B's badges should be shown
+      expect(screen.queryByLabelText(/e3, empty, legal destination/i)).toBeNull();
+      expect(screen.getByLabelText(/d3, empty, legal destination/i)).toBeTruthy();
+    });
+
+    it('F1: stale results - position change clears badges', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
+      const client = new MockEngineClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let resolveA: any;
+      client.classifyMovesFrom = vi.fn().mockImplementation(async () => {
+        return new Promise(r => resolveA = () => r({ ok: true, value: [{ move: { from: 'e2', to: 'e3' }, label: 'safe', reasons: [] }] }));
+      });
+      render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      
+      await user.click(screen.getByLabelText(/e2, white pawn/i)); // pending
+      
+      // change position
+      await user.click(screen.getByText('Change position'));
+      
+      await act(async () => {
+        resolveA();
+      });
+      
+      expect(screen.queryByLabelText(/e3, empty, legal destination/i)).toBeNull();
+    });
+
+    it('F6: tapping selected piece again cancels selection', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
+      const client = new MockEngineClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client.classifyMovesFrom = async () => ({ ok: true, value: [{ move: { from: 'e2', to: 'e3' }, label: 'safe' } as any] });
+      render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      
+      await user.click(screen.getByLabelText(/e2, white pawn/i));
+      await waitFor(() => expect(screen.getByLabelText(/e3, empty, legal destination/i)).toBeTruthy());
+      
+      await user.click(screen.getByLabelText(/e2, white pawn/i));
+      expect(screen.queryByLabelText(/e3, empty, legal destination/i)).toBeNull();
+    });
+
+    it('F7: orientation default = side to move at bottom', () => {
+      const client = new MockEngineClient();
+      const { container } = render(<AnalysisScreen engineClient={client} initialFen="4k3/8/8/8/8/8/4P3/4K3 b - - 0 1" />);
+      const e8 = container.querySelector('[aria-label="e8, black king"]');
+      expect(e8?.getAttribute('style')).toMatch(/top: 87\.5%/);
+    });
+
+    it('F8: arrow keys follow visual direction when flipped', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
+      const client = new MockEngineClient();
+      render(<AnalysisScreen engineClient={client} initialFen="4k3/8/8/8/8/8/4P3/4K3 b - - 0 1" />);
+      
+      const e8Square = screen.getByLabelText('e8, black king');
+      e8Square.focus();
+      await user.keyboard('{ArrowUp}');
+      
+      expect(document.activeElement).toBe(screen.getByLabelText('e7, empty'));
+    });
+
+    it('F9: live region exists before selection and text updates', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
+      const client = new MockEngineClient();
+      client.classifyMovesFrom = async () => ({ ok: true, value: [] });
+      render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      
+      const liveRegion = document.querySelector('[aria-live="polite"]');
+      expect(liveRegion).toBeTruthy();
+      
+      await user.click(screen.getByLabelText(/e1, white king/i));
+      await waitFor(() => {
+        expect(liveRegion?.textContent).toMatch(/This piece has no legal moves/);
+      });
+    });
+
+    it('F11: invalid FEN error text color is neutral', () => {
+      const client = new MockEngineClient();
+      const { container } = render(<AnalysisScreen engineClient={client} initialFen="invalid fen" />);
+      
+      const msg = screen.getByText("This position isn't valid. Check the FEN.");
+      expect(msg.style.color).not.toBe('red');
+      expect(container.textContent).not.toContain('⚠');
+    });
+
+    it('F12: Change position button returns to sample list', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
+      const client = new MockEngineClient();
+      render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      
+      await user.click(screen.getByText('Change position'));
+      
+      expect(screen.getByPlaceholderText('Paste FEN here')).toBeTruthy();
+    });
+
+    it('F13: Results appear here placeholder', () => {
+      const client = new MockEngineClient();
+      render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      
+      expect(screen.getByText('Results appear here after you choose a destination.')).toBeTruthy();
+    });
+  });
 });
