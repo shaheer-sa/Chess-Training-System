@@ -1,6 +1,6 @@
 import { Chess, fen as fenOps, IllegalSetup } from 'chessops';
 import { Result, LegalMove } from './types.js';
-import { toAlgebraic, toRole, normalizeCastling } from './chessops-utils.js';
+import { toAlgebraic, toRole, normalizeCastling, fromAlgebraic } from './chessops-utils.js';
 
 export function getLegalMoves(fen: string): Result<LegalMove[]> {
   const setupResult = fenOps.parseFen(fen);
@@ -58,10 +58,12 @@ export function getLegalMoves(fen: string): Result<LegalMove[]> {
     }
   }
 
-  // Deterministic ordering (by from-square, then to-square, then promotion)
+  // Deterministic ordering: by from-index, then to-index, then promotion alphabetical
   legalMoves.sort((a, b) => {
-    if (a.from !== b.from) return a.from.localeCompare(b.from);
-    if (a.to !== b.to) return a.to.localeCompare(b.to);
+    const fromDiff = fromAlgebraic(a.from) - fromAlgebraic(b.from);
+    if (fromDiff !== 0) return fromDiff;
+    const toDiff = fromAlgebraic(a.to) - fromAlgebraic(b.to);
+    if (toDiff !== 0) return toDiff;
     if (a.promotion !== b.promotion) {
       if (!a.promotion) return -1;
       if (!b.promotion) return 1;

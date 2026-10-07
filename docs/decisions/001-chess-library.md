@@ -10,13 +10,13 @@
 
 ## Context & Problem Statement
 
-We are developing an interactive chess training platform centered on deterministic "square safety" analysis: assessing piece attackers, legal defenders, x-ray lines of sight, pin states, and static exchange evaluation (SEE).
+We are developing an interactive chess training platform centered on deterministic "square safety" analysis: assessing piece geometric attackers, geometric/legal defenders, x-ray lines of sight, pin states, and static exchange evaluation (SEE).
 
 The engine requires:
 
 1. Rigorous, deterministic move generation and position validation (Perft benchmarks).
 2. Distinction between geometric (pseudo-legal) attacks and strictly legal moves/defenders (e.g., handling absolute pins).
-3. Defender and attacker queries for either color regardless of whose turn it is, without mutating board state or generating illegal states.
+3. Geometric defender and attacker queries for either color regardless of whose turn it is, without mutating board state or generating illegal states.
 4. Low-level primitives for exchange analysis: ray generation (`ray`, `between`), sliding attacks with custom occupancy masks for x-ray detection, and pin/checker sets.
 5. High TypeScript type safety and maintainability.
 
@@ -61,7 +61,7 @@ In square safety analysis, we need the defenders of a target square for the side
   - Attempting to load a FEN with turn flipped to Black when White is in check (`6rk/8/8/8/8/8/8/6K1 b - - 0 1`) succeeds without validation error, leading to a legally corrupt state where Black can capture White's King (`Rxg1`).
   - `chess.setTurn()` internally executes a null move; when in check, it throws `Error: Null move not allowed when in check`.
   - Loading a FEN with an en passant square for the wrong turn throws an error.
-  - Cannot evaluate defenders without either mutating turn or relying on pseudo-legal `attackers()`.
+  - Cannot evaluate geometric defenders without either mutating turn or relying on pseudo-legal `attackers()`.
 - **`chessops`**:
   - Validates chess law: `Chess.fromSetup()` rejects opposite-check positions with `PositionError: ERR_OPPOSITE_CHECK`.
   - `pos.kingAttackers(square, color, occ)` and ray functions give **GEOMETRIC attackers** for either color without mutating the position.

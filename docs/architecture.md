@@ -50,6 +50,15 @@ Analysis flows linearly through five decoupled layers (planned for future phases
 
 ---
 
+## Ordering Contract
+
+"By square" ordering strictly follows chessops square index order (a1=0, b1=1 ... h1=7, a2=8 ... h8=63), not alphabetical string order.
+- `getLegalMoves`: sort by from-index, then to-index, then promotion alphabetical (`bishop`, `knight`, `queen`, `rook`).
+- `geometricAttackers`, `geometricDefenders`, `legalRecaptures`: by square index.
+- `legalCaptures`: by capturer square index.
+
+---
+
 ## Testing Approach
 
 - **Deterministic FEN Fixtures**: Test positions live in `/tests/fixtures/` as structured FEN strings accompanied by hand-verified ground truth.

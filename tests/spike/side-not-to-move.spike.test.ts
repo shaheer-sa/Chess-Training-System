@@ -39,7 +39,7 @@ describe('Spike C: Defenders for Side Not to Move & FEN Flipping (chessops)', ()
     const pos = Chessops.fromSetup(setup).unwrap();
     const d2 = parseSquare('d2');
 
-    // Query black attackers/defenders of d2 directly on the white-to-move position:
+    // Query black geometric attackers/defenders of d2 directly on the white-to-move position:
     const blackDefenders = pos.kingAttackers(d2, 'black', pos.board.occupied);
     const b4 = parseSquare('b4');
     expect(blackDefenders.has(b4)).toBe(true);

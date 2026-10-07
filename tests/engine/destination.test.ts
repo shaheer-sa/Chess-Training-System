@@ -75,17 +75,19 @@ describe('Destination Report (Phase 1A)', () => {
   });
 
   describe('Additional Tests', () => {
-    it('Geometric attackers: pawn (both directions), knight, bishop, rook, queen, king', () => {
+    it('Geometric attackers and legal capturers exact-order (Phase 1A.2 2b, 2b2)', () => {
       // e4 is attacked by d5(p), f5(p), c3(n), d4(k), e8(r), g2(b), h4(q).
       // FEN: 4r3/8/8/3p1p2/3k3q/2n5/4P1b1/K7 w - - 0 1
       const fen = '4r3/8/8/3p1p2/3k3q/2n5/4P1b1/K7 w - - 0 1';
       const res = analyzeDestination(fen, { from: 'e2', to: 'e4' });
       expect(res.ok).toBe(true);
       if (!res.ok) return;
-      const attackers = res.value.geometricAttackers.map(a => `${a.role}@${a.square}`);
-      expect(attackers.sort()).toEqual([
-        'bishop@g2', 'king@d4', 'knight@c3', 'pawn@d5', 'pawn@f5', 'queen@h4', 'rook@e8'
-      ].sort());
+      expect(res.value.geometricAttackers.map(a => a.square)).toEqual([
+        'g2', 'c3', 'd4', 'h4', 'd5', 'f5', 'e8'
+      ]);
+      expect(res.value.legalCaptures.map(c => c.capturer.square)).toEqual([
+        'g2', 'c3', 'd4', 'h4', 'd5', 'f5', 'e8'
+      ]);
     });
 
     it('King as the moved piece -> legalCaptures always empty', () => {
@@ -96,7 +98,7 @@ describe('Destination Report (Phase 1A)', () => {
       expect(res.value.legalCaptures).toEqual([]);
     });
 
-    it('Defenders: own king as defender, but cannot recapture due to another attacker', () => {
+    it('Defenders: own king as defender, but cannot recapture due to another attacker (Phase 1A.2 2d)', () => {
       // White king on c2, white pawn on d2. Black knight on c5, black bishop on c4.
       // White plays d2-d3.
       // King on c2 defends d3. Knight on c5 captures d3. King cannot recapture because bishop on c4 protects d3.
@@ -105,6 +107,7 @@ describe('Destination Report (Phase 1A)', () => {
       expect(res.ok).toBe(true);
       if (!res.ok) return;
       const r = res.value;
+      expect(r.geometricAttackers.map(a => a.square)).toEqual(['c4', 'c5']);
       expect(r.geometricDefenders).toEqual([{ square: 'c2', role: 'king', color: 'white' }]);
       const capture = r.legalCaptures.find(c => c.capturer.square === 'c5');
       expect(capture).toBeDefined();
@@ -130,34 +133,75 @@ describe('Destination Report (Phase 1A)', () => {
       expect(res.value.geometricDefenders).toEqual([{ square: 'd8', role: 'queen', color: 'black' }]);
     });
 
-    it('Multiple geometric defenders and blocked slider (Black to move)', () => {
-      // Black to move: d5 is defended by Black Knights on c7 and e7.
-      // White rook on a5 attacks d5. White bishop on h1 is blocked from d5 by a white pawn on e4.
-      // FEN: 8/2n1n3/8/R2p4/4P3/8/8/4K2k b - - 0 1
-      const fen = '8/2n1n3/8/R2p4/4P3/8/8/4K2k b - - 0 1';
-      const res = analyzeDestination(fen, { from: 'd5', to: 'd4' });
-      expect(res.ok).toBe(true);
-      if (!res.ok) return;
-      expect(res.value.mover.color).toBe('black');
-      // On d4, does White rook on a5 attack it? No, a5 attacks a4, b4, c4, d4? No, a5 is 5th rank, d4 is 4th rank.
-      // Wait, let's look at the destination d4.
-      // We want multiple defenders on d4, and blocked slider attacking d4.
-      // White bishop on a1 attacks d4. Blocked by white pawn on c3. (a1, b2, c3, d4).
+    it('Multiple geometric defenders and blocked slider (Black to move) (Phase 1A.2 2c)', () => {
+      // Black to move: d5 is defended by Black Knights on b5 and f5.
+      // White bishop on a1 is blocked by white pawn on c3. (a1, b2, c3, d4).
       // Black Knights on b5, f5 defend d4.
       // Black pawn on d5 moves to d4.
-      // Black king on h8. White king on e1.
-      // FEN: 7k/8/8/1n3n2/8/2P5/3P4/B3K3 b - - 0 1 -> move d5 to d4. (Wait, black pawn is on d5).
       // FEN: 7k/8/8/1n1p1n2/8/2P5/8/B3K3 b - - 0 1. move d5 to d4.
       const fen2 = '7k/8/8/1n1p1n2/8/2P5/8/B3K3 b - - 0 1';
       const res2 = analyzeDestination(fen2, { from: 'd5', to: 'd4' });
       expect(res2.ok).toBe(true);
       if (!res2.ok) return;
-      expect(res2.value.geometricDefenders.sort((a,b) => a.square.localeCompare(b.square))).toEqual([
+      expect(res2.value.mover.color).toBe('black');
+      expect(res2.value.geometricDefenders.map(d => d.square)).toEqual(['b5', 'f5']);
+      expect(res2.value.geometricDefenders).toEqual([
         { square: 'b5', role: 'knight', color: 'black' },
-        { square: 'f5', role: 'knight', color: 'black' }
+        { square: 'f5', role: 'knight', color: 'black' },
       ]);
       // Bishop on a1 is blocked by c3 pawn. The pawn itself attacks d4, but the bishop does not.
       expect(res2.value.geometricAttackers).toEqual([{ square: 'c3', role: 'pawn', color: 'white' }]);
+      const c3Capture = res2.value.legalCaptures.find(c => c.capturer.square === 'c3');
+      expect(c3Capture).toBeDefined();
+      expect(c3Capture?.legalRecaptures.map(r => r.square)).toEqual(['b5', 'f5']);
+      expect(c3Capture?.legalRecaptures).toEqual([
+        { square: 'b5', role: 'knight', color: 'black' },
+        { square: 'f5', role: 'knight', color: 'black' },
+      ]);
+    });
+
+    it('Opponent capture that promotes (Phase 1A.2 3a)', () => {
+      // FEN: 7k/8/8/1R6/8/8/2pN3K/8 w - - 0 1   move: b5b1
+      const res = analyzeDestination('7k/8/8/1R6/8/8/2pN3K/8 w - - 0 1', { from: 'b5', to: 'b1' });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+
+      const r = res.value;
+      expect(r.geometricAttackers).toEqual([
+        { square: 'c2', role: 'pawn', color: 'black' },
+      ]);
+      expect(r.geometricDefenders).toEqual([
+        { square: 'd2', role: 'knight', color: 'white' },
+      ]);
+      expect(r.legalCaptures).toEqual([
+        {
+          capturer: { square: 'c2', role: 'pawn', color: 'black' },
+          captureSquare: 'b1',
+          isEnPassant: false,
+          promotion: 'queen',
+          legalRecaptures: [
+            { square: 'd2', role: 'knight', color: 'white' },
+          ],
+        },
+      ]);
+    });
+
+    it('Candidate pawn move to last rank without promotion returns ILLEGAL_MOVE (Phase 1A.2 3b)', () => {
+      // b7b8 in 4k3/1P6/8/8/8/8/8/R3K3 w Q - 0 1 without promotion
+      const res = analyzeDestination('4k3/1P6/8/8/8/8/8/R3K3 w Q - 0 1', { from: 'b7', to: 'b8' });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error.code).toBe('ILLEGAL_MOVE');
+      }
+    });
+
+    it('Candidate pawn move to last rank with promotion queen succeeds (Phase 1A.2 3c)', () => {
+      // b7b8 with promotion 'queen'
+      const res = analyzeDestination('4k3/1P6/8/8/8/8/8/R3K3 w Q - 0 1', { from: 'b7', to: 'b8', promotion: 'queen' });
+      expect(res.ok).toBe(true);
+      if (res.ok) {
+        expect(res.value.mover.promotion).toBe('queen');
+      }
     });
 
     it('Black candidate move into capture and recapture (Black to move)', () => {

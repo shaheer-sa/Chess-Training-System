@@ -68,4 +68,33 @@ describe('Rules Adapter (Phase 1A)', () => {
       expect(moves[3].promotion).toBe('rook');
     }
   });
+
+  it('exact-order move generation (Phase 1A.2 2a)', () => {
+    const res = getLegalMoves('4k3/1P6/8/8/8/8/8/R3K3 w Q - 0 1');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    expect(res.value).toEqual([
+      { from: 'a1', to: 'b1', role: 'rook', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'a1', to: 'c1', role: 'rook', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'a1', to: 'd1', role: 'rook', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'a1', to: 'a2', role: 'rook', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'a1', to: 'a3', role: 'rook', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'a1', to: 'a4', role: 'rook', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'a1', to: 'a5', role: 'rook', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'a1', to: 'a6', role: 'rook', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'a1', to: 'a7', role: 'rook', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'a1', to: 'a8', role: 'rook', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'e1', to: 'c1', role: 'king', isCapture: false, isEnPassant: false, isCastling: true },
+      { from: 'e1', to: 'd1', role: 'king', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'e1', to: 'f1', role: 'king', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'e1', to: 'd2', role: 'king', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'e1', to: 'e2', role: 'king', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'e1', to: 'f2', role: 'king', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'b7', to: 'b8', role: 'pawn', promotion: 'bishop', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'b7', to: 'b8', role: 'pawn', promotion: 'knight', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'b7', to: 'b8', role: 'pawn', promotion: 'queen', isCapture: false, isEnPassant: false, isCastling: false },
+      { from: 'b7', to: 'b8', role: 'pawn', promotion: 'rook', isCapture: false, isEnPassant: false, isCastling: false },
+    ]);
+  });
 });

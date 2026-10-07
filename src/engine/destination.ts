@@ -103,7 +103,7 @@ export function analyzeDestination(
   }
 
   const sortPieceOnSquare = (a: PieceOnSquare, b: PieceOnSquare) =>
-    a.square.localeCompare(b.square);
+    fromAlgebraic(a.square) - fromAlgebraic(b.square);
 
   geometricAttackers.sort(sortPieceOnSquare);
   geometricDefenders.sort(sortPieceOnSquare);
@@ -177,8 +177,10 @@ export function analyzeDestination(
     }
   }
 
-  // Deterministically order legalCaptures by capturer's square
-  legalCaptures.sort((a, b) => a.capturer.square.localeCompare(b.capturer.square));
+  // Deterministically order legalCaptures by capturer square index
+  legalCaptures.sort(
+    (a, b) => fromAlgebraic(a.capturer.square) - fromAlgebraic(b.capturer.square)
+  );
 
   const givesCheck = posAfter.isCheck();
 
