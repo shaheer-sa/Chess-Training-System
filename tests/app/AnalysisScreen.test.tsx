@@ -14,6 +14,7 @@ import { AnalysisScreen } from '../../src/app/screens/AnalysisScreen.js';
 expect.extend(matchers as any);
 import { DirectEngineClient } from '../../src/app/engine/DirectEngineClient.js';
 import { EngineClient } from '../../src/app/engine/EngineClient.js';
+import { Square, Result, MoveClassification, MoveInput } from '../../src/engine/types.js';
 
 import { cleanup } from '@testing-library/react';
 
@@ -29,19 +30,19 @@ class MockEngineClient implements EngineClient {
   public shouldReject = false;
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async classifyMovesFrom(_fen: string, _from: string): Promise<unknown> {
+  async classifyMovesFrom(_fen: string, _from: Square): Promise<Result<MoveClassification[]>> {
     if (this.delayMs > 0) {
       await new Promise(r => setTimeout(r, this.delayMs));
     }
     if (this.shouldReject) {
-      return { ok: false, error: { code: 'ENGINE_ERROR', message: 'Mock error' } };
+      return { ok: false, error: { code: 'INVALID_FEN', message: 'Mock error' } };
     }
-    return { ok: true, value: [] };
+    return { ok: true, value: [] } as any;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async classifyMove(_fen: string, _move: unknown): Promise<unknown> {
-    return { ok: true, value: { label: 'safe', netMaterial: 0, reasons: [] } };
+  async classifyMove(_fen: string, _move: MoveInput): Promise<Result<MoveClassification>> {
+    return { ok: true, value: { label: 'safe', netMaterial: 0, reasons: [] } } as any;
   }
 }
 
@@ -59,7 +60,7 @@ describe('Analysis Screen', () => {
     });
 
     it('supports keyboard navigation', async () => {
-      const user = userEvent.setup();
+      const user = (userEvent as any).setup();
       const client = new MockEngineClient();
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
       
@@ -76,7 +77,7 @@ describe('Analysis Screen', () => {
     });
 
     it('selecting an opponent piece does nothing', async () => {
-      const user = userEvent.setup();
+      const user = (userEvent as any).setup();
       const client = new MockEngineClient();
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
       
@@ -89,7 +90,7 @@ describe('Analysis Screen', () => {
     });
 
     it('tapping a non-legal square shows the exact message', async () => {
-      const user = userEvent.setup();
+      const user = (userEvent as any).setup();
       const client = new MockEngineClient();
       client.classifyMovesFrom = async () => ({ ok: true, value: [] });
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
@@ -104,7 +105,7 @@ describe('Analysis Screen', () => {
     });
 
     it('piece with no legal moves shows specific message', async () => {
-      const user = userEvent.setup();
+      const user = (userEvent as any).setup();
       const client = new MockEngineClient();
       client.classifyMovesFrom = async () => ({ ok: true, value: [] });
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
@@ -120,7 +121,7 @@ describe('Analysis Screen', () => {
 
   describe('States', () => {
     it('does not show Checking moves... if analysis is fast', async () => {
-      const user = userEvent.setup();
+      const user = (userEvent as any).setup();
       const client = new MockEngineClient();
       client.delayMs = 50; // < 150ms
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
@@ -159,7 +160,7 @@ describe('Analysis Screen', () => {
     });
 
     it('engine error shows exact message and keeps selection', async () => {
-      const user = userEvent.setup();
+      const user = (userEvent as any).setup();
       const client = new MockEngineClient();
       client.shouldReject = true;
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
@@ -187,7 +188,7 @@ describe('Analysis Screen', () => {
   });
 
   describe('End-to-end with REAL engine', () => {
-    const user = userEvent.setup();
+    const user = (userEvent as any).setup();
       const realClient = new DirectEngineClient();
 
     it('Position 1, select e6 -> g5 badge Loses material', async () => {
@@ -262,7 +263,7 @@ describe('Analysis Screen', () => {
     }, 10000);
 
     it('has no violations with piece selected', async () => {
-      const user = userEvent.setup();
+      const user = (userEvent as any).setup();
       const { container } = render(<AnalysisScreen engineClient={new MockEngineClient()} initialFen={startpos} />);
       await user.click(screen.getByLabelText(/e2, white pawn/i));
       const results = await axe(container);
