@@ -121,3 +121,44 @@ export interface TacticalReport {
   }[];
   exchangeLineMate: { stepIndex: number; matedColor: Color } | null;
 }
+
+export type ReasonCode =
+  | 'ALLOWS_MATE_IN_ONE'
+  | 'EXCHANGE_LINE_MATE'
+  | 'CAUSES_STALEMATE'
+  | 'EXCHANGE_LINE_MATES_OPPONENT'
+  | 'FORCED_CAPTURE_IGNORED'
+  | 'PINNED_DEFENDER'
+  | 'KING_CANNOT_RECAPTURE'
+  | 'DEFENDER_UNAVAILABLE'
+  | 'UNDEFENDED_PIECE_LOST'
+  | 'BAD_EXCHANGE'
+  | 'DEFENDER_MOVED'
+  | 'LINE_OPENED'
+  | 'PIECE_ALREADY_HANGING'
+  | 'EVEN_EXCHANGE'
+  | 'OPPONENT_CAPTURE_LOSES'
+  | 'ATTACKER_CANNOT_CAPTURE'
+  | 'NOT_ATTACKED'
+  | 'WINS_MATERIAL'
+  | 'DELIVERS_MATE'
+  | 'GIVES_CHECK'
+  | 'MOVER_PINNED'
+  | 'CASTLING_NOT_ANALYZED';
+
+export interface Reason {
+  code: ReasonCode;
+  squares: Square[];
+  moves?: { from: Square; to: Square; promotion?: Role }[];
+  amount?: number;
+}
+
+export interface MoveClassification {
+  move: { from: Square; to: Square; promotion?: Role };
+  label: 'safe' | 'even_trade' | 'loses_material' | 'unclear';
+  netMaterial: number;
+  reasons: Reason[];
+  destination: DestinationReport | null;
+  exchange: ExchangeReport | null;
+  tactics: TacticalReport | null;
+}

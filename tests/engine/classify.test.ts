@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { classifyMove, classifyMovesFrom } from '../../src/engine/classify.js';
+import { Square, Role } from '../../src/engine/types.js';
 
 describe('Move Classification (Phase 1E)', () => {
   describe('Supervisor Fixtures', () => {
@@ -96,7 +97,7 @@ describe('Move Classification (Phase 1E)', () => {
 
     for (const fx of fixtures) {
       it(`Fixture ${fx.id}`, () => {
-        const res = classifyMove(fx.fen, fx.move as any);
+        const res = classifyMove(fx.fen, fx.move as { from: Square; to: Square; promotion?: Role });
         expect(res.ok).toBe(true);
         if (!res.ok) return;
 
@@ -161,19 +162,17 @@ describe('Move Classification (Phase 1E)', () => {
 
     it('Black-mover: loses_material', () => {
       // Black knight moves to square attacked by white pawn.
-      const fen = 'k7/8/8/8/4P3/8/8/4K3 b - - 0 1';
-      const res = classifyMove(fen, { from: 'a8', to: 'b7' }); // wait, move king? No, let's use a knight
-      // let's adjust: Black Knight on c6. White Pawn on d4. Black moves Nd4.
-      const fen2 = '4k3/8/2n5/8/3P4/8/8/4K3 b - - 0 1';
-      const res2 = classifyMove(fen2, { from: 'c6', to: 'd4' });
-      expect(res2.ok).toBe(true);
-      if (res2.ok) expect(res2.value.label).toBe('loses_material');
+      // White pawn on c3 attacks d4.
+      const fen = '4k3/8/2n5/8/8/2P5/8/4K3 b - - 0 1';
+      const res = classifyMove(fen, { from: 'c6', to: 'd4' });
+      expect(res.ok).toBe(true);
+      if (res.ok) expect(res.value.label).toBe('loses_material');
     });
 
     it('Black-mover: even_trade', () => {
-      // Black rook captures white rook.
-      const fen = '4k3/8/8/8/8/8/8/R3r2K b - - 0 1';
-      const res = classifyMove(fen, { from: 'e1', to: 'a1' });
+      // Black rook captures white rook. White king recaptures.
+      const fen2 = '4k3/8/8/8/8/8/K7/R3r3 b - - 0 1';
+      const res = classifyMove(fen2, { from: 'e1', to: 'a1' });
       expect(res.ok).toBe(true);
       if (res.ok) expect(res.value.label).toBe('even_trade');
     });
@@ -187,10 +186,9 @@ describe('Move Classification (Phase 1E)', () => {
     });
 
     it('WINS_MATERIAL where destination is later recaptured (net > 0)', () => {
-      // White plays Nd5 capturing a pawn (value 100). Black can recapture with pawn (value 300).
-      // Wait, if White captures pawn with knight, White gains 100, then loses 300. Net -200 (loses_material).
-      // If White captures Queen with Knight, White gains 900, then loses 300. Net 600 (WINS_MATERIAL).
-      const fen = '4k3/8/8/3q4/8/2N5/8/4K3 w - - 0 1';
+      // White plays Nd5 capturing a queen (value 900). Black can recapture with pawn (value 100).
+      // White loses knight (300). Net 900 - 300 = 600.
+      const fen = '4k3/8/4p3/3q4/8/2N5/8/4K3 w - - 0 1';
       const res = classifyMove(fen, { from: 'c3', to: 'd5' });
       expect(res.ok).toBe(true);
       if (!res.ok) return;
@@ -200,10 +198,7 @@ describe('Move Classification (Phase 1E)', () => {
     });
 
     it('PIECE_ALREADY_HANGING that does NOT change the label', () => {
-      // White has a hanging knight on a1. White moves a pawn.
-      // Net material is 0 (from the move). Caused hang is max(causedHang), but 'other' cause is NOT included in causedHang calculation.
-      // "causedHang = max opponentGain over T.hangingAfterMove entries with cause 'defender_moved' or 'line_opened' (0 if none)"
-      const fen = '4k3/8/8/8/8/8/7P/N5r1 w - - 0 1'; // White knight a1 attacked by black rook g1
+      const fen = '4k3/8/8/8/8/3K4/7P/N5r1 w - - 0 1'; // White knight a1 attacked by black rook g1
       const res = classifyMove(fen, { from: 'h2', to: 'h3' });
       expect(res.ok).toBe(true);
       if (!res.ok) return;

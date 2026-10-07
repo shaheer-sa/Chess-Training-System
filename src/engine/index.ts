@@ -4,3 +4,4 @@ export { analyzeDestination } from './destination.js';
 export { analyzeExchange, PIECE_VALUES } from './exchange.js';
 export { getPositionFacts } from './facts.js';
 export { analyzeTactics } from './tactics.js';
+export { classifyMove, classifyMovesFrom } from './classify.js';
