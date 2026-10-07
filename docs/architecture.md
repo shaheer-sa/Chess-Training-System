@@ -71,6 +71,11 @@ Analysis flows linearly through five decoupled layers (planned for future phases
 
 The Phase 1B Exchange Analysis utilizes recursive legal-move generation rather than a traditional static bitboard swap-list (Static Exchange Evaluation). 
 Known limitations/characteristics of this approach include:
-1. **Performance Overhead**: Generating legal moves and cloning/playing the board state at every depth is slower than a static bitboard evaluation.
-2. **Intermediate Checks**: If a capture on the target square gives check, the opponent must respond to the check. If the only legal response is to move the king away (abandoning the recapture), the sequence terminates correctly but does not evaluate the broader positional consequences of the king move.
-3. **Target Isolation**: The recursion strictly evaluates captures on the *target square* (and en-passant square). It does not analyze tactical deflections, "zwischenzugs" (in-between moves) on other squares, or mating threats.
+
+1. **Only captures on the current exchange square are considered.**
+   Off-square zwischenzugs, deflections, forks, mating ideas and other tactical consequences are outside Phase 1B.
+
+2. **Stand pat is allowed even when the side to move is in check.**
+   This is a deliberate Phase 1B simplification. Therefore Phase 1B SEE is a MATERIAL EXCHANGE evaluator, not a complete tactical/legal-game-tree evaluator. Check/mate consequences belong to Phase 1C.
+
+3. **Capture promotions are analyzed as queen promotion only, for BOTH sides.**

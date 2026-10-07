@@ -267,5 +267,37 @@ describe('Exchange Analysis (Phase 1B)', () => {
         expect(res.error.code).toBe('UNSUPPORTED_MOVE_TYPE');
       });
     });
+
+    it('Candidate move is en-passant capture', () => {
+      // FEN: 4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1
+      // Candidate: e5xd6 ep
+      const res = analyzeExchange('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1', { from: 'e5', to: 'd6' });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+
+      const r = res.value;
+      expect(r.materialFromMove).toBe(100);
+      expect(r.see).toBe(100);
+      expect(r.fenAfter.startsWith('4k3/8/3P4/8/8/8/8/4K3')).toBe(true);
+      expect(r.bestLine).toEqual([]);
+    });
+
+    it('Numeric tie-break: square index vs lexical ordering', () => {
+      // FEN: 4k3/8/8/3p4/R7/8/8/3R2K1 b - - 0 1
+      // Candidate: Black plays d5-d4
+      // Target: d4.
+      // Competing captures: White can capture with Ra4 (a4) or Rd1 (d1).
+      // Both are Rooks (value 500), both gain 100.
+      // Square indexes: d1 = 3, a4 = 24.
+      // Lexical string order: "a4" < "d1".
+      // Expected winner (numeric index order): d1.
+      const res = analyzeExchange('4k3/8/8/3p4/R7/8/8/3R2K1 b - - 0 1', { from: 'd5', to: 'd4' });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+
+      const r = res.value;
+      expect(r.bestLine).toHaveLength(1);
+      expect(r.bestLine[0].capturer.square).toBe('d1');
+    });
   });
 });
