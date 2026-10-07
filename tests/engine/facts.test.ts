@@ -131,6 +131,19 @@ describe('Position Facts (Phase 1C)', () => {
       expect(result.value.checkers).toHaveLength(2);
     });
 
+    it('King cannot be pinned to queen', () => {
+      const fen = '3r2k1/8/8/8/3K4/8/8/3Q4 w - - 0 1';
+      const result = getPositionFacts(fen);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.pins).toEqual([]);
+      expect(result.value.inCheck).toBe(true);
+      expect(result.value.checkers).toEqual([
+        { square: 'd8', role: 'rook', color: 'black' }
+      ]);
+    });
+
     it('Error passthrough: invalid FEN', () => {
       const result = getPositionFacts('invalid fen');
       expect(result.ok).toBe(false);

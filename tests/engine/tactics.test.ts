@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { analyzeTactics } from '../../src/engine/tactics.js';
+import { getPositionFacts } from '../../src/engine/facts.js';
 
 describe('Tactical Report (Phase 1C)', () => {
   describe('Supervisor Fixtures', () => {
@@ -187,6 +188,40 @@ describe('Tactical Report (Phase 1C)', () => {
       const res3 = analyzeTactics(fenCastle, { from: 'e1', to: 'g1' });
       expect(res3.ok).toBe(false);
       if (!res3.ok) expect(res3.error.code).toBe('UNSUPPORTED_MOVE_TYPE');
+    });
+
+    it('Deterministic pin order + moverPinned prefers absolute', () => {
+      const fen = '4r2k/8/6b1/8/8/8/5N2/1Q2K3 w - - 0 1';
+      const move = { from: 'f2' as const, to: 'e4' as const };
+      const result = analyzeTactics(fen, move);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.moverPinned).toEqual({
+        kind: 'absolute',
+        pinned: { square: 'e4', role: 'knight', color: 'white' },
+        pinner: { square: 'e8', role: 'rook', color: 'black' },
+        target: { square: 'e1', role: 'king', color: 'white' }
+      });
+
+      const factsRes = getPositionFacts(result.value.fenAfter);
+      expect(factsRes.ok).toBe(true);
+      if (!factsRes.ok) return;
+
+      expect(factsRes.value.pins).toEqual([
+        {
+          kind: 'absolute',
+          pinned: { square: 'e4', role: 'knight', color: 'white' },
+          pinner: { square: 'e8', role: 'rook', color: 'black' },
+          target: { square: 'e1', role: 'king', color: 'white' }
+        },
+        {
+          kind: 'to_queen',
+          pinned: { square: 'e4', role: 'knight', color: 'white' },
+          pinner: { square: 'g6', role: 'bishop', color: 'black' },
+          target: { square: 'b1', role: 'queen', color: 'white' }
+        }
+      ]);
     });
   });
 });
