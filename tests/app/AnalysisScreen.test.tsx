@@ -35,14 +35,14 @@ class MockEngineClient implements EngineClient {
       await new Promise(r => setTimeout(r, this.delayMs));
     }
     if (this.shouldReject) {
-      return { ok: false, error: { code: 'INVALID_FEN', message: 'Mock error' } };
+      return Promise.reject(new Error('Mock engine failure'));
     }
-    return { ok: true, value: [] } as any;
+    return { ok: true, value: [] } as unknown as Result<MoveClassification[]>;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async classifyMove(_fen: string, _move: MoveInput): Promise<Result<MoveClassification>> {
-    return { ok: true, value: { label: 'safe', netMaterial: 0, reasons: [] } } as any;
+    return { ok: true, value: { label: 'safe', netMaterial: 0, reasons: [], destination: null, exchange: null, tactics: null, move: { from: 'a1', to: 'a2' } } } as unknown as Result<MoveClassification>;
   }
 }
 
@@ -60,7 +60,8 @@ describe('Analysis Screen', () => {
     });
 
     it('supports keyboard navigation', async () => {
-      const user = (userEvent as any).setup();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
       const client = new MockEngineClient();
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
       
@@ -77,7 +78,8 @@ describe('Analysis Screen', () => {
     });
 
     it('selecting an opponent piece does nothing', async () => {
-      const user = (userEvent as any).setup();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
       const client = new MockEngineClient();
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
       
@@ -90,7 +92,8 @@ describe('Analysis Screen', () => {
     });
 
     it('tapping a non-legal square shows the exact message', async () => {
-      const user = (userEvent as any).setup();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
       const client = new MockEngineClient();
       client.classifyMovesFrom = async () => ({ ok: true, value: [] });
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
@@ -105,7 +108,8 @@ describe('Analysis Screen', () => {
     });
 
     it('piece with no legal moves shows specific message', async () => {
-      const user = (userEvent as any).setup();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
       const client = new MockEngineClient();
       client.classifyMovesFrom = async () => ({ ok: true, value: [] });
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
@@ -121,7 +125,8 @@ describe('Analysis Screen', () => {
 
   describe('States', () => {
     it('does not show Checking moves... if analysis is fast', async () => {
-      const user = (userEvent as any).setup();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
       const client = new MockEngineClient();
       client.delayMs = 50; // < 150ms
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
@@ -160,7 +165,8 @@ describe('Analysis Screen', () => {
     });
 
     it('engine error shows exact message and keeps selection', async () => {
-      const user = (userEvent as any).setup();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
       const client = new MockEngineClient();
       client.shouldReject = true;
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
@@ -188,7 +194,8 @@ describe('Analysis Screen', () => {
   });
 
   describe('End-to-end with REAL engine', () => {
-    const user = (userEvent as any).setup();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
       const realClient = new DirectEngineClient();
 
     it('Position 1, select e6 -> g5 badge Loses material', async () => {
@@ -263,7 +270,8 @@ describe('Analysis Screen', () => {
     }, 10000);
 
     it('has no violations with piece selected', async () => {
-      const user = (userEvent as any).setup();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
       const { container } = render(<AnalysisScreen engineClient={new MockEngineClient()} initialFen={startpos} />);
       await user.click(screen.getByLabelText(/e2, white pawn/i));
       const results = await axe(container);
