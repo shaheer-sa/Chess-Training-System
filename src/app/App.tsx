@@ -20,15 +20,10 @@ export const App: React.FC<{ engineClient?: EngineClient }> = ({ engineClient = 
     }
     setCurrentScreen(screen);
   };
-  
-  const startAnalysis = (fen: string) => {
-    setInitialFen(fen);
-    setCurrentScreen('analysis');
-  };
 
   return (
     <div style={{ fontFamily: 'sans-serif', margin: 0, padding: 0 }}>
-      {currentScreen === 'home' && <Home onNavigate={navigate} onAnalyze={startAnalysis} />}
+      {currentScreen === 'home' && <Home onNavigate={navigate} />}
       {currentScreen === 'help' && <Help onNavigate={navigate} />}
       {currentScreen === 'analysis' && <AnalysisScreen engineClient={engineClient} initialFen={initialFen} onNavigate={navigate} />}
     </div>

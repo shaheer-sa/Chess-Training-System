@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { EngineClient } from '../engine/EngineClient.js';
 import { MoveClassification, Square } from '../../engine/types.js';
 import { Chess, fen as fenOps } from 'chessops';
-import { makeFen } from 'chessops/fen';
+import { Piece } from '../components/Piece.js';
 
 interface AnalysisScreenProps {
   engineClient: EngineClient;
   initialFen?: string;
-  onNavigate?: (screen: any) => void;
+  onNavigate?: (screen: 'home' | 'help' | 'analysis') => void;
 }
 
 const SAMPLES = [
@@ -20,15 +20,11 @@ const SAMPLES = [
 ];
 
 export const BADGE_INFO = {
-  safe: { icon: '✓', text: 'Safe', meaning: 'No immediate material or tactical problem was found. It does not mean this is the best move.', color: '#2e7d32' },
-  even_trade: { icon: '⇄', text: 'Even trade', meaning: 'Your piece can be taken, but you win back the same value.', color: '#1565c0' },
-  loses_material: { icon: '⚠', text: 'Loses material', meaning: 'This move loses material or allows a tactic against you right away.', color: '#c62828' },
-  unclear: { icon: '?', text: 'Unclear', meaning: 'This needs deeper calculation than this trainer does — check it yourself.', color: '#f57f17' },
+  safe: { icon: '✓', text: 'Safe', meaning: 'No immediate material or tactical problem was found. It does not mean this is the best move.', color: '#2e7d32', textColor: '#ffffff' },
+  even_trade: { icon: '⇄', text: 'Even trade', meaning: 'Your piece can be taken, but you win back the same value.', color: '#1565c0', textColor: '#ffffff' },
+  loses_material: { icon: '⚠', text: 'Loses material', meaning: 'This move loses material or allows a tactic against you right away.', color: '#c62828', textColor: '#ffffff' },
+  unclear: { icon: '?', text: 'Unclear', meaning: 'This needs deeper calculation than this trainer does — check it yourself.', color: '#f57f17', textColor: '#000000' },
 } as const;
-
-const PIECES: Record<string, string> = {
-  p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king'
-};
 
 export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, initialFen, onNavigate }) => {
   const initSetup = initialFen ? fenOps.parseFen(initialFen) : null;
@@ -46,8 +42,10 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   const [engineError, setEngineError] = useState(false);
   const [destinationSquare, setDestinationSquare] = useState<number | null>(null);
   const [resultMessage, setResultMessage] = useState<string>('');
+  const [flipped, setFlipped] = useState(false);
+  const [focusedSquare, setFocusedSquare] = useState<number>(0);
   
-  const analyzingTimer = useRef<any>(null);
+  const analyzingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (fen) {
@@ -119,7 +117,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
             setEngineError(true);
           }
         }
-      } catch (e) {
+      } catch {
         setEngineError(true);
       } finally {
         setAnalyzing(false);
@@ -157,8 +155,12 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       if (e.key === 'ArrowLeft') nextFile = Math.max(0, currentFile - 1);
       if (e.key === 'ArrowRight') nextFile = Math.min(7, currentFile + 1);
       const nextIndex = (nextRank << 3) | nextFile;
-      const el = document.getElementById(`sq-${nextIndex}`);
-      if (el) el.focus();
+      setFocusedSquare(nextIndex);
+      // Wait for render to update tabIndex, then focus
+      setTimeout(() => {
+        const el = document.getElementById(`sq-${nextIndex}`);
+        if (el) el.focus();
+      }, 0);
     }
   };
 
@@ -184,18 +186,22 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       <div
         id={`sq-${index}`}
         key={index}
-        tabIndex={0}
-        role="button"
+        tabIndex={index === focusedSquare ? 0 : -1}
+        role="gridcell"
         aria-label={ariaLabel}
         onKeyDown={(e) => handleKeyDown(e, index)}
-        onClick={() => onSquareClick(index)}
+        onClick={() => {
+          setFocusedSquare(index);
+          onSquareClick(index);
+        }}
+        onFocus={() => setFocusedSquare(index)}
         style={{
           width: '12.5%',
           height: '12.5%',
           backgroundColor: isLight ? '#f0d9b5' : '#b58863',
           position: 'absolute',
-          left: `${file * 12.5}%`,
-          top: `${(7 - rank) * 12.5}%`,
+          left: `${(flipped ? 7 - file : file) * 12.5}%`,
+          top: `${(flipped ? rank : 7 - rank) * 12.5}%`,
           boxSizing: 'border-box',
           border: isSelected ? '3px solid #333' : isSelectedDest ? '3px solid #fff' : 'none',
           display: 'flex',
@@ -205,14 +211,24 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
         }}
       >
         {piece && (
-          <svg viewBox="0 0 45 45" width="80%" height="80%">
-            <text x="22.5" y="35" fontSize="35" textAnchor="middle" fill={piece.color === 'white' ? '#fff' : '#000'} stroke={piece.color === 'white' ? '#000' : '#fff'} strokeWidth="1.5">
-              {piece.role === 'pawn' ? '♟' : piece.role === 'knight' ? '♞' : piece.role === 'bishop' ? '♝' : piece.role === 'rook' ? '♜' : piece.role === 'queen' ? '♛' : '♚'}
-            </text>
-          </svg>
+          <Piece 
+            color={piece.color === 'white' ? 'w' : 'b'} 
+            type={piece.role === 'pawn' ? 'P' : piece.role === 'knight' ? 'N' : piece.role === 'bishop' ? 'B' : piece.role === 'rook' ? 'R' : piece.role === 'queen' ? 'Q' : 'K'} 
+            style={{ width: '80%', height: '80%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+          />
         )}
         {isDestination && !piece && (
           <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.3)' }} />
+        )}
+        {(rank === (flipped ? 7 : 0)) && (
+          <div style={{ position: 'absolute', bottom: 2, right: 2, fontSize: '10px', color: isLight ? '#b58863' : '#f0d9b5' }}>
+            {getSquareName(index)[0]}
+          </div>
+        )}
+        {(file === (flipped ? 7 : 0)) && (
+          <div style={{ position: 'absolute', top: 2, left: 2, fontSize: '10px', color: isLight ? '#b58863' : '#f0d9b5' }}>
+            {getSquareName(index)[1]}
+          </div>
         )}
         {isDestination && piece && (
           <div style={{ position: 'absolute', width: '100%', height: '100%', border: '4px solid rgba(0,0,0,0.3)', borderRadius: '50%', boxSizing: 'border-box' }} />
@@ -220,7 +236,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
         {isDestination && moveInfo && (
           <div style={{
             position: 'absolute', top: 2, right: 2, backgroundColor: BADGE_INFO[moveInfo.label].color,
-            color: '#fff', fontSize: '10px', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold'
+            color: BADGE_INFO[moveInfo.label].textColor, fontSize: '10px', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold',
+            border: '1px solid #000'
           }}>
             {BADGE_INFO[moveInfo.label].icon}
           </div>
@@ -229,11 +246,17 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     );
   };
 
-  const squares = [];
+  const rows = [];
   for (let rank = 0; rank < 8; rank++) {
+    const squaresInRow = [];
     for (let file = 0; file < 8; file++) {
-      squares.push(renderSquare(rank, file));
+      squaresInRow.push(renderSquare(rank, file));
     }
+    rows.push(
+      <div key={`row-${rank}`} role="row" style={{ display: 'contents' }}>
+        {squaresInRow}
+      </div>
+    );
   }
 
   const selectedDestInfo = destinationSquare !== null ? moves.find(m => m.move.to === getSquareName(destinationSquare)) : null;
@@ -266,8 +289,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       {position && (
         <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, padding: '10px' }}>
           <div style={{ flex: '1 1 400px', maxWidth: '600px', margin: '0 auto' }}>
-            <div style={{ position: 'relative', width: '100%', paddingBottom: '100%', border: '1px solid #ccc' }}>
-              {squares}
+            <div role="grid" aria-label="Chess board" style={{ position: 'relative', width: '100%', paddingBottom: '100%', border: '1px solid #ccc' }}>
+              {rows}
             </div>
             
             <div style={{ marginTop: '10px', minHeight: '30px' }}>
@@ -278,6 +301,11 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               {showAnalyzingIndicator && <div>Checking moves…</div>}
               {engineError && <div>We couldn't analyze this move. Try another square.</div>}
             </div>
+            
+            <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
+              <button onClick={() => setFlipped(!flipped)}>Flip Board</button>
+              {onNavigate && <button onClick={() => onNavigate('help')} style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer' }}>What do the labels mean?</button>}
+            </div>
           </div>
           
           <div style={{ flex: '1 1 300px', padding: '20px', background: '#f9f9f9', marginLeft: '10px' }}>
@@ -285,8 +313,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               <div aria-live="polite">
                 <h2>{BADGE_INFO[selectedDestInfo.label].text}</h2>
                 <span style={{ fontSize: '24px' }}>{BADGE_INFO[selectedDestInfo.label].icon}</span>
-                <p>Result: {BADGE_INFO[selectedDestInfo.label].text}. {BADGE_INFO[selectedDestInfo.label].meaning}</p>
-                <p>You lose more material than you win.</p>
+                <p>{BADGE_INFO[selectedDestInfo.label].meaning}</p>
               </div>
             ) : (
               <div>Result panel</div>

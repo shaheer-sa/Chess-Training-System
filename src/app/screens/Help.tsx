@@ -5,14 +5,12 @@ import { BADGE_INFO } from './AnalysisScreen.js';
 export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavigate }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 20px', fontFamily: 'sans-serif' }}>
-      <button 
-        onClick={() => onNavigate('home')}
-        style={{ alignSelf: 'flex-start', padding: '8px 16px', marginBottom: '20px', cursor: 'pointer' }}
-      >
-        &larr; Back to Home
-      </button>
+      <header style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <strong>Chess Training System</strong>
+        <button onClick={() => onNavigate('home')}>Home</button>
+      </header>
 
-      <h1>How to use</h1>
+      <h1>What do the labels mean?</h1>
       <p style={{ maxWidth: '600px', fontSize: '18px', color: '#555', lineHeight: '1.5' }}>
         This app helps you learn if a move is safe. Just tap one of your pieces, and we'll tell you the immediate material consequences of moving to any square.
       </p>
@@ -21,7 +19,7 @@ export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavi
         <h2>Vocabulary</h2>
         <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <li style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <span style={{ fontSize: '24px', backgroundColor: BADGE_INFO['safe'].color, color: '#fff', padding: '5px', borderRadius: '4px' }}>
+            <span style={{ fontSize: '24px', backgroundColor: BADGE_INFO['safe'].color, color: BADGE_INFO['safe'].textColor, border: '1px solid #000', padding: '5px', borderRadius: '4px' }}>
               {BADGE_INFO['safe'].icon}
             </span>
             <div>
@@ -29,7 +27,7 @@ export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavi
             </div>
           </li>
           <li style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <span style={{ fontSize: '24px', backgroundColor: BADGE_INFO['even_trade'].color, color: '#fff', padding: '5px', borderRadius: '4px' }}>
+            <span style={{ fontSize: '24px', backgroundColor: BADGE_INFO['even_trade'].color, color: BADGE_INFO['even_trade'].textColor, border: '1px solid #000', padding: '5px', borderRadius: '4px' }}>
               {BADGE_INFO['even_trade'].icon}
             </span>
             <div>
@@ -37,7 +35,7 @@ export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavi
             </div>
           </li>
           <li style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <span style={{ fontSize: '24px', backgroundColor: BADGE_INFO['loses_material'].color, color: '#fff', padding: '5px', borderRadius: '4px' }}>
+            <span style={{ fontSize: '24px', backgroundColor: BADGE_INFO['loses_material'].color, color: BADGE_INFO['loses_material'].textColor, border: '1px solid #000', padding: '5px', borderRadius: '4px' }}>
               {BADGE_INFO['loses_material'].icon}
             </span>
             <div>
@@ -45,7 +43,7 @@ export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavi
             </div>
           </li>
           <li style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <span style={{ fontSize: '24px', backgroundColor: BADGE_INFO['unclear'].color, color: '#fff', padding: '5px', borderRadius: '4px' }}>
+            <span style={{ fontSize: '24px', backgroundColor: BADGE_INFO['unclear'].color, color: BADGE_INFO['unclear'].textColor, border: '1px solid #000', padding: '5px', borderRadius: '4px' }}>
               {BADGE_INFO['unclear'].icon}
             </span>
             <div>

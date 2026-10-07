@@ -11,10 +11,10 @@ self.onmessage = (e: MessageEvent) => {
       result = classifyMove(fen, move);
     }
     self.postMessage({ id, result });
-  } catch (error: any) {
+  } catch (error: unknown) {
     self.postMessage({ 
       id, 
-      result: { ok: false, error: { code: 'ILLEGAL_POSITION', message: error.message } } 
+      result: { ok: false, error: { code: 'ILLEGAL_POSITION', message: error instanceof Error ? error.message : 'Unknown error' } } 
     });
   }
 };

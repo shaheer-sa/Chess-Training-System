@@ -1,18 +1,20 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { axe, toHaveNoViolations } from 'vitest-axe';
+import { axe } from 'vitest-axe';
+// @ts-expect-error vitest-axe types missing
 import * as matchers from 'vitest-axe/matchers';
 import React from 'react';
-import { AnalysisScreen } from '../../src/app/screens/AnalysisScreen';
+import { AnalysisScreen } from '../../src/app/screens/AnalysisScreen.js';
 
-expect.extend(matchers);
-import { DirectEngineClient } from '../../src/app/engine/DirectEngineClient';
-import { EngineClient } from '../../src/app/engine/EngineClient';
-import { Result } from '../../src/engine/types';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+expect.extend(matchers as any);
+import { DirectEngineClient } from '../../src/app/engine/DirectEngineClient.js';
+import { EngineClient } from '../../src/app/engine/EngineClient.js';
+
 import { cleanup } from '@testing-library/react';
 
 afterEach(() => {
@@ -26,7 +28,8 @@ class MockEngineClient implements EngineClient {
   public delayMs = 0;
   public shouldReject = false;
 
-  async classifyMovesFrom(fen: string, from: string): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async classifyMovesFrom(_fen: string, _from: string): Promise<unknown> {
     if (this.delayMs > 0) {
       await new Promise(r => setTimeout(r, this.delayMs));
     }
@@ -36,7 +39,8 @@ class MockEngineClient implements EngineClient {
     return { ok: true, value: [] };
   }
 
-  async classifyMove(fen: string, move: any): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async classifyMove(_fen: string, _move: unknown): Promise<unknown> {
     return { ok: true, value: { label: 'safe', netMaterial: 0, reasons: [] } };
   }
 }
@@ -134,10 +138,9 @@ describe('Analysis Screen', () => {
       render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
       
       const e2Square = screen.getByLabelText('e2, white pawn');
+      let resolveClick: () => void;
       
-      let resolveClick: any;
-      const originalClassify = client.classifyMovesFrom;
-      client.classifyMovesFrom = async (f, s) => {
+      client.classifyMovesFrom = async () => {
         return new Promise(res => {
           resolveClick = () => res({ ok: true, value: [] });
         });
@@ -170,7 +173,6 @@ describe('Analysis Screen', () => {
     });
 
     it('invalid FEN shows exact message and keeps field text', async () => {
-      const user = userEvent.setup();
       const client = new MockEngineClient();
       render(<AnalysisScreen engineClient={client} initialFen="invalid fen" />);
       
@@ -185,10 +187,10 @@ describe('Analysis Screen', () => {
   });
 
   describe('End-to-end with REAL engine', () => {
-    const realClient = new DirectEngineClient();
+    const user = userEvent.setup();
+      const realClient = new DirectEngineClient();
 
     it('Position 1, select e6 -> g5 badge Loses material', async () => {
-      const user = userEvent.setup();
       render(<AnalysisScreen engineClient={realClient} initialFen="k7/8/2b1N2p/8/8/8/6R1/7K w - - 0 1" />);
       
       await user.click(screen.getByLabelText(/e6, white knight/i));
@@ -199,7 +201,6 @@ describe('Analysis Screen', () => {
     });
 
     it('Position 2, select f2 -> e4 badge Safe', async () => {
-      const user = userEvent.setup();
       render(<AnalysisScreen engineClient={realClient} initialFen="7k/8/8/8/R1r5/8/5N2/K7 w - - 0 1" />);
       
       await user.click(screen.getByLabelText(/f2, white knight/i));
@@ -210,7 +211,6 @@ describe('Analysis Screen', () => {
     });
 
     it('Position 3, select d2 -> d4 badge Even trade', async () => {
-      const user = userEvent.setup();
       render(<AnalysisScreen engineClient={realClient} initialFen="4k3/8/8/2p5/8/8/3P4/3QK3 w - - 0 1" />);
       
       await user.click(screen.getByLabelText(/d2, white pawn/i));
@@ -221,7 +221,6 @@ describe('Analysis Screen', () => {
     });
 
     it('Position 5, select e2 -> e8 badge Unclear', async () => {
-      const user = userEvent.setup();
       render(<AnalysisScreen engineClient={realClient} initialFen="3r2k1/5ppp/8/8/8/8/4R3/4R1K1 w - - 0 1" />);
       
       await user.click(screen.getByLabelText(/e2, white rook/i));
@@ -232,7 +231,6 @@ describe('Analysis Screen', () => {
     });
 
     it('Starting position, select e1 -> no legal moves message', async () => {
-      const user = userEvent.setup();
       render(<AnalysisScreen engineClient={realClient} initialFen={startpos} />);
       
       await user.click(screen.getByLabelText(/e1, white king/i));
@@ -242,7 +240,6 @@ describe('Analysis Screen', () => {
     });
 
     it('Destination selected -> result panel shows label + icon + meaning', async () => {
-      const user = userEvent.setup();
       render(<AnalysisScreen engineClient={realClient} initialFen="k7/8/2b1N2p/8/8/8/6R1/7K w - - 0 1" />);
       
       await user.click(screen.getByLabelText(/e6, white knight/i));
@@ -253,7 +250,7 @@ describe('Analysis Screen', () => {
       
       expect(screen.getByText('Loses material')).toBeTruthy();
       expect(screen.getAllByText('⚠').length).toBeGreaterThan(0);
-      expect(screen.getByText('You lose more material than you win.')).toBeTruthy();
+      expect(screen.getByText('This move loses material or allows a tactic against you right away.')).toBeTruthy();
     });
   });
 
@@ -261,7 +258,7 @@ describe('Analysis Screen', () => {
     it('has no violations on idle state', async () => {
       const { container } = render(<AnalysisScreen engineClient={new MockEngineClient()} initialFen={startpos} />);
       const results = await axe(container);
-      expect(results).toHaveNoViolations();
+      (expect(results) as unknown as { toHaveNoViolations: () => void }).toHaveNoViolations();
     }, 10000);
 
     it('has no violations with piece selected', async () => {
@@ -269,7 +266,7 @@ describe('Analysis Screen', () => {
       const { container } = render(<AnalysisScreen engineClient={new MockEngineClient()} initialFen={startpos} />);
       await user.click(screen.getByLabelText(/e2, white pawn/i));
       const results = await axe(container);
-      expect(results).toHaveNoViolations();
+      (expect(results) as unknown as { toHaveNoViolations: () => void }).toHaveNoViolations();
     });
   });
 });
