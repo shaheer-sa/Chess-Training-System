@@ -86,3 +86,38 @@ export interface ExchangeReport {
     resultForMover: number;    // mover's final net material if opponent starts with this capture
   }[];
 }
+
+export interface Pin {
+  kind: 'absolute' | 'to_queen';
+  pinned: PieceOnSquare;
+  pinner: PieceOnSquare;
+  target: PieceOnSquare;
+}
+
+export interface PositionFacts {
+  sideToMove: Color;
+  inCheck: boolean;
+  checkers: PieceOnSquare[];
+  pins: Pin[];
+  kingZones: {
+    white: { king: Square; zone: Square[]; enemyAttackers: PieceOnSquare[] };
+    black: { king: Square; zone: Square[]; enemyAttackers: PieceOnSquare[] };
+  };
+}
+
+export interface TacticalReport {
+  fenBefore: string;
+  fenAfter: string;
+  mover: { color: Color; role: Role; from: Square; to: Square; promotion?: Role };
+  givesCheck: boolean;
+  deliversMate: boolean;
+  causesStalemate: boolean;
+  moverPinned: Pin | null;
+  allowsMateInOne: { from: Square; to: Square; promotion?: Role }[];
+  hangingAfterMove: {
+    piece: PieceOnSquare;
+    opponentGain: number;
+    cause: 'defender_moved' | 'line_opened' | 'other';
+  }[];
+  exchangeLineMate: { stepIndex: number; matedColor: Color } | null;
+}

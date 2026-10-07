@@ -13,7 +13,7 @@ const POSITIONS = [
 const CROWDED_FEN = '3r2bk/3q4/1np2n2/8/1N3N2/1B6/3Q4/3R3K w - - 0 1';
 const CROWDED_MOVE = { from: 'f4' as const, to: 'd5' as const };
 
-function runBenchmark() {
+async function runBenchmark() {
   console.log('=== EXCHANGE BENCHMARK ===\n');
 
   // (a) Crowded fixture alone
@@ -44,7 +44,22 @@ function runBenchmark() {
     console.log(`  ${pos.name.padEnd(10)} (${moves.length.toString().padStart(2)} moves): ${elapsedMs.toFixed(2)} ms`);
   }
 
-  console.log(`\nAll-positions total: ${grandTotalMs.toFixed(2)} ms\n`);
+  console.log(`\nAll-positions total: ${grandTotalMs.toFixed(2)} ms`);
+
+  console.log('\n(c) analyzeTactics over every legal move of kiwipete:');
+  const kiwiFen = POSITIONS.find(p => p.name === 'kiwipete')!.fen;
+  const kiwiMovesRes = getLegalMoves(kiwiFen);
+  if (kiwiMovesRes.ok) {
+    const kiwiMoves = kiwiMovesRes.value;
+    const tStartTactics = performance.now();
+    for (const m of kiwiMoves) {
+      const { analyzeTactics } = await import('../src/engine/tactics.js');
+      analyzeTactics(kiwiFen, { from: m.from, to: m.to, promotion: m.promotion });
+    }
+    const tEndTactics = performance.now() - tStartTactics;
+    console.log(`  Total ms: ${tEndTactics.toFixed(2)} ms`);
+    console.log(`  Average per move: ${(tEndTactics / kiwiMoves.length).toFixed(2)} ms`);
+  }
 }
 
 runBenchmark();
