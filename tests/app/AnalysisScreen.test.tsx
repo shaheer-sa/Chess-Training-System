@@ -461,5 +461,93 @@ describe('Analysis Screen', () => {
         vi.runAllTimers();
       });
     });
+    it('R2: selected-destination indicator is dashed #1a1a1a', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const client = new MockEngineClient();
+      const { container } = render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      
+      const e2Square = screen.getByLabelText('e2, white pawn');
+      fireEvent.click(e2Square);
+      
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      
+      const e4Square = screen.getByLabelText('e4, empty (legal destination)');
+      fireEvent.click(e4Square);
+      
+      const indicator = container.querySelector('[style*="dashed"]');
+      expect(indicator).toBeTruthy();
+      expect(indicator?.getAttribute('style')).toContain('dashed #1a1a1a');
+      expect(indicator?.getAttribute('style')).not.toContain('solid #fff');
+    });
+
+    it('R3: Esc fully cancels selection', async () => {
+      const user = userEvent.setup();
+      const client = new MockEngineClient();
+      render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      
+      await user.click(screen.getByLabelText('e2, white pawn'));
+      expect(screen.getByLabelText('e4, empty (legal destination)')).toBeTruthy();
+      
+      await user.keyboard('{Escape}');
+      
+      const allLabels = screen.queryAllByLabelText(/legal destination/);
+      expect(allLabels.length).toBe(0);
+    });
+
+    it('R4: tap-again while pending cancels indicator', async () => {
+      vi.useFakeTimers();
+      let resolvePromise: (value: any) => void;
+      const client: EngineClient = {
+        classifyMovesFrom: () => new Promise((resolve) => { resolvePromise = resolve; }),
+        classifyMove: vi.fn(),
+      };
+      
+      render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      const e2Square = screen.getByLabelText('e2, white pawn');
+      
+      fireEvent.click(e2Square);
+      
+      // Before 150ms tap again
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+      
+      fireEvent.click(e2Square);
+      
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      
+      expect(screen.queryByText('Checking moves…')).toBeNull();
+    });
+
+    it('R4: Change position while pending cancels indicator', async () => {
+      vi.useFakeTimers();
+      let resolvePromise: (value: any) => void;
+      const client: EngineClient = {
+        classifyMovesFrom: () => new Promise((resolve) => { resolvePromise = resolve; }),
+        classifyMove: vi.fn(),
+      };
+      
+      render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      const e2Square = screen.getByLabelText('e2, white pawn');
+      
+      fireEvent.click(e2Square);
+      
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+      
+      fireEvent.click(screen.getByText('Change position'));
+      
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      
+      expect(screen.queryByText('Checking moves…')).toBeNull();
+    });
   });
 });

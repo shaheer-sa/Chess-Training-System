@@ -102,4 +102,44 @@ describe('WorkerEngineClient Cache', () => {
 
     expect(callCount).toBe(2);
   });
+  it('R5: Cache does not mix positions when responses arrive out of order', async () => {
+    const client = new WorkerEngineClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const worker = (client as any).worker as MockWorker;
+    
+    // 1. request fenA pending
+    const pA = client.classifyMovesFrom('fenA', 'e2');
+    
+    // 2. request fenB pending
+    const pB = client.classifyMovesFrom('fenB', 'e2');
+    
+    // 3. fenB resolves first
+    worker.onmessage!({ data: { id: 2, result: { ok: true, value: ['B'] } } } as MessageEvent);
+    
+    // 4. fenA resolves second
+    worker.onmessage!({ data: { id: 1, result: { ok: true, value: ['A'] } } } as MessageEvent);
+    
+    await pA;
+    await pB;
+    
+    // 5. a new fenB request should return fenB's result
+    // wait, if we requested fenB, the cache for fenB should be preserved?
+    // the requirement says "keep clearing it when the FEN changes". 
+    // Wait, the client only keeps ONE cached FEN. 
+    // Let's just mock postRequest or mock worker to not respond for the second one, 
+    // and verify what it returns. Actually, if it clears when FEN changes, 
+    // the current FEN in the client should be fenB because it was requested last.
+    // Let's just do another classifyMovesFrom('fenB', 'e2') and see if it uses the cache or returns 'B'.
+    
+    let callCount = 0;
+    client['postRequest'] = async () => {
+      callCount++;
+      return { ok: true, value: ['NewCall'] };
+    };
+    
+    const pB_new = await client.classifyMovesFrom('fenB', 'e2');
+    // If it cached fenB correctly (and didn't overwrite it with fenA's late arrival)
+    expect(callCount).toBe(0); 
+    expect(pB_new).toEqual({ ok: true, value: ['B'] });
+  });
 });
