@@ -408,5 +408,58 @@ describe('Analysis Screen', () => {
       
       expect(screen.getByText('Results appear here after you choose a destination.')).toBeTruthy();
     });
+
+    it('F15: Analyzing timer cleanup', async () => {
+      vi.useFakeTimers();
+      const client: EngineClient = {
+        classifyMovesFrom: () => new Promise(() => {}),
+        classifyMove: vi.fn(),
+      };
+      
+      const { unmount } = render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      const e2Square = screen.getByLabelText('e2, white pawn');
+      
+      fireEvent.click(e2Square);
+      
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      
+      unmount();
+      
+      expect(vi.getTimerCount()).toBe(0); 
+      
+      act(() => {
+        vi.runAllTimers();
+      });
+    });
+
+    it('F15: Message timer cleanup', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      
+      const client = new MockEngineClient();
+      const { unmount } = render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      
+      const e2Square = screen.getByLabelText('e2, white pawn');
+      fireEvent.click(e2Square);
+      
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      
+      const a6Square = screen.getByLabelText('a6, empty');
+      fireEvent.click(a6Square);
+      
+      expect(screen.getAllByText("That square isn't a legal move for this piece.")[0]).toBeTruthy();
+      const preTimerCount = vi.getTimerCount();
+      expect(preTimerCount).toBeGreaterThan(0);
+      
+      unmount();
+      
+      expect(vi.getTimerCount()).toBeLessThan(preTimerCount);
+      
+      act(() => {
+        vi.runAllTimers();
+      });
+    });
   });
 });
