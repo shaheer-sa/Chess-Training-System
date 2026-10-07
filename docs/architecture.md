@@ -33,10 +33,20 @@ Analysis flows linearly through five decoupled layers (planned for future phases
 
 ## Core Analysis Rule
 
-**All analysis happens on the position AFTER the candidate move is played.**
+**All consequence analysis runs on the position AFTER the candidate move is played.**
 
 - When a user considers moving a piece to square $S$, the engine plays the candidate move to generate the resulting board state.
 - Square safety, opponent responses, newly unmasked x-rays, and exchange balances are evaluated on this subsequent position.
+
+---
+
+## Structured Output Contract
+
+- Engine output must be structured, not just a classification verdict.
+- At minimum, output includes:
+  - The ordered exchange steps (piece, from-square, captured piece).
+  - Deterministic reason codes.
+- Explanations can later be generated directly from engine data rather than written freehand.
 
 ---
 

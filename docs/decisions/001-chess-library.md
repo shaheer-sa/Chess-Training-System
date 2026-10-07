@@ -53,9 +53,9 @@ Both libraries correctly passed the standard Perft benchmarks:
 
 **Key Finding**: Both libraries' square attacker queries are purely **geometric** (line of sight / pseudo-legal). However, `chessops` explicitly exposes `ctx.blockers` (pinned pieces) and `ctx.checkers`, whereas `chess.js` encapsulates pin status privately inside move generation, preventing inspection without attempting full moves.
 
-### 3. Defenders for the Side NOT to Move
+### 3. Defenders for the Side NOT to Move & Legality Determination
 
-In square safety analysis, we need the legal defenders of a target square for the side not to move.
+In square safety analysis, we need the defenders of a target square for the side not to move.
 
 - **`chess.js`**:
   - Attempting to load a FEN with turn flipped to Black when White is in check (`6rk/8/8/8/8/8/8/6K1 b - - 0 1`) succeeds without validation error, leading to a legally corrupt state where Black can capture White's King (`Rxg1`).
@@ -64,8 +64,10 @@ In square safety analysis, we need the legal defenders of a target square for th
   - Cannot evaluate defenders without either mutating turn or relying on pseudo-legal `attackers()`.
 - **`chessops`**:
   - Validates chess law: `Chess.fromSetup()` rejects opposite-check positions with `PositionError: ERR_OPPOSITE_CHECK`.
-  - **Does NOT require flipping FEN/turn**: `pos.kingAttackers(square, 'black', occ)` queries attackers/defenders for either color directly on the undisturbed position.
-  - Pin detection can be run directly on the opposite side's king using exported bitboard functions (`rookAttacks`, `bishopAttacks`, `between`) without mutating position state.
+  - `pos.kingAttackers(square, color, occ)` and ray functions give **GEOMETRIC attackers** for either color without mutating the position.
+  - `ctx.blockers` gives pin information for the **SIDE TO MOVE only**.
+  - **Legal recaptures are NOT determined by geometric queries**.
+  - **Planned Phase 1 approach**: Determine legality by actually playing each capture and generating legal moves for the side to move at each step. Geometric/bitboard queries are used for speed and x-ray detection only, never as proof of legality.
 
 ### 4. Exchange & X-Ray Analysis Primitives
 
@@ -99,13 +101,19 @@ We adopt **`chessops`** as the rules and board representation engine.
 ### Rationale
 
 1. `chessops` provides the exact primitives required for square safety analysis and SEE: bitboard rays, custom occupancy masks for x-ray line of sight, and explicit pin blockers (`ctx.blockers`).
-2. It allows querying attackers and defenders for either color without clumsy FEN turn-flipping hacks.
+2. It allows querying geometric attackers for either color without clumsy FEN turn-flipping hacks.
 3. It has strict, deterministic position validation and zero hidden mutation.
+
+---
+
+## License
+
+- `chessops` is licensed under **GPL-3.0-or-later**.
+- **Decision**: This project is licensed **GPL-3.0-or-later** and the source will be publicly available. This allows the engine to run in the browser.
 
 ---
 
 ## Known Limitations to Handle Ourselves
 
-1. **GPL-3.0-or-later License**: Any distributed application incorporating `chessops` must respect GPL-3 requirements.
-2. **`kingAttackers` Naming & Semantics**: The method `pos.kingAttackers(sq, color, occ)` returns pseudo-legal/geometric attackers (all pieces of `color` attacking `sq`, named historically after king-check generation). We must build a Rules Adapter layer on top to filter geometric attackers into legally permitted attackers/defenders (checking absolute pins and king safety).
-3. **Square Indexing**: Squares in `chessops` are represented as integers `0..63` (`Square`). Our adapter layer will map between algebraic strings (`'e4'`) and chessops numerical squares using `parseSquare` and `makeSquare`.
+1. **Geometric vs Legal Distinction**: `pos.kingAttackers()` returns geometric attackers, not legal moves or legal defenders, and `ctx.blockers` covers pins for the side to move only. Legality must be established in Phase 1 by making moves and checking legal candidate moves at each exchange step.
+2. **Square Indexing**: Squares in `chessops` are represented as integers `0..63` (`Square`). Our adapter layer will map between algebraic strings (`'e4'`) and chessops numerical squares using `parseSquare` and `makeSquare`.
