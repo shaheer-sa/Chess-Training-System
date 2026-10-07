@@ -94,7 +94,7 @@ function findPins(board: Board, targetColor: Color): Pin[] {
           const blockerSq = betw[0];
           if (targetSet.has(blockerSq)) {
             const blockerRole = toRole(board.getRole(blockerSq)!);
-            if (!(tRole === 'queen' && blockerRole === 'queen')) {
+            if (!(tRole === 'queen' && (blockerRole === 'queen' || blockerRole === 'king'))) {
               pins.push({
                 kind: tRole === 'king' ? 'absolute' : 'to_queen',
                 pinned: { square: toAlgebraic(blockerSq), role: blockerRole, color: targetColor },
@@ -116,7 +116,7 @@ function findPins(board: Board, targetColor: Color): Pin[] {
           const blockerSq = betw[0];
           if (targetSet.has(blockerSq)) {
             const blockerRole = toRole(board.getRole(blockerSq)!);
-            if (!(tRole === 'queen' && blockerRole === 'queen')) {
+            if (!(tRole === 'queen' && (blockerRole === 'queen' || blockerRole === 'king'))) {
               pins.push({
                 kind: tRole === 'king' ? 'absolute' : 'to_queen',
                 pinned: { square: toAlgebraic(blockerSq), role: blockerRole, color: targetColor },
@@ -130,7 +130,15 @@ function findPins(board: Board, targetColor: Color): Pin[] {
     }
   }
   
-  pins.sort((a, b) => fromAlgebraic(a.pinned.square) - fromAlgebraic(b.pinned.square));
+  pins.sort((a, b) => {
+    const pSqDiff = fromAlgebraic(a.pinned.square) - fromAlgebraic(b.pinned.square);
+    if (pSqDiff !== 0) return pSqDiff;
+    const kindDiff = (a.kind === 'absolute' ? 0 : 1) - (b.kind === 'absolute' ? 0 : 1);
+    if (kindDiff !== 0) return kindDiff;
+    const pinnerDiff = fromAlgebraic(a.pinner.square) - fromAlgebraic(b.pinner.square);
+    if (pinnerDiff !== 0) return pinnerDiff;
+    return fromAlgebraic(a.target.square) - fromAlgebraic(b.target.square);
+  });
   return pins;
 }
 
@@ -180,7 +188,15 @@ export function getPositionFacts(fen: string): Result<PositionFacts> {
 
   const whitePins = findPins(board, 'white');
   const blackPins = findPins(board, 'black');
-  const pins = [...whitePins, ...blackPins].sort((a, b) => fromAlgebraic(a.pinned.square) - fromAlgebraic(b.pinned.square));
+  const pins = [...whitePins, ...blackPins].sort((a, b) => {
+    const pSqDiff = fromAlgebraic(a.pinned.square) - fromAlgebraic(b.pinned.square);
+    if (pSqDiff !== 0) return pSqDiff;
+    const kindDiff = (a.kind === 'absolute' ? 0 : 1) - (b.kind === 'absolute' ? 0 : 1);
+    if (kindDiff !== 0) return kindDiff;
+    const pinnerDiff = fromAlgebraic(a.pinner.square) - fromAlgebraic(b.pinner.square);
+    if (pinnerDiff !== 0) return pinnerDiff;
+    return fromAlgebraic(a.target.square) - fromAlgebraic(b.target.square);
+  });
 
   return {
     ok: true,
