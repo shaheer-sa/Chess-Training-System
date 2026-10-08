@@ -12,7 +12,11 @@ export interface TrainingRecord {
   timestamp: string;
 }
 
-function readRecords(): TrainingRecord[] {
+// In-memory fallback
+let memoryRecords: TrainingRecord[] = [];
+let hasLoadedFromStorage = false;
+
+function loadFromStorage(): TrainingRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
@@ -24,24 +28,47 @@ function readRecords(): TrainingRecord[] {
   }
 }
 
-function writeRecords(records: TrainingRecord[]): void {
+function writeToStorage(records: TrainingRecord[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   } catch {
-    // Storage unavailable — silently degrade
+    // Storage unavailable — silently degrade, records remain in memory
+  }
+}
+
+function ensureLoaded() {
+  if (!hasLoadedFromStorage) {
+    const stored = loadFromStorage();
+    // Merge any existing memory records not in storage
+    const storedKeys = new Set(stored.map(r => `${r.sessionId}-${r.exerciseId}-${r.attempt}`));
+    const toAdd = memoryRecords.filter(r => !storedKeys.has(`${r.sessionId}-${r.exerciseId}-${r.attempt}`));
+    memoryRecords = [...stored, ...toAdd];
+    hasLoadedFromStorage = true;
   }
 }
 
 export function appendRecord(record: TrainingRecord): void {
-  const existing = readRecords();
-  existing.push(record);
-  writeRecords(existing);
+  ensureLoaded();
+  // Prevent duplicate insertion
+  const key = `${record.sessionId}-${record.exerciseId}-${record.attempt}`;
+  if (memoryRecords.some(r => `${r.sessionId}-${r.exerciseId}-${r.attempt}` === key)) {
+    return;
+  }
+  memoryRecords.push(record);
+  writeToStorage(memoryRecords);
 }
 
 export function getAllRecords(): TrainingRecord[] {
-  return readRecords();
+  ensureLoaded();
+  return [...memoryRecords];
 }
 
 export function generateSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// For testing
+export function _resetRecordsState(): void {
+  memoryRecords = [];
+  hasLoadedFromStorage = false;
 }

@@ -5,8 +5,8 @@ import { axe } from 'vitest-axe';
 // @ts-expect-error vitest-axe matchers missing types
 import * as matchers from 'vitest-axe/matchers';
 import React from 'react';
-import TrainingScreen from '../../src/app/screens/TrainingScreen';
-import { EngineClient } from '../../src/app/engine/EngineClient';
+import TrainingScreen from '../../src/app/screens/TrainingScreen.js';
+import { EngineClient } from '../../src/app/engine/EngineClient.js';
 
 expect.extend(matchers);
 

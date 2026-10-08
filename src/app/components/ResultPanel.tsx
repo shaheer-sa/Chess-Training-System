@@ -30,7 +30,9 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
   return (
     <div style={{ flex: '1 1 300px', padding: '20px', background: '#f9f9f9', margin: '4px' }}>
       <div>
-        <h2>{BADGE_INFO[selectedDestInfo.label as keyof typeof BADGE_INFO].text} <span style={{ fontSize: '24px' }}>{BADGE_INFO[selectedDestInfo.label as keyof typeof BADGE_INFO].icon}</span></h2>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: BADGE_INFO[selectedDestInfo.label as keyof typeof BADGE_INFO].color, color: BADGE_INFO[selectedDestInfo.label as keyof typeof BADGE_INFO].textColor, padding: '5px 10px', borderRadius: '4px', fontWeight: 'bold', fontSize: '18px', marginBottom: '10px' }}>
+          {BADGE_INFO[selectedDestInfo.label as keyof typeof BADGE_INFO].text} <span>{BADGE_INFO[selectedDestInfo.label as keyof typeof BADGE_INFO].icon}</span>
+        </div>
         <p><strong>{explanation.primary}</strong></p>
         
         {expandedLevel >= 2 && (

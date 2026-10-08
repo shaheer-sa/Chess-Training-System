@@ -5,6 +5,8 @@ import { Chess, fen as fenOps } from 'chessops';
 import { explain } from '../explain/explain.js';
 import { Board } from '../components/Board.js';
 import { ResultPanel } from '../components/ResultPanel.js';
+import { getStepText } from '../shared/exchange.js';
+import { ExchangeControls } from '../shared/ExchangeControls.js';
 
 interface AnalysisScreenProps {
   engineClient: EngineClient;
@@ -223,16 +225,12 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     }
   };
 
-  const selectedDestInfo = destinationSquare !== null ? moves.find(m => m.move.to === getSquareName(destinationSquare)) : null;
+  const selectedDestInfo = (destinationSquare !== null ? moves.find(m => m.move.to === getSquareName(destinationSquare)) : null) || null;
   const explanation = selectedDestInfo ? explain(selectedDestInfo) : null;
 
 
 
-  let stepText = '';
-  if (expandedLevel >= 3 && exchangeStep > 0 && selectedDestInfo?.exchange) {
-    const step = selectedDestInfo.exchange.bestLine[exchangeStep - 1];
-    stepText = `Step ${exchangeStep} of ${selectedDestInfo.exchange.bestLine.length}: ${step.side === 'white' ? 'White' : 'Black'} ${step.capturer.role} on ${step.capturer.square} takes ${step.captured.role} on ${step.captured.square}${step.promotion ? ' and becomes a queen' : ''}${step.givesCheck ? ' — check' : ''}.`;
-  }
+  const stepText = getStepText(selectedDestInfo, exchangeStep);
 
   let liveText = '';
   if (stepText) {
@@ -306,13 +304,12 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 <div aria-hidden="true">{liveText}</div>
                 {showAnalyzingIndicator && <div aria-hidden="true">Checking moves…</div>}
               </div>
-              {expandedLevel >= 3 && selectedDestInfo?.exchange && selectedDestInfo.exchange.bestLine.length > 0 && (
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <button onClick={() => setExchangeStep(0)} disabled={exchangeStep === 0}>Back to position</button>
-                  <button onClick={() => setExchangeStep(Math.max(1, exchangeStep - 1))} disabled={exchangeStep <= 1}>Prev</button>
-                  <button onClick={() => setExchangeStep(Math.min(selectedDestInfo.exchange!.bestLine.length, exchangeStep + 1))} disabled={exchangeStep === selectedDestInfo.exchange!.bestLine.length}>Next</button>
-                </div>
-              )}
+              <ExchangeControls
+                expandedLevel={expandedLevel}
+                exchangeStep={exchangeStep}
+                setExchangeStep={setExchangeStep}
+                selectedDestInfo={selectedDestInfo}
+              />
             </div>
             
             <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between' }}>

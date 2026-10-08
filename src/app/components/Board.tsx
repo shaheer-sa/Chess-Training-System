@@ -30,7 +30,7 @@ export const Board: React.FC<BoardProps> = ({
   position, flipped, onSquareClick, selectedSquare, destinationSquare, moves, expandedLevel, exchangeStep, selectedDestInfo,
   focusedSquare = 0, setFocusedSquare, readOnly = false, arrow
 }) => {
-  let displayBoard: Map<number, { role: string, color: string }> = new Map();
+  const displayBoard: Map<number, { role: string, color: string }> = new Map();
   for (let i = 0; i < 64; i++) {
     const p = position.board.get(i);
     if (p) displayBoard.set(i, { role: p.role, color: p.color });

@@ -5,20 +5,24 @@ import { Board } from '../components/Board.js';
 import { ResultPanel } from '../components/ResultPanel.js';
 import { Chess, fen as fenOps } from 'chessops';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
-import { MoveClassification } from '../../engine/types.js';
+import { MoveClassification, Result } from '../../engine/types.js';
 import { appendRecord, generateSessionId, getAllRecords } from '../training/records.js';
+import { getStepText } from '../shared/exchange.js';
+import { ExchangeControls } from '../shared/ExchangeControls.js';
 
 interface TrainingScreenProps {
   engineClient: EngineClient;
   exercises: Exercise[];
   onExit: () => void;
+  onTrainAgain?: () => void;
 }
 
-export default function TrainingScreen({ engineClient, exercises, onExit }: TrainingScreenProps) {
+export default function TrainingScreen({ engineClient, exercises, onExit, onTrainAgain }: TrainingScreenProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionId] = useState(() => generateSessionId());
   
   const [loading, setLoading] = useState(true);
+  const [engineError, setEngineError] = useState(false);
   const [result, setResult] = useState<MoveClassification | null>(null);
   
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -33,14 +37,46 @@ export default function TrainingScreen({ engineClient, exercises, onExit }: Trai
   
   const [userFlipped, setUserFlipped] = useState<boolean | null>(null);
 
+  const submittingRef = useRef(false);
+  const prefetchCache = useRef<Record<string, Promise<Result<MoveClassification>>>>({});
+
   const currentEx = exercises[currentIndex];
   const isComplete = currentIndex >= exercises.length;
 
+  const loadExercise = (index: number) => {
+    if (index >= exercises.length) return;
+    const ex = exercises[index];
+    const key = `${ex.id}-${ex.fen}-${ex.from}-${ex.to}`;
+
+    if (!prefetchCache.current[key]) {
+      prefetchCache.current[key] = engineClient.classifyMove(ex.fen, { from: ex.from, to: ex.to, promotion: ex.promotion as any });
+    }
+
+    if (index === currentIndex) {
+      setLoading(true);
+      setEngineError(false);
+      
+      prefetchCache.current[key].then(res => {
+        // Guard against stale resolution
+        if (exercises[currentIndex]?.id !== ex.id) return;
+        if (res.ok) {
+          setResult(res.value);
+          setLoading(false);
+          setStartTime(Date.now());
+        } else {
+          setEngineError(true);
+          setLoading(false);
+        }
+      }).catch(() => {
+        if (exercises[currentIndex]?.id !== ex.id) return;
+        setEngineError(true);
+        setLoading(false);
+      });
+    }
+  };
+
   useEffect(() => {
     if (isComplete) return;
-    let active = true;
-    
-    setLoading(true);
     setResult(null);
     setSelectedAnswer(null);
     setConfidence(null);
@@ -49,22 +85,23 @@ export default function TrainingScreen({ engineClient, exercises, onExit }: Trai
     setExpandedLevel(1);
     setExchangeStep(0);
     setUserFlipped(null);
-
-    engineClient.classifyMove(currentEx.fen, { from: currentEx.from, to: currentEx.to, promotion: currentEx.promotion as any })
-      .then(res => {
-        if (!active) return;
-        if (res.ok) setResult(res.value);
-        setLoading(false);
-        setStartTime(Date.now());
-      });
-      
-    return () => { active = false; };
-  }, [currentIndex, currentEx, engineClient, isComplete]);
+    submittingRef.current = false;
+    
+    loadExercise(currentIndex);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, isComplete]); // currentEx, engineClient intentionally omitted to prevent double triggering
 
   if (isComplete) {
-    const records = getAllRecords().filter(r => r.sessionId === sessionId);
-    const correctCount = records.filter(r => r.attempt === 1 && r.correct).length;
+    const sessionRecords = getAllRecords().filter(r => r.sessionId === sessionId);
     
+    // Compute summary correctly
+    // g = graded first attempts, c = correct first attempts, n = not sure first attempts
+    const firstAttempts = exercises.map(ex => sessionRecords.find(r => r.exerciseId === ex.id && r.attempt === 1)).filter(Boolean) as any[];
+    
+    const c = firstAttempts.filter(r => r.correct === true).length;
+    const n = firstAttempts.filter(r => r.answer === 'not_sure').length;
+    const g = firstAttempts.filter(r => r.answer !== 'not_sure').length;
+
     const handleDownload = () => {
       const data = JSON.stringify(getAllRecords(), null, 2);
       const blob = new Blob([data], { type: 'application/json' });
@@ -79,8 +116,18 @@ export default function TrainingScreen({ engineClient, exercises, onExit }: Trai
     return (
       <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
         <h2>Session Complete</h2>
-        <p>{correctCount} correct on first attempt</p>
-        <button onClick={onExit} style={{ marginRight: '10px' }}>Train again</button>
+        <p>{c} of {g} correct</p>
+        <p>{n} not sure</p>
+        
+        <ul style={{ margin: '20px 0' }}>
+          {firstAttempts.map((r, i) => (
+            <li key={i}>
+              {r.exerciseId}: {r.answer} (Actual: {r.correctLabel})
+            </li>
+          ))}
+        </ul>
+
+        <button onClick={onTrainAgain || onExit} style={{ marginRight: '10px' }}>Train again</button>
         <button onClick={handleDownload}>Download my results</button>
       </div>
     );
@@ -99,13 +146,14 @@ export default function TrainingScreen({ engineClient, exercises, onExit }: Trai
     const piece = position.board.get(fromIdx);
     if (piece) {
       const color = piece.color === 'white' ? 'White' : 'Black';
-      let promo = currentEx.promotion ? ` and promotes to a ${currentEx.promotion}` : '';
+      const promo = currentEx.promotion ? ` and promotes to a ${currentEx.promotion}` : '';
       questionText = `${color} plays ${piece.role} ${currentEx.from}→${currentEx.to}${promo}. What happens?`;
     }
   }
 
   const handleSubmit = () => {
-    if (!selectedAnswer || !result) return;
+    if (!selectedAnswer || !result || submittingRef.current) return;
+    submittingRef.current = true;
     
     const msToAnswer = Date.now() - startTime;
     const isCorrect = selectedAnswer === 'not_sure' ? null : selectedAnswer === result.label;
@@ -123,6 +171,10 @@ export default function TrainingScreen({ engineClient, exercises, onExit }: Trai
     });
     
     setSubmitted(true);
+    // Prefetch next
+    if (currentIndex + 1 < exercises.length) {
+      loadExercise(currentIndex + 1);
+    }
   };
 
   const handleTryAgain = () => {
@@ -133,6 +185,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit }: Trai
     setExpandedLevel(1);
     setExchangeStep(0);
     setStartTime(Date.now());
+    submittingRef.current = false;
   };
 
   let feedback = '';
@@ -140,12 +193,18 @@ export default function TrainingScreen({ engineClient, exercises, onExit }: Trai
     if (selectedAnswer === 'not_sure') feedback = 'Not graded';
     else if (selectedAnswer === result.label) feedback = 'Correct';
     else {
-      const chosenLabel = Object.keys(BADGE_INFO).includes(selectedAnswer) 
+      const chosenLabel = Object.keys(BADGE_INFO).includes(selectedAnswer!) 
         ? BADGE_INFO[selectedAnswer as keyof typeof BADGE_INFO].text 
         : selectedAnswer;
       feedback = `Not quite — you chose ${chosenLabel}`;
     }
   }
+
+  const handleRetryLoad = () => {
+    const key = `${currentEx.id}-${currentEx.fen}-${currentEx.from}-${currentEx.to}`;
+    delete prefetchCache.current[key]; // force fresh request
+    loadExercise(currentIndex);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
@@ -159,28 +218,54 @@ export default function TrainingScreen({ engineClient, exercises, onExit }: Trai
 
       <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, padding: '4px' }}>
         <div style={{ flex: '1 1 352px', maxWidth: '600px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ alignSelf: 'flex-end', marginBottom: '8px' }}>
-            <button onClick={() => setUserFlipped(!displayFlipped)}>Flip Board</button>
-          </div>
-          {position && (
-            <Board
-              position={position}
-              flipped={displayFlipped}
-              selectedSquare={null}
-              destinationSquare={null}
-              moves={[]}
-              expandedLevel={expandedLevel}
-              exchangeStep={exchangeStep}
-              selectedDestInfo={submitted ? result : null}
-              readOnly={true}
-              arrow={!submitted ? { from: currentEx.from, to: currentEx.to } : null}
-            />
+          {!loading && !engineError && (
+            <>
+              <div style={{ alignSelf: 'flex-end', marginBottom: '8px' }}>
+                <button onClick={() => setUserFlipped(!displayFlipped)}>Flip Board</button>
+              </div>
+              {expandedLevel >= 3 && exchangeStep > 0 && submitted && result?.exchange && (
+                <div style={{ textAlign: 'center', marginBottom: '8px', fontWeight: 'bold' }}>
+                  Showing the exchange — step {exchangeStep} of {result.exchange.bestLine.length}
+                </div>
+              )}
+              {position && (
+                <Board
+                  position={position}
+                  flipped={displayFlipped}
+                  selectedSquare={null}
+                  destinationSquare={null}
+                  moves={[]}
+                  expandedLevel={expandedLevel}
+                  exchangeStep={exchangeStep}
+                  selectedDestInfo={submitted ? result : null}
+                  readOnly={true}
+                  arrow={!submitted ? { from: currentEx.from, to: currentEx.to } : null}
+                />
+              )}
+              {submitted && (
+                 <div style={{ marginTop: '10px', width: '100%', display: 'flex', justifyContent: 'center' }}>
+                    <ExchangeControls
+                      expandedLevel={expandedLevel}
+                      exchangeStep={exchangeStep}
+                      setExchangeStep={setExchangeStep}
+                      selectedDestInfo={result}
+                      nextLabel="Next step"
+                      prevLabel="Prev step"
+                    />
+                 </div>
+              )}
+            </>
           )}
         </div>
 
         <div style={{ flex: '1 1 300px', padding: '20px', background: '#f9f9f9', margin: '4px' }}>
           {loading ? (
             <h2>Loading exercise…</h2>
+          ) : engineError ? (
+            <div>
+              <h2 aria-live="polite">An error occurred while loading this exercise.</h2>
+              <button onClick={handleRetryLoad}>Retry</button>
+            </div>
           ) : (
             <>
               <h2 aria-live="polite">{submitted ? feedback : questionText}</h2>
@@ -189,40 +274,54 @@ export default function TrainingScreen({ engineClient, exercises, onExit }: Trai
                 <div style={{ marginTop: '20px' }}>
                   <div role="radiogroup" aria-label="Your prediction" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {Object.entries(BADGE_INFO).map(([key, info]) => (
-                      <button
-                        key={key}
-                        role="radio"
-                        aria-checked={selectedAnswer === key}
-                        onClick={() => setSelectedAnswer(key)}
-                        style={{ padding: '10px', textAlign: 'left', background: selectedAnswer === key ? '#e0e0e0' : '#fff', border: '1px solid #ccc', cursor: 'pointer' }}
-                      >
+                      <label key={key} style={{ display: 'flex', alignItems: 'center', padding: '10px', background: selectedAnswer === key ? '#e0e0e0' : '#fff', border: '1px solid #ccc', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="prediction"
+                          value={key}
+                          checked={selectedAnswer === key}
+                          onChange={() => setSelectedAnswer(key)}
+                          style={{ marginRight: '10px' }}
+                        />
                         {info.text} {info.icon}
-                      </button>
+                      </label>
                     ))}
-                    <button
-                      role="radio"
-                      aria-checked={selectedAnswer === 'not_sure'}
-                      onClick={() => setSelectedAnswer('not_sure')}
-                      style={{ padding: '10px', textAlign: 'left', background: selectedAnswer === 'not_sure' ? '#e0e0e0' : '#fff', border: '1px solid #ccc', cursor: 'pointer' }}
-                    >
+                    <label style={{ display: 'flex', alignItems: 'center', padding: '10px', background: selectedAnswer === 'not_sure' ? '#e0e0e0' : '#fff', border: '1px solid #ccc', cursor: 'pointer', marginTop: '10px' }}>
+                      <input
+                        type="radio"
+                        name="prediction"
+                        value="not_sure"
+                        checked={selectedAnswer === 'not_sure'}
+                        onChange={() => setSelectedAnswer('not_sure')}
+                        style={{ marginRight: '10px' }}
+                      />
                       Not sure
-                    </button>
+                    </label>
                   </div>
 
                   {selectedAnswer && (
                     <div style={{ marginTop: '20px' }}>
-                      <label style={{ fontWeight: 'bold' }}>Confidence (optional):</label>
-                      <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                        {['Low', 'Medium', 'High'].map(lvl => (
-                          <button
-                            key={lvl}
-                            onClick={() => setConfidence(lvl.toLowerCase() as any)}
-                            style={{ flex: 1, padding: '8px', background: confidence === lvl.toLowerCase() ? '#e0e0e0' : '#fff', border: '1px solid #ccc', cursor: 'pointer' }}
-                          >
-                            {lvl}
-                          </button>
-                        ))}
-                      </div>
+                      <fieldset style={{ border: 'none', margin: 0, padding: 0 }}>
+                        <legend style={{ fontWeight: 'bold', marginBottom: '10px' }}>Confidence (optional):</legend>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          {['Low', 'Medium', 'High'].map(lvl => {
+                            const val = lvl.toLowerCase() as any;
+                            return (
+                              <label key={lvl} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', background: confidence === val ? '#e0e0e0' : '#fff', border: '1px solid #ccc', cursor: 'pointer' }}>
+                                <input
+                                  type="radio"
+                                  name="confidence"
+                                  value={val}
+                                  checked={confidence === val}
+                                  onChange={() => setConfidence(val)}
+                                  style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+                                />
+                                {lvl}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </fieldset>
                     </div>
                   )}
 
@@ -244,7 +343,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit }: Trai
                     setExpandedLevel={setExpandedLevel}
                     exchangeStep={exchangeStep}
                     setExchangeStep={setExchangeStep}
-                    stepText=""
+                    stepText={getStepText(result, exchangeStep)}
                   />
 
                   <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
