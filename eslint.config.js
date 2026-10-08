@@ -5,7 +5,14 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ['dist/**', 'node_modules/**', '*.log'],
+    ignores: ['dist/**', 'node_modules/**', '*.log', 'smoke-screenshots/**'],
+  },
+  {
+    // Supervisor CI scripts run in Node.
+    files: ['scripts/ci/**/*.mjs'],
+    languageOptions: {
+      globals: { console: 'readonly', process: 'readonly', fetch: 'readonly', setTimeout: 'readonly', document: 'readonly' },
+    },
   },
   {
     files: ['src/engine/**/*.ts'],

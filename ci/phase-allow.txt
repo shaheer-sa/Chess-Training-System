@@ -1,0 +1,2 @@
+# Protected path prefixes the CURRENT phase is allowed to change (edited on main by the supervisor only).
+# Empty = nothing protected may change.

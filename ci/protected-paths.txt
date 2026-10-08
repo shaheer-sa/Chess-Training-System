@@ -1,0 +1,17 @@
+# Paths a phase branch may NOT change unless the supervisor allows it in ci/phase-allow.txt.
+# The guard always reads BOTH files from main, so a branch cannot weaken them.
+# One path prefix per line.
+src/engine/
+src/app/explain/explain.ts
+tests/engine/
+tests/fixtures/
+tests/support/
+tests/app/explain.test.ts
+tests/app/WorkerEngineClient.test.ts
+.github/
+ci/
+scripts/ci/
+vite.config.ts
+eslint.config.js
+tsconfig.json
+tsconfig.build.json
