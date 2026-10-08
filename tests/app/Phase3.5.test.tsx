@@ -34,7 +34,7 @@ function createMockEngine(): EngineClient {
       }
     }
   };
-  return { classifyMove: vi.fn().mockResolvedValue(result) } as unknown as EngineClient;
+  return { classifyMovesFrom: vi.fn().mockResolvedValue({ ok: true, value: [] }), classifyMove: vi.fn().mockResolvedValue(result) } as unknown as EngineClient;
 }
 
 const FIXED_SESSION: Exercise[] = [

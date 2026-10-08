@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { EngineClient } from '../engine/EngineClient.js';
 import { MoveClassification, Square } from '../../engine/types.js';
 import { Chess, fen as fenOps } from 'chessops';
-import { explain } from '../explain/explain.js';
 import { Board } from '../components/Board.js';
 import { ResultPanel } from '../components/ResultPanel.js';
 import { getStepText } from '../shared/exchange.js';
@@ -23,21 +22,7 @@ const SAMPLES = [
   { name: 'Position 5', fen: '3r2k1/5ppp/8/8/8/8/4R3/4R1K1 w - - 0 1' }
 ];
 
-export const BADGE_INFO = {
-  safe: { icon: '✓', text: 'Safe', meaning: 'No immediate material or tactical problem was found. It does not mean this is the best move.', color: '#2e7d32', textColor: '#ffffff' },
-  even_trade: { icon: '⇄', text: 'Even trade', meaning: 'Your piece can be taken, but you win back the same value.', color: '#1565c0', textColor: '#ffffff' },
-  loses_material: { icon: '⚠', text: 'Loses material', meaning: 'This move loses material or allows a tactic against you right away.', color: '#c62828', textColor: '#ffffff' },
-  unclear: { icon: '?', text: 'Unclear', meaning: 'This needs deeper calculation than this trainer does — check it yourself.', color: '#f57f17', textColor: '#000000' },
-} as const;
-
-export function formatPawns(cp: number): string {
-  const pawns = cp / 100;
-  const sign = pawns > 0 ? '+' : '';
-  const plural = Math.abs(pawns) === 1 ? 'pawn' : 'pawns';
-  return `${sign}${pawns} ${plural}`;
-}
-
-export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, initialFen, onNavigate }) => {
+export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, initialFen }) => {
   const initSetup = initialFen ? fenOps.parseFen(initialFen) : null;
   const initPos = initSetup?.isOk ? Chess.fromSetup(initSetup.unwrap()).unwrap() : null;
 
@@ -198,46 +183,14 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onSquareClick(index);
-    } else if (e.key === 'Escape') {
-      setSelectedSquare(null);
-      setDestinationSquare(null);
-    } else if (e.key.startsWith('Arrow')) {
-      e.preventDefault();
-      const currentRank = index >> 3;
-      const currentFile = index & 7;
-      let nextRank = currentRank;
-      let nextFile = currentFile;
-      if (e.key === 'ArrowUp') nextRank = flipped ? Math.max(0, currentRank - 1) : Math.min(7, currentRank + 1);
-      if (e.key === 'ArrowDown') nextRank = flipped ? Math.min(7, currentRank + 1) : Math.max(0, currentRank - 1);
-      if (e.key === 'ArrowLeft') nextFile = flipped ? Math.min(7, currentFile + 1) : Math.max(0, currentFile - 1);
-      if (e.key === 'ArrowRight') nextFile = flipped ? Math.max(0, currentFile - 1) : Math.min(7, currentFile + 1);
-      const nextIndex = (nextRank << 3) | nextFile;
-      setFocusedSquare(nextIndex);
-      // Wait for render to update tabIndex, then focus
-      setTimeout(() => {
-        const el = document.getElementById(`sq-${nextIndex}`);
-        if (el) el.focus();
-      }, 0);
-    }
-  };
-
   const selectedDestInfo = (destinationSquare !== null ? moves.find(m => m.move.to === getSquareName(destinationSquare)) : null) || null;
-  const explanation = selectedDestInfo ? explain(selectedDestInfo) : null;
-
-
-
   const stepText = getStepText(selectedDestInfo, exchangeStep);
 
   let liveText = '';
   if (stepText) {
     liveText = stepText;
-  } else if (selectedDestInfo && explanation) {
-    liveText = `${BADGE_INFO[selectedDestInfo.label].text}. ${explanation.primary}`;
+  } else if (selectedDestInfo) {
+    liveText = `Result shown for ${selectedDestInfo.move.to}`;
   } else if (engineError) {
     liveText = "We couldn't analyze this move. Try another square.";
   } else if (resultMessage) {
@@ -251,85 +204,124 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
-      <div aria-live="polite" style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div aria-live="polite" className="sr-only">
         {liveText}
       </div>
-      <header style={{ padding: '10px', background: '#eee', display: 'flex', justifyContent: 'space-between' }}>
-        <strong>Chess Training System</strong>
-        {onNavigate && <button onClick={() => onNavigate('home')}>Home</button>}
-      </header>
-      <div style={{ background: '#333', color: '#fff', padding: '10px', textAlign: 'center' }}>
+
+      <div style={{ background: 'var(--panel)', color: 'var(--text-muted)', padding: '10px 24px', textAlign: 'center', fontSize: '0.85rem', borderBottom: '1px solid var(--border)' }}>
         ANALYSIS · Results are shown immediately
       </div>
       
-      {!position && (
-        <div style={{ padding: '20px' }}>
-          <h3>Select a position</h3>
-          <ul>
-            {SAMPLES.map((s, i) => (
-              <li key={i}><button onClick={() => { resetSelection(); setFen(s.fen); }}>{s.name}</button></li>
-            ))}
-          </ul>
-          <div>
-            <input type="text" value={inputFen} onChange={handleFenChange} placeholder="Paste FEN here" style={{ width: '300px' }} />
-            {!validFen && <div style={{ color: '#333' }}>This position isn't valid. Check the FEN.</div>}
+      {!position ? (
+        <div style={{ padding: '40px 24px', maxWidth: '1320px', margin: '0 auto', width: '100%' }}>
+          <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '16px' }}>Select a position</h2>
+            <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {SAMPLES.map((s, i) => (
+                <li key={i}>
+                  <button 
+                    onClick={() => { resetSelection(); setFen(s.fen); }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--accent-text)', padding: 0, cursor: 'pointer', fontSize: '1rem', textDecoration: 'underline' }}
+                  >
+                    {s.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div>
+              <input aria-label="FEN" type="text" value={inputFen} onChange={handleFenChange} placeholder="Paste FEN here" 
+                style={{ width: '100%', maxWidth: '400px', padding: '10px 12px', background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', borderRadius: '6px', fontSize: '1rem' }} 
+              />
+              {!validFen && <div style={{ color: 'var(--accent-text)', marginTop: '8px', fontSize: '0.9rem' }}>This position isn't valid. Check the FEN.</div>}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="analysis-layout">
+          {/* Top toolbar */}
+          <div className="analysis-toolbar" style={{ background: 'var(--panel)', padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
+            <div style={{ flex: 1, minWidth: '280px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="mono" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>FEN</span>
+              <input aria-label="FEN" type="text" value={inputFen} onChange={handleFenChange} style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', borderRadius: '6px', fontSize: '0.9rem', fontFamily: 'IBM Plex Mono, monospace' }} 
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={() => setFlipped(!flipped)}
+                style={{ background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem' }}
+              >
+                Flip Board
+              </button>
+              <button 
+                onClick={() => { resetSelection(); setFen(''); setInputFen(''); }}
+                style={{ background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem' }}
+              >
+                Change position
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', maxWidth: '1320px', margin: '0 auto', width: '100%' }}>
+            
+            <div className="board-container" style={{ flex: '1 1 400px', maxWidth: '640px', display: 'flex', flexDirection: 'column' }}>
+              {expandedLevel >= 3 && exchangeStep > 0 && selectedDestInfo?.exchange && (
+                <div style={{ padding: '12px', textAlign: 'center', fontWeight: 600, color: 'var(--text-2)' }}>
+                  Showing the exchange — step {exchangeStep} of {selectedDestInfo.exchange.bestLine.length}
+                </div>
+              )}
+              <Board
+                position={position}
+                flipped={flipped}
+                onSquareClick={onSquareClick}
+                selectedSquare={selectedSquare}
+                destinationSquare={destinationSquare}
+                moves={moves}
+                expandedLevel={expandedLevel}
+                exchangeStep={exchangeStep}
+                selectedDestInfo={selectedDestInfo}
+                focusedSquare={focusedSquare}
+                setFocusedSquare={setFocusedSquare}
+              />
+              
+              <div style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'space-between', background: 'var(--panel)', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ flex: 1 }}>
+                  <div aria-hidden="true" style={{ fontSize: '0.95rem', color: 'var(--text-2)' }}>{liveText}</div>
+                  {showAnalyzingIndicator && <div aria-hidden="true" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>Checking moves…</div>}
+                </div>
+                {selectedDestInfo && (
+                  <ExchangeControls
+                    expandedLevel={expandedLevel}
+                    exchangeStep={exchangeStep}
+                    setExchangeStep={setExchangeStep}
+                    selectedDestInfo={selectedDestInfo}
+                  />
+                )}
+              </div>
+            </div>
+            
+            <ResultPanel
+              selectedDestInfo={selectedDestInfo}
+              expandedLevel={expandedLevel}
+              setExpandedLevel={setExpandedLevel}
+              exchangeStep={exchangeStep}
+              setExchangeStep={setExchangeStep}
+              stepText={stepText}
+            />
           </div>
         </div>
       )}
 
-      {position && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, padding: '4px' }}>
-          <div style={{ flex: '1 1 352px', maxWidth: '600px', margin: '0 auto' }}>
-            {expandedLevel >= 3 && exchangeStep > 0 && selectedDestInfo?.exchange && (
-              <div style={{ textAlign: 'center', marginBottom: '8px', fontWeight: 'bold' }}>
-                Showing the exchange — step {exchangeStep} of {selectedDestInfo.exchange.bestLine.length}
-              </div>
-            )}
-            <Board
-              position={position}
-              flipped={flipped}
-              onSquareClick={onSquareClick}
-              selectedSquare={selectedSquare}
-              destinationSquare={destinationSquare}
-              moves={moves}
-              expandedLevel={expandedLevel}
-              exchangeStep={exchangeStep}
-              selectedDestInfo={selectedDestInfo}
-              focusedSquare={focusedSquare}
-              setFocusedSquare={setFocusedSquare}
-            />
-            
-            <div style={{ marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-              <div style={{ flex: 1, minHeight: '30px' }}>
-                <div aria-hidden="true">{liveText}</div>
-                {showAnalyzingIndicator && <div aria-hidden="true">Checking moves…</div>}
-              </div>
-              <ExchangeControls
-                expandedLevel={expandedLevel}
-                exchangeStep={exchangeStep}
-                setExchangeStep={setExchangeStep}
-                selectedDestInfo={selectedDestInfo}
-              />
-            </div>
-            
-            <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
-              <button onClick={() => setFlipped(!flipped)}>Flip Board</button>
-              <button onClick={() => { resetSelection(); setFen(''); setInputFen(''); }}>Change position</button>
-              {onNavigate && <button onClick={() => onNavigate('help')} style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer' }}>What do the labels mean?</button>}
-            </div>
-          </div>
-          
-          <ResultPanel
-            selectedDestInfo={selectedDestInfo}
-            expandedLevel={expandedLevel}
-            setExpandedLevel={setExpandedLevel}
-            exchangeStep={exchangeStep}
-            setExchangeStep={setExchangeStep}
-            stepText={stepText}
-          />
-        </div>
-      )}
+      <style>{`
+        .analysis-layout { display: flex; flex-direction: column; }
+        @media (max-width: 767px) {
+          .board-container { width: 100%; max-width: none !important; }
+          .board-container > div[role="grid"] { border-left: none !important; border-right: none !important; outline: none !important; }
+        }
+        @media (min-width: 1024px) {
+          .board-container { padding: 24px; border-right: 1px solid var(--border); }
+        }
+      `}</style>
     </div>
   );
 };

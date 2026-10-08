@@ -83,7 +83,7 @@ describe('TrainingScreen', () => {
     expect((submitBtn as HTMLButtonElement).disabled).toBe(true);
 
     // Click wrong answer first
-    const wrongBtn = screen.getByText('Even trade ⇄');
+    const wrongBtn = screen.getByText('Even trade');
     fireEvent.click(wrongBtn);
     expect((submitBtn as HTMLButtonElement).disabled).toBe(false);
 
@@ -97,7 +97,7 @@ describe('TrainingScreen', () => {
     expect(screen.queryByText(/Not quite/i)).toBeNull();
     
     // Now click correct answer
-    const safeBtn = screen.getByText('Safe ✓');
+    const safeBtn = screen.getByText('Safe');
     fireEvent.click(safeBtn);
     fireEvent.click(screen.getByText('Submit'));
     
@@ -110,7 +110,7 @@ describe('TrainingScreen', () => {
     render(<TrainingScreen engineClient={mockEngineClient} exercises={[getDummyExercises()[2]]} onExit={vi.fn()} />);
     await screen.findByText(/What happens\?/);
     
-    fireEvent.click(screen.getByText('Safe ✓'));
+    fireEvent.click(screen.getByText('Safe'));
     fireEvent.click(screen.getByText('Submit'));
 
     await screen.findByText('Not quite — you chose Safe');
@@ -130,7 +130,7 @@ describe('TrainingScreen', () => {
     render(<TrainingScreen engineClient={mockEngineClient} exercises={[getDummyExercises()[1]]} onExit={vi.fn()} />);
     await screen.findByText(/What happens\?/);
     
-    const safeBtn = screen.getByText('Safe ✓');
+    const safeBtn = screen.getByText('Safe');
     safeBtn.focus();
     fireEvent.click(safeBtn);
     
@@ -147,7 +147,7 @@ describe('TrainingScreen', () => {
     //@ts-expect-error type missing
     expect(await axe(container)).toHaveNoViolations();
     
-    fireEvent.click(screen.getByText('Safe ✓'));
+    fireEvent.click(screen.getByText('Safe'));
     fireEvent.click(screen.getByText('Submit'));
     await screen.findByText('Correct');
     //@ts-expect-error type missing

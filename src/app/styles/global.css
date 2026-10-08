@@ -1,0 +1,87 @@
+/* Rookvex Design System — global tokens & base styles */
+
+/* Font imports */
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-sans/700.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+@import '@fontsource/cinzel/700.css';
+
+:root {
+  --bg: #2D231E;
+  --bg-sunken: #271E1A;
+  --panel: #382B24;
+  --panel-hover: #47372D;
+  --border: #4A3A30;
+  --border-strong: #5C493D;
+  --text: #F3E9DC;
+  --text-2: #D9CBBB;
+  --text-muted: #B5A495;
+  --text-faint: #A8978A;
+  --accent: #D45C1C;
+  --accent-btn: #C2501D;
+  --accent-text: #F0894A;
+  --board-light: #FBE6C2;
+  --board-dark: #847E7C;
+  --board-ink: #15171b;
+  --board-coord: #2b241b;
+  --board-last: rgba(212, 92, 28, 0.30);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'IBM Plex Sans', sans-serif;
+  color: var(--text);
+  margin: 0 0 0.5em;
+}
+
+a {
+  color: var(--accent-text);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+.mono {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

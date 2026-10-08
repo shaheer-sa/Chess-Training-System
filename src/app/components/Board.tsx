@@ -3,6 +3,7 @@ import { Chess, fen as fenOps } from 'chessops';
 import { Piece } from './Piece.js';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { MoveClassification, Square } from '../../engine/types.js';
+import { LabelIcon } from './LabelIcon.js';
 
 interface BoardProps {
   position: Chess;
@@ -140,54 +141,59 @@ export const Board: React.FC<BoardProps> = ({
         style={{
           width: '12.5%',
           height: '12.5%',
-          backgroundColor: isLight ? '#f0d9b5' : '#b58863',
+          backgroundColor: isLight ? 'var(--board-light)' : 'var(--board-dark)',
           position: 'absolute',
           left: `${(flipped ? 7 - file : file) * 12.5}%`,
           top: `${(flipped ? rank : 7 - rank) * 12.5}%`,
           boxSizing: 'border-box',
-          border: (!isReplaying && isSelected) ? '3px solid #333' : (!isReplaying && isSelectedDest) ? '3px dashed #1a1a1a' : isReplayLandingSquare ? '3px dashed #1a1a1a' : 'none',
+          boxShadow: index === focusedSquare ? 'inset 0 0 0 3px #ffffff, inset 0 0 0 6px var(--board-ink)' : (isSelected ? 'inset 0 0 0 4px var(--board-ink)' : 'none'),
+          border: (!isReplaying && isSelectedDest) ? '3px dashed var(--board-ink)' : isReplayLandingSquare ? '3px dashed var(--board-ink)' : 'none',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
           cursor: readOnly ? 'default' : 'pointer'
         }}
       >
+        {isReplayLandingSquare && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'var(--board-last)', pointerEvents: 'none' }} />
+        )}
+        
         {piece && (
           <Piece 
             color={piece.color === 'white' ? 'w' : 'b'} 
             type={piece.role === 'pawn' ? 'P' : piece.role === 'knight' ? 'N' : piece.role === 'bishop' ? 'B' : piece.role === 'rook' ? 'R' : piece.role === 'queen' ? 'Q' : 'K'} 
-            style={{ width: '80%', height: '80%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            style={{ width: '80%', height: '80%', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1 }}
           />
         )}
         {!readOnly && !isReplaying && isDestination && !piece && (
-          <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: '#222', border: '2px solid #fff' }} />
+          <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(21, 23, 27, 0.42)' }} />
         )}
         {(rank === (flipped ? 7 : 0)) && (
-          <div aria-hidden="true" style={{ position: 'absolute', bottom: 2, right: 2, fontSize: '10px', color: isLight ? '#4a3219' : '#1a1109' }}>
+          <div aria-hidden="true" className="mono" style={{ position: 'absolute', bottom: 2, right: 4, fontSize: '12px', fontWeight: 600, color: 'var(--board-coord)', zIndex: 0 }}>
             {sqName[0]}
           </div>
         )}
         {(file === (flipped ? 7 : 0)) && (
-          <div aria-hidden="true" style={{ position: 'absolute', top: 2, left: 2, fontSize: '10px', color: isLight ? '#4a3219' : '#1a1109' }}>
+          <div aria-hidden="true" className="mono" style={{ position: 'absolute', top: 2, left: 4, fontSize: '12px', fontWeight: 600, color: 'var(--board-coord)', zIndex: 0 }}>
             {sqName[1]}
           </div>
         )}
         {!readOnly && !isReplaying && isDestination && piece && (
-          <div style={{ position: 'absolute', width: '90%', height: '90%', border: '3px dashed #1a1a1a', borderRadius: '50%', boxSizing: 'border-box' }} />
+          <div style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid rgba(21, 23, 27, 0.42)', borderRadius: '50%', boxSizing: 'border-box' }} />
         )}
         {!readOnly && !isReplaying && isDestination && moveInfo && (
           <div style={{
-            position: 'absolute', top: 2, right: 2, backgroundColor: BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].color,
-            color: BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].textColor, fontSize: '10px', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold',
-            border: '1px solid #000', zIndex: 10
+            position: 'absolute', top: '-4px', right: '-4px', backgroundColor: BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].color,
+            color: BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].textColor, padding: '2px', borderRadius: '6px',
+            border: '1.5px solid var(--board-ink)', zIndex: 10, display: 'flex', boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
           }}>
-            {BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].icon}
+            <LabelIcon kind={moveInfo.label as keyof typeof BADGE_INFO} size={14} />
           </div>
         )}
         {!readOnly && marker && (
           <div style={{
-            position: 'absolute', bottom: 2, left: 2, backgroundColor: '#333',
-            color: '#fff', fontSize: '10px', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold', zIndex: 10
+            position: 'absolute', bottom: 2, left: 2, backgroundColor: 'var(--panel)',
+            color: 'var(--text)', fontSize: '10px', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold', zIndex: 10, border: '1px solid var(--border)'
           }}>
             {marker}
           </div>
@@ -210,7 +216,7 @@ export const Board: React.FC<BoardProps> = ({
   }
 
   return (
-    <div role="grid" aria-label="Chess board" style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid #ccc', boxSizing: 'border-box' }}>
+    <div role="grid" aria-label="Chess board" style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid var(--border-strong)', boxSizing: 'border-box', overflow: 'hidden', borderRadius: '4px' }}>
       {rows}
       {readOnly && arrow && (() => {
         const fromFile = arrow.from.charCodeAt(0) - 97;
@@ -227,10 +233,10 @@ export const Board: React.FC<BoardProps> = ({
           <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 20 }}>
             <defs>
               <marker id="arrowhead" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
-                <polygon points="0 0, 4 2, 0 4" fill="rgba(0,0,0,0.5)" />
+                <polygon points="0 0, 4 2, 0 4" fill="var(--board-last)" />
               </marker>
             </defs>
-            <line x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke="rgba(0,0,0,0.5)" strokeWidth="3" markerEnd="url(#arrowhead)" />
+            <line x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke="var(--board-last)" strokeWidth="3" markerEnd="url(#arrowhead)" />
           </svg>
         );
       })()}

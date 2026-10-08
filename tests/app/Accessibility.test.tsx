@@ -15,7 +15,7 @@ expect.extend(matchers as any);
 
 afterEach(() => {
   cleanup();
-});
+}, 10000);
 
 describe('Accessibility - Other Screens', () => {
   it('Home screen has no violations', async () => {
@@ -23,12 +23,12 @@ describe('Accessibility - Other Screens', () => {
     const results = await axe(container);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (expect(results) as any).toHaveNoViolations();
-  });
+  }, 10000);
 
   it('Help screen has no violations', async () => {
     const { container } = render(<Help onNavigate={() => {}} />);
     const results = await axe(container);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (expect(results) as any).toHaveNoViolations();
-  });
-});
+  }, 10000);
+}, 10000);

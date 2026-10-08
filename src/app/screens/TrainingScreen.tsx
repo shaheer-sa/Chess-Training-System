@@ -9,6 +9,7 @@ import { MoveClassification, Result } from '../../engine/types.js';
 import { appendRecord, generateSessionId, getAllRecords } from '../training/records.js';
 import { getStepText } from '../shared/exchange.js';
 import { ExchangeControls } from '../shared/ExchangeControls.js';
+import { LabelIcon } from '../components/LabelIcon.js';
 
 interface TrainingScreenProps {
   engineClient: EngineClient;
@@ -94,18 +95,14 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
     const ex = exercises[currentIndex];
     currentKeyRef.current = `${ex.id}-${ex.fen}-${ex.from}-${ex.to}`;
     
-    // We do NOT reset state here anymore, it is handled atomically in handleNext / init
-    // But on mount or try again, we might need to load
     requestTokenRef.current += 1;
     loadExercise(currentIndex);
     
-  }, [currentIndex, isComplete]); // currentEx, engineClient intentionally omitted to prevent double triggering
+  }, [currentIndex, isComplete]);
 
   if (isComplete) {
     const sessionRecords = getAllRecords().filter(r => r.sessionId === sessionId);
     
-    // Compute summary correctly
-    // g = graded first attempts, c = correct first attempts, n = not sure first attempts
     const firstAttempts = exercises.map(ex => sessionRecords.find(r => r.exerciseId === ex.id && r.attempt === 1)).filter(Boolean) as import("../training/records.js").TrainingRecord[];
     
     const c = firstAttempts.filter(r => r.correct === true).length;
@@ -124,27 +121,38 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
     };
 
     return (
-      <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-        <h2>Session Complete</h2>
-        <p>{c} of {g} correct</p>
-        <p>{n} not sure</p>
+      <div style={{ padding: '40px 24px', maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <h2 style={{ fontSize: '2rem', margin: 0 }}>Session Complete</h2>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <div style={{ background: 'var(--panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{c} of {g}</div>
+            <div style={{ color: 'var(--text-muted)' }}>correct</div>
+          </div>
+          <div style={{ background: 'var(--panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{n}</div>
+            <div style={{ color: 'var(--text-muted)' }}>not sure</div>
+          </div>
+        </div>
         
-        <ul style={{ margin: '20px 0' }}>
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {firstAttempts.map((r, i) => {
             const answerLabel = r.answer === 'not_sure' ? 'Not sure' : (BADGE_INFO[r.answer as keyof typeof BADGE_INFO]?.text ?? r.answer);
             const grade = r.correct === true ? 'Correct' : r.answer === 'not_sure' ? 'Not graded' : 'Not quite';
             const correctLabel = BADGE_INFO[r.correctLabel as keyof typeof BADGE_INFO]?.text ?? r.correctLabel;
             return (
-              <li key={i}>
-                {i + 1}. {answerLabel} — {grade} (answer: {correctLabel})
+              <li key={i} style={{ background: 'var(--panel)', padding: '12px 16px', borderRadius: '6px', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{i + 1}. {answerLabel} — {grade}</span>
+                <span style={{ color: 'var(--text-muted)' }}>(answer: {correctLabel})</span>
               </li>
             );
           })}
         </ul>
 
-        <button onClick={onExit} style={{ marginRight: '10px' }}>Home</button>
-        <button onClick={onTrainAgain || onExit} style={{ marginRight: '10px' }}>Train again</button>
-        <button onClick={handleDownload}>Download my results</button>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <button onClick={onExit} style={{ background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '12px 24px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>Home</button>
+          <button onClick={onTrainAgain || onExit} style={{ background: 'var(--accent-btn)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>Train again</button>
+          <button onClick={handleDownload} style={{ background: 'transparent', color: 'var(--accent-text)', border: 'none', padding: '12px 24px', cursor: 'pointer', textDecoration: 'underline' }}>Download my results</button>
+        </div>
       </div>
     );
   }
@@ -187,7 +195,6 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
     });
     
     setSubmitted(true);
-    // Prefetch next
     if (currentIndex + 1 < exercises.length) {
       loadExercise(currentIndex + 1);
     }
@@ -252,24 +259,26 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'sans-serif' }}>
-      <header style={{ padding: '10px', background: '#eee', display: 'flex', justifyContent: 'space-between' }}>
-        <strong>Chess Training System</strong>
-        <button onClick={onExit}>Exit Training</button>
-      </header>
-      <div style={{ background: '#4a148c', color: '#fff', padding: '10px', textAlign: 'center' }}>
-        TRAINING · Exercise {currentIndex + 1} of {exercises.length} · Answer hidden until you submit
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ background: '#4a148c', color: '#fff', padding: '10px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
+        <span>TRAINING · Exercise {currentIndex + 1} of {exercises.length} · Answer hidden until you submit</span>
+        <button onClick={onExit} style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Exit Training</button>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, padding: '4px' }}>
-        <div style={{ flex: '1 1 352px', maxWidth: '600px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', maxWidth: '1320px', margin: '0 auto', width: '100%', padding: '24px 0' }}>
+        <div style={{ flex: '1 1 400px', maxWidth: '640px', padding: '0 24px', display: 'flex', flexDirection: 'column' }}>
           {!loading && !engineError && loadedExerciseKey === `${currentEx.id}-${currentEx.fen}-${currentEx.from}-${currentEx.to}` && (
             <>
               <div style={{ alignSelf: 'flex-end', marginBottom: '8px' }}>
-                <button onClick={() => setUserFlipped(!displayFlipped)}>Flip Board</button>
+                <button 
+                  onClick={() => setUserFlipped(!displayFlipped)}
+                  style={{ background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.9rem' }}
+                >
+                  Flip Board
+                </button>
               </div>
               {expandedLevel >= 3 && exchangeStep > 0 && submitted && result?.exchange && (
-                <div style={{ textAlign: 'center', marginBottom: '8px', fontWeight: 'bold' }}>
+                <div style={{ textAlign: 'center', marginBottom: '12px', fontWeight: 600, color: 'var(--text-2)' }}>
                   Showing the exchange — step {exchangeStep} of {result.exchange.bestLine.length}
                 </div>
               )}
@@ -288,7 +297,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
                 />
               )}
               {submitted && (
-                 <div style={{ marginTop: '10px', width: '100%', display: 'flex', justifyContent: 'center' }}>
+                 <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
                     <ExchangeControls
                       expandedLevel={expandedLevel}
                       exchangeStep={exchangeStep}
@@ -303,21 +312,26 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
           )}
         </div>
 
-        <div style={{ flex: '1 1 300px', padding: '20px', background: '#f9f9f9', margin: '4px' }}>
+        <div style={{ flex: '1 1 300px', padding: '0 24px' }}>
           {loading || (!engineError && loadedExerciseKey !== `${currentEx.id}-${currentEx.fen}-${currentEx.from}-${currentEx.to}`) ? (
-            <h2>Loading exercise…</h2>
+            <h2 style={{ fontSize: '1.5rem', color: 'var(--text-muted)' }}>Loading exercise…</h2>
           ) : engineError ? (
-            <div>
-              <h2 role="status" aria-live="polite">An error occurred while loading this exercise.</h2>
-              <button onClick={handleRetryLoad}>Retry</button>
+            <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <h2 role="status" aria-live="polite" style={{ fontSize: '1.25rem', marginBottom: '16px' }}>An error occurred while loading this exercise.</h2>
+              <button 
+                onClick={handleRetryLoad}
+                style={{ background: 'var(--accent-btn)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+              >
+                Retry
+              </button>
             </div>
           ) : (
-            <>
-              <h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <h2 style={{ fontSize: '1.5rem', margin: 0 }}>
                 <span role="status" aria-live="polite">
                   <span>{submitted ? feedback : questionText}</span>
                   {liveAnnouncement && (
-                    <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', border: 0 }}>
+                    <span className="sr-only">
                       {liveAnnouncement}
                     </span>
                   )}
@@ -325,50 +339,53 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
               </h2>
               
               {!submitted && (
-                <div style={{ marginTop: '20px' }}>
-                  <div role="radiogroup" aria-label="Your prediction" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                  <div role="radiogroup" aria-label="Your prediction" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {Object.entries(BADGE_INFO).map(([key, info]) => (
-                      <label key={key} style={{ display: 'flex', alignItems: 'center', padding: '10px', background: selectedAnswer === key ? '#e0e0e0' : '#fff', border: '1px solid #ccc', cursor: 'pointer' }}>
+                      <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: selectedAnswer === key ? 'var(--panel-hover)' : 'var(--bg-sunken)', border: selectedAnswer === key ? '1px solid var(--accent)' : '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}>
                         <input
                           type="radio"
                           name="prediction"
                           value={key}
                           checked={selectedAnswer === key}
                           onChange={() => setSelectedAnswer(key)}
-                          style={{ marginRight: '10px' }}
+                          style={{ margin: 0 }}
                         />
-                        {info.text} {info.icon}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ color: info.color }}><LabelIcon kind={key as 'safe'|'even_trade'|'loses_material'|'unclear'} /></span>
+                          {info.text}
+                        </span>
                       </label>
                     ))}
-                    <label style={{ display: 'flex', alignItems: 'center', padding: '10px', background: selectedAnswer === 'not_sure' ? '#e0e0e0' : '#fff', border: '1px solid #ccc', cursor: 'pointer', marginTop: '10px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: selectedAnswer === 'not_sure' ? 'var(--panel-hover)' : 'var(--bg-sunken)', border: selectedAnswer === 'not_sure' ? '1px solid var(--accent)' : '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', marginTop: '8px' }}>
                       <input
                         type="radio"
                         name="prediction"
                         value="not_sure"
                         checked={selectedAnswer === 'not_sure'}
                         onChange={() => setSelectedAnswer('not_sure')}
-                        style={{ marginRight: '10px' }}
+                        style={{ margin: 0 }}
                       />
                       Not sure
                     </label>
                   </div>
 
                   {selectedAnswer && (
-                    <div style={{ marginTop: '20px' }}>
+                    <div style={{ marginTop: '24px' }}>
                       <fieldset style={{ border: 'none', margin: 0, padding: 0 }}>
-                        <legend style={{ fontWeight: 'bold', marginBottom: '10px' }}>Confidence (optional):</legend>
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                        <legend style={{ fontWeight: 600, marginBottom: '12px', color: 'var(--text-2)' }}>Confidence (optional):</legend>
+                        <div style={{ display: 'flex', gap: '8px' }}>
                           {['Low', 'Medium', 'High'].map(lvl => {
                             const val = lvl.toLowerCase() as "low" | "medium" | "high";
                             return (
-                              <label key={lvl} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', background: confidence === val ? '#e0e0e0' : '#fff', border: '1px solid #ccc', cursor: 'pointer' }}>
+                              <label key={lvl} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px', background: confidence === val ? 'var(--panel-hover)' : 'var(--bg-sunken)', border: confidence === val ? '1px solid var(--accent)' : '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}>
                                 <input
                                   type="radio"
                                   name="confidence"
                                   value={val}
                                   checked={confidence === val}
                                   onChange={() => setConfidence(val)}
-                                  style={{ marginRight: '10px' }}
+                                  className="sr-only"
                                 />
                                 {lvl}
                               </label>
@@ -382,7 +399,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
                   <button 
                     onClick={handleSubmit} 
                     disabled={!selectedAnswer}
-                    style={{ marginTop: '20px', width: '100%', padding: '15px', background: selectedAnswer ? '#004d40' : '#ccc', color: '#fff', border: 'none', cursor: selectedAnswer ? 'pointer' : 'default' }}
+                    style={{ marginTop: '24px', width: '100%', padding: '14px', background: selectedAnswer ? 'var(--accent-btn)' : 'var(--bg)', color: selectedAnswer ? '#fff' : 'var(--text-muted)', border: selectedAnswer ? 'none' : '1px solid var(--border-strong)', borderRadius: '6px', cursor: selectedAnswer ? 'pointer' : 'default', fontWeight: 600, fontSize: '1.05rem' }}
                   >
                     Submit
                   </button>
@@ -390,7 +407,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
               )}
 
               {submitted && result && (
-                <div style={{ marginTop: '20px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <ResultPanel
                     selectedDestInfo={result}
                     expandedLevel={expandedLevel}
@@ -400,17 +417,23 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
                     stepText={getStepText(result, exchangeStep)}
                   />
 
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                    <button onClick={handleNext} style={{ padding: '10px', flex: 1, background: '#004d40', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button 
+                      onClick={handleNext} 
+                      style={{ flex: 1, padding: '14px', background: 'var(--accent-btn)', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '1.05rem' }}
+                    >
                       Next
                     </button>
-                    <button onClick={handleTryAgain} style={{ padding: '10px', flex: 1, background: '#fff', border: '1px solid #ccc', cursor: 'pointer' }}>
+                    <button 
+                      onClick={handleTryAgain} 
+                      style={{ flex: 1, padding: '14px', background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--border-strong)', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '1.05rem' }}
+                    >
                       Try again
                     </button>
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>

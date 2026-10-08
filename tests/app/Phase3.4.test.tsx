@@ -177,7 +177,7 @@ describe('Phase 3.4 — Async Race Conditions and Prefetch', () => {
       await screen.findByText(/What happens/i);
       
       // 2. Submit A
-      fireEvent.click(screen.getByText('Safe ✓'));
+      fireEvent.click(screen.getByText('Safe'));
       fireEvent.click(screen.getByText('Submit'));
       await screen.findByText('Correct'); // A reveal remains correct
       
@@ -215,7 +215,7 @@ describe('Phase 3.4 — Async Race Conditions and Prefetch', () => {
       
       render(<TrainingScreen engineClient={engine} exercises={[getFixedSession()[0]]} onExit={vi.fn()} />);
       await screen.findByText(/What happens/i);
-      fireEvent.click(screen.getByText('Safe ✓'));
+      fireEvent.click(screen.getByText('Safe'));
       fireEvent.click(screen.getByText('Submit'));
       await screen.findByText(/Correct/i);
       fireEvent.click(screen.getByText('Next'));
@@ -243,7 +243,7 @@ describe('Phase 3.4 — Async Race Conditions and Prefetch', () => {
       d1.resolve(createClassifyResult({ from: 'e2', to: 'e4' }, getFixedSession()[0].fen));
       await screen.findByText(/What happens/i);
       
-      fireEvent.click(screen.getByText('Safe ✓'));
+      fireEvent.click(screen.getByText('Safe'));
       fireEvent.click(screen.getByText('Submit'));
       
       // Click Next
@@ -288,7 +288,7 @@ describe('Phase 3.4 — Async Race Conditions and Prefetch', () => {
       expect(liveRegion.textContent).not.toMatch(/Correct|Not quite|Safe|material/i);
       
       // C. After Submit feedback is announced.
-      fireEvent.click(screen.getByText('Safe ✓'));
+      fireEvent.click(screen.getByText('Safe'));
       fireEvent.click(screen.getByText('Submit'));
       
       await waitFor(() => {

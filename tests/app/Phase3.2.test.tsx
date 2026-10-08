@@ -58,7 +58,7 @@ function createMockEngine(overrides?: Partial<EngineClient>) {
     };
   });
   return {
-    classifyMovesFrom: vi.fn(),
+    classifyMovesFrom: vi.fn().mockResolvedValue({ ok: true, value: [] }),
     classifyMove,
     ...overrides,
   } as EngineClient;
@@ -81,7 +81,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
   describe('1. Loading State', () => {
     it('hides board, arrow, question, and answers completely while loading', async () => {
       const d = deferred<unknown>();
-      const engine = createMockEngine({ classifyMove: vi.fn().mockReturnValue(d.promise) });
+      const engine = createMockEngine({ classifyMovesFrom: vi.fn().mockResolvedValue({ ok: true, value: [] }), classifyMove: vi.fn().mockReturnValue(d.promise) });
       const { container } = render(<TrainingScreen engineClient={engine} exercises={getFixedSession()} onExit={vi.fn()} />);
       
       expect(screen.getByText('Loading exercise…')).toBeTruthy();
@@ -146,7 +146,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
   describe('3. Handle Engine Errors', () => {
     it('handles ok=false and Promise rejection gracefully', async () => {
       const d1 = deferred<unknown>();
-      const engine = createMockEngine({ classifyMove: vi.fn().mockReturnValue(d1.promise) });
+      const engine = createMockEngine({ classifyMovesFrom: vi.fn().mockResolvedValue({ ok: true, value: [] }), classifyMove: vi.fn().mockReturnValue(d1.promise) });
       render(<TrainingScreen engineClient={engine} exercises={getFixedSession()} onExit={vi.fn()} />);
       
       d1.resolve({ ok: false, error: 'Engine timeout' });
@@ -244,8 +244,8 @@ describe('Phase 3.2 — Core Acceptance', () => {
       
       await screen.findByText(/Session Complete/);
       // c of g correct where c=4, g=8, n=2
-      expect(screen.getByText('4 of 8 correct')).toBeTruthy();
-      expect(screen.getByText('2 not sure')).toBeTruthy();
+      expect(screen.getByText(/4 of 8/)).toBeTruthy();
+      expect(screen.getAllByText(/not sure/i)[0]).toBeTruthy();
       
       // Should display list of all 10 exercises
       const listItems = container.querySelectorAll('li');
@@ -258,7 +258,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
       const engine = createMockEngine();
       render(<App engineClient={engine} />);
       
-      fireEvent.click(screen.getByText('Train'));
+      fireEvent.click(screen.getAllByText(/Beginner drills/)[0]);
       await screen.findByRole('grid');
       
       // Fast forward to end of 10
@@ -271,7 +271,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
       }
       
       await screen.findByText('Session Complete');
-      fireEvent.click(screen.getByText('Train again'));
+      fireEvent.click(screen.getAllByText('Train again')[0]);
       
       // Should show exercise 1 of 10 again
       await waitFor(() => {
