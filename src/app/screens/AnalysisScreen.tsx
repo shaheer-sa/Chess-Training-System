@@ -244,7 +244,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
         }
         
         const toParse = (sq: string) => (sq.charCodeAt(1) - '1'.charCodeAt(0)) * 8 + (sq.charCodeAt(0) - 'a'.charCodeAt(0));
-        for (let i = 0; i < exchangeStep - 1; i++) {
+        for (let i = 0; i < exchangeStep; i++) {
           const step = selectedDestInfo.exchange.bestLine[i];
           const fromIdx = toParse(step.capturer.square);
           const toIdx = toParse(step.to);

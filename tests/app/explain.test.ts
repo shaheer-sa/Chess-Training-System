@@ -126,9 +126,11 @@ describe('explain module', () => {
   });
 
   it('X13 (EXCHANGE_LINE_MATE)', async () => {
-    const c = await getClassification('4r2k/8/8/8/8/8/3B1PPP/q2R2K1 w - - 0 1', 'd2', 'e1');
+    const c = await getClassification('4r2k/8/8/8/8/8/5PPP/R5K1 w - - 0 1', 'a1', 'e1');
     const result = explain(c as unknown as MoveClassification);
-    expect(result.primary).toBe("The capture sequence on this square ends with you getting checkmated.");
+    expect(result.primary).toBe("After this move your opponent can checkmate you: rook e8→e1.");
+    expect(result.details).toContain("The capture sequence on this square ends with you getting checkmated.");
+    expect(result.details).toContain("Nothing protects your rook on e1 — it can be taken for free.");
   });
 
   describe('Additional templates', () => {

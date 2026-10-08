@@ -638,12 +638,38 @@ describe('Analysis Screen', () => {
       await waitFor(() => {
         expect(prev.closest('button')?.disabled).toBe(true);
       });
+      // Assert original board state is restored: white pawn should be back on d2!
+      expect(screen.getByLabelText(/d2, white pawn/)).toBeTruthy();
       
       // Change destination collapses
       fireEvent.click(screen.getByLabelText(/d3/));
       await waitFor(() => {
         expect(screen.queryByText('Prev')).toBeNull(); // step-through closed
       });
+    });
+
+    it('Level 3: Real En Passant narration and board', async () => {
+      const client = new DirectEngineClient();
+      render(<AnalysisScreen engineClient={client} initialFen="6k1/8/8/8/3p4/8/4P3/2B3K1 w - - 0 1" />);
+
+      // Candidate move: e2e4
+      fireEvent.click(screen.getByLabelText(/e2, white pawn/));
+      fireEvent.click(await screen.findByLabelText(/e4, empty/));
+      fireEvent.click(await screen.findByText('Show the exchange'));
+
+      // Forward step 1 (d4xe3)
+      fireEvent.click(await screen.findByText('Next'));
+      await waitFor(() => {
+        expect(screen.getAllByText(/Step 1 of 2: Black pawn on d4 takes pawn on e4\./).length).toBeGreaterThan(0);
+      });
+      // The pawn that moved was placed on e3, but the narration must correctly identify the captured pawn on e4.
+
+      // Verify the board visually has a pawn on e3 and NO pawn on e4.
+      // E.g. screen.getByLabelText(/e3, black pawn/);
+      expect(screen.getByLabelText(/e3, black pawn/)).toBeTruthy();
+      
+      // And e4 should be empty
+      expect(screen.getByLabelText(/e4, empty/)).toBeTruthy();
     });
 
     it('Level 3: En Passant, Promotion, changing piece, and immutable FEN', async () => {
