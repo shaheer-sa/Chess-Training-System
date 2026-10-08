@@ -113,8 +113,9 @@ export function analyzeTactics(fenBefore: string, moveInput: MoveInput): Result<
         const seeResult = bestExchangePos(posAfter, sq, pRole, moverColor, cache);
         if (seeResult.gain > 0) {
           let cause: 'defender_moved' | 'line_opened' | 'other' = 'other';
-          const attackedBefore = doesPieceGeometricallyAttack(boardBefore, fromAlgebraic(move.from), sq);
-          if (attackedBefore) {
+          const defendedBefore = doesPieceGeometricallyAttack(boardBefore, fromAlgebraic(move.from), sq);
+          const defendsAfter = doesPieceGeometricallyAttack(boardAfter, fromAlgebraic(move.to), sq);
+          if (defendedBefore && !defendsAfter) {
             cause = 'defender_moved';
           } else {
             const enemyColor = opponentColor;

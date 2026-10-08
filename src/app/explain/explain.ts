@@ -7,6 +7,7 @@ const PRIORITY_ORDER: ReasonCode[] = [
   'EXCHANGE_LINE_MATE',
   'CAUSES_STALEMATE',
   'EXCHANGE_LINE_MATES_OPPONENT',
+  'CAPTURE_ALLOWS_MATE',
   'FORCED_CAPTURE_IGNORED',
   'PINNED_DEFENDER',
   'KING_CANNOT_RECAPTURE',
@@ -75,6 +76,13 @@ const formatTemplate = (code: ReasonCode, c: MoveClassification): string => {
     case 'EXCHANGE_LINE_MATE': return "The capture sequence on this square ends with you getting checkmated.";
     case 'CAUSES_STALEMATE': return "This move leaves your opponent no legal moves — the game ends in a draw.";
     case 'EXCHANGE_LINE_MATES_OPPONENT': return "The capture sequence on this square ends with your opponent checkmated — calculate it yourself.";
+    case 'CAPTURE_ALLOWS_MATE': {
+      const move = reason.moves?.[0];
+      const from = move?.from || '';
+      const to = move?.to || '';
+      const mateRole = getRole(fenAfter, from);
+      return `If your opponent takes, you can checkmate them: ${mateRole} ${from}→${to}.`;
+    }
     case 'FORCED_CAPTURE_IGNORED': return "Your opponent is forced to capture here — this trainer can't judge the result simply.";
     case 'PINNED_DEFENDER': return `Your ${role} on ${sq} seems to defend this square, but it's pinned to your king, so it can't take back.`;
     case 'KING_CANNOT_RECAPTURE': return "Your king defends this square, but it can't take back because the square is still attacked.";

@@ -92,6 +92,18 @@ describe('Move Classification (Phase 1E)', () => {
       {
         id: 'U2', fen: '7k/7p/6P1/5N2/2Bq4/8/8/1K6 w - - 0 1', move: { from: 'g6', to: 'g7' },
         label: 'unclear', netMaterial: 0, reasons: ['FORCED_CAPTURE_IGNORED', 'GIVES_CHECK']
+      },
+      {
+        id: 'B2a', fen: 'k7/8/2b1N2p/8/8/8/6R1/7K w - - 0 1', move: { from: 'h1', to: 'h2' },
+        label: 'safe', netMaterial: 0, reasons: ['PIECE_ALREADY_HANGING', 'NOT_ATTACKED']
+      },
+      {
+        id: 'B2b', fen: 'k7/8/2b1N2p/8/8/8/6R1/7K w - - 0 1', move: { from: 'h1', to: 'g1' },
+        label: 'safe', netMaterial: 0, reasons: ['PIECE_ALREADY_HANGING', 'NOT_ATTACKED']
+      },
+      {
+        id: 'B1', fen: '3r2k1/5ppp/8/8/8/8/4R3/4R1K1 w - - 0 1', move: { from: 'e2', to: 'd2' },
+        label: 'safe', netMaterial: 0, reasons: ['CAPTURE_ALLOWS_MATE']
       }
     ];
 

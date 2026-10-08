@@ -33,7 +33,67 @@ export function classifyMove(fen: string, moveInput: MoveInput): Result<MoveClas
 
   const move = { from: moveInput.from, to: moveInput.to, promotion: moveInput.promotion };
 
-  const destGain = ex.materialFromMove - ex.see;
+  const refutedCapturers: Square[] = [];
+  const matingMoves: { from: Square; to: Square; promotion?: Role }[] = [];
+  let nonRefutedOptions = ex.captureOptions;
+  
+  if (!(tac.exchangeLineMate && tac.exchangeLineMate.matedColor === opponentColor)) {
+    const nextOptions = [];
+    for (const opt of ex.captureOptions) {
+      const replayPos = Chess.fromSetup(fenOps.parseFen(ex.fenAfter).unwrap()).unwrap();
+      replayPos.play({ from: fromAlgebraic(opt.capturer.square), to: fromAlgebraic(opt.captureSquare), promotion: opt.promotion });
+      
+      let refuted = false;
+      if (!replayPos.isCheck()) {
+        const afterCapFen = makeFen(replayPos.toSetup());
+        const lmRes = getLegalMoves(afterCapFen);
+        if (lmRes.ok) {
+          const matingList = [];
+          for (const m of lmRes.value) {
+            const tempPos = replayPos.clone();
+            tempPos.play({ from: fromAlgebraic(m.from), to: fromAlgebraic(m.to), promotion: m.promotion });
+            if (tempPos.isCheck()) {
+              const replyFen = makeFen(tempPos.toSetup());
+              const lmRes2 = getLegalMoves(replyFen);
+              if (lmRes2.ok && lmRes2.value.length === 0) {
+                matingList.push(m);
+              }
+            }
+          }
+          if (matingList.length > 0) {
+            matingList.sort((a, b) => fromAlgebraic(a.from) !== fromAlgebraic(b.from) ? fromAlgebraic(a.from) - fromAlgebraic(b.from) : fromAlgebraic(a.to) - fromAlgebraic(b.to));
+            refuted = true;
+            refutedCapturers.push(opt.capturer.square);
+            matingMoves.push({ from: matingList[0].from, to: matingList[0].to, promotion: matingList[0].promotion });
+          }
+        }
+      }
+      
+      if (!refuted) {
+        nextOptions.push(opt);
+      }
+    }
+    nonRefutedOptions = nextOptions;
+  }
+
+  let effectiveSee = ex.materialFromMove;
+  let bestNonRefutedOption = null;
+  if (nonRefutedOptions.length > 0) {
+    let minRes = Infinity;
+    for (const opt of nonRefutedOptions) {
+      if (opt.resultForMover < minRes) {
+        minRes = opt.resultForMover;
+        bestNonRefutedOption = opt;
+      }
+    }
+    effectiveSee = Math.min(ex.materialFromMove, minRes);
+  }
+
+  let destGain = ex.materialFromMove - ex.see;
+  if (refutedCapturers.length > 0) {
+    destGain = ex.materialFromMove - effectiveSee;
+  }
+
   let causedHang = 0;
   for (const hang of tac.hangingAfterMove) {
     if ((hang.cause === 'defender_moved' || hang.cause === 'line_opened') && hang.opponentGain > causedHang) {
@@ -67,6 +127,10 @@ export function classifyMove(fen: string, moveInput: MoveInput): Result<MoveClas
     addReason('EXCHANGE_LINE_MATES_OPPONENT');
   }
 
+  if (refutedCapturers.length > 0) {
+    addReason('CAPTURE_ALLOWS_MATE', refutedCapturers, matingMoves);
+  }
+
   // RULE FORCED
   let forcedCaptureIgnored = false;
   const replayPos = Chess.fromSetup(fenOps.parseFen(ex.fenAfter).unwrap()).unwrap();
@@ -95,10 +159,9 @@ export function classifyMove(fen: string, moveInput: MoveInput): Result<MoveClas
     }
   }
 
-  // RULE DEFENDERS (only when X.see < 0 AND X.bestLine non-empty)
-  if (ex.see < 0 && ex.bestLine.length > 0) {
-    const first = ex.bestLine[0];
-    const recs = dest.legalCaptures.find(c => c.capturer.square === first.capturer.square)?.legalRecaptures || [];
+  // RULE DEFENDERS (only when effectiveSee < 0 AND bestNonRefutedOption exists)
+  if (effectiveSee < 0 && bestNonRefutedOption) {
+    const recs = dest.legalCaptures.find(c => c.capturer.square === bestNonRefutedOption.capturer.square)?.legalRecaptures || [];
     const unavailable = dest.geometricDefenders.filter(d => !recs.some(r => r.square === d.square));
     for (const u of unavailable) {
       if (factsAfter.pins.some(p => p.kind === 'absolute' && p.pinned.square === u.square)) {
@@ -178,7 +241,7 @@ export function classifyMove(fen: string, moveInput: MoveInput): Result<MoveClas
     label = 'unclear';
   } else if (netMaterial < 0) {
     label = 'loses_material';
-  } else if (ex.bestLine.length > 0 && netMaterial === 0) {
+  } else if (bestNonRefutedOption && bestNonRefutedOption.resultForMover <= ex.materialFromMove && netMaterial === 0) {
     label = 'even_trade';
   } else {
     label = 'safe';
@@ -196,24 +259,25 @@ export function classifyMove(fen: string, moveInput: MoveInput): Result<MoveClas
     'EXCHANGE_LINE_MATE': 2,
     'CAUSES_STALEMATE': 3,
     'EXCHANGE_LINE_MATES_OPPONENT': 4,
-    'FORCED_CAPTURE_IGNORED': 5,
-    'PINNED_DEFENDER': 6,
-    'KING_CANNOT_RECAPTURE': 7,
-    'DEFENDER_UNAVAILABLE': 8,
-    'UNDEFENDED_PIECE_LOST': 9,
-    'BAD_EXCHANGE': 10,
-    'DEFENDER_MOVED': 11,
-    'LINE_OPENED': 12,
-    'PIECE_ALREADY_HANGING': 13,
-    'EVEN_EXCHANGE': 14,
-    'OPPONENT_CAPTURE_LOSES': 15,
-    'ATTACKER_CANNOT_CAPTURE': 16,
-    'NOT_ATTACKED': 17,
-    'WINS_MATERIAL': 18,
-    'DELIVERS_MATE': 19,
-    'GIVES_CHECK': 20,
-    'MOVER_PINNED': 21,
-    'CASTLING_NOT_ANALYZED': 22
+    'CAPTURE_ALLOWS_MATE': 5,
+    'FORCED_CAPTURE_IGNORED': 6,
+    'PINNED_DEFENDER': 7,
+    'KING_CANNOT_RECAPTURE': 8,
+    'DEFENDER_UNAVAILABLE': 9,
+    'UNDEFENDED_PIECE_LOST': 10,
+    'BAD_EXCHANGE': 11,
+    'DEFENDER_MOVED': 12,
+    'LINE_OPENED': 13,
+    'PIECE_ALREADY_HANGING': 14,
+    'EVEN_EXCHANGE': 15,
+    'OPPONENT_CAPTURE_LOSES': 16,
+    'ATTACKER_CANNOT_CAPTURE': 17,
+    'NOT_ATTACKED': 18,
+    'WINS_MATERIAL': 19,
+    'DELIVERS_MATE': 20,
+    'GIVES_CHECK': 21,
+    'MOVER_PINNED': 22,
+    'CASTLING_NOT_ANALYZED': 23
   };
 
   reasons.sort((a, b) => orderMap[a.code] - orderMap[b.code]);
