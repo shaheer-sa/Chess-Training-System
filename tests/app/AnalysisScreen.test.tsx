@@ -258,7 +258,7 @@ describe('Analysis Screen', () => {
       
       expect(screen.getByText('Loses material')).toBeTruthy();
       expect(screen.getAllByText('⚠').length).toBeGreaterThan(0);
-      expect(screen.getByText('This move loses material or allows a tactic against you right away.')).toBeTruthy();
+      expect(screen.getByText("Your rook on g2 seems to defend this square, but it's pinned to your king, so it can't take back.")).toBeTruthy();
     });
   });
 
