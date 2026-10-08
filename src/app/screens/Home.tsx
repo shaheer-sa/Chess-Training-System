@@ -71,12 +71,13 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
                 position={heroPos}
                 flipped={false}
                 selectedSquare={44} // e6 is index 44
-                destinationSquare={46} // g5 is index 46
+                destinationSquare={38} // g5 is index 38
                 moves={moves}
                 expandedLevel={1}
                 exchangeStep={0}
                 selectedDestInfo={destInfo}
                 readOnly={true}
+                showBadgesOnReadOnly={true}
               />
               {destInfo && caption && (
                 <div style={{ marginTop: '16px', padding: '12px', background: 'var(--bg-sunken)', borderRadius: '6px', border: '1px solid var(--border-strong)', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>

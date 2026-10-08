@@ -109,7 +109,7 @@ describe('Phase 3.5 � Freeze Blockers', () => {
   });
 
   describe('T4: Training mode bar uses dark purple background', () => {
-    it('training mode bar style has background #4a148c', async () => {
+    it('training mode bar style has background panel var(--panel)', async () => {
       const engine = createMockEngine();
       const { container } = render(
         <TrainingScreen engineClient={engine} exercises={FIXED_SESSION} onExit={vi.fn()} />
@@ -121,12 +121,12 @@ describe('Phase 3.5 � Freeze Blockers', () => {
       const bar = allDivs.find((el) => {
         const text = el.textContent ?? '';
         const style = el.getAttribute('style') ?? '';
-        return text.includes('TRAINING') && text.includes('Exercise') && style.includes('background');
+        return text.includes('BEGINNER DRILLS') && text.includes('Exercise') && style.includes('background');
       }) as HTMLElement | undefined;
 
       expect(bar).toBeDefined();
       const style = bar!.getAttribute('style')!.toLowerCase();
-      expect(style).toMatch(/#4a148c|rgb\(74,\s*20,\s*140\)/);
+      expect(style).toContain('var(--panel)');
     });
   });
 });

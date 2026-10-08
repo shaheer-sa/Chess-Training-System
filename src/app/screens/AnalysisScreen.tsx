@@ -6,6 +6,8 @@ import { Board } from '../components/Board.js';
 import { ResultPanel } from '../components/ResultPanel.js';
 import { getStepText } from '../shared/exchange.js';
 import { ExchangeControls } from '../shared/ExchangeControls.js';
+import { BADGE_INFO } from '../shared/badgeInfo.js';
+import { explain } from '../explain/explain.js';
 
 interface AnalysisScreenProps {
   engineClient: EngineClient;
@@ -190,7 +192,9 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   if (stepText) {
     liveText = stepText;
   } else if (selectedDestInfo) {
-    liveText = `Result shown for ${selectedDestInfo.move.to}`;
+    const primary = explain(selectedDestInfo).primary;
+    const badgeText = BADGE_INFO[selectedDestInfo.label as keyof typeof BADGE_INFO].text;
+    liveText = `Result for ${selectedDestInfo.move.to}: ${badgeText}. ${primary}`;
   } else if (engineError) {
     liveText = "We couldn't analyze this move. Try another square.";
   } else if (resultMessage) {

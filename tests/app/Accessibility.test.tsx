@@ -8,6 +8,8 @@ import { axe } from 'vitest-axe';
 import * as matchers from 'vitest-axe/matchers';
 import React from 'react';
 import { Home } from '../../src/app/screens/Home.js';
+import { AppShell } from '../../src/app/components/AppShell.js';
+import { fireEvent } from '@testing-library/react';
 import { Help } from '../../src/app/screens/Help.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,4 +33,23 @@ describe('Accessibility - Other Screens', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (expect(results) as any).toHaveNoViolations();
   }, 10000);
-}, 10000);
+  it('AppShell + Home has no violations (desktop)', async () => {
+    const { container } = render(<AppShell currentScreen="home" onNavigate={() => {}}><Home onNavigate={() => {}} /></AppShell>);
+    const results = await axe(container);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (expect(results) as any).toHaveNoViolations();
+  }, 10000);
+
+  it('AppShell + Home has no violations (mobile menu open)', async () => {
+    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 500 });
+    window.dispatchEvent(new Event('resize'));
+    const { container } = render(<AppShell currentScreen="home" onNavigate={() => {}}><Home onNavigate={() => {}} /></AppShell>);
+    const btn = container.querySelector('button[aria-label="Open navigation menu"]');
+    if (btn) fireEvent.click(btn);
+    const results = await axe(container);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (expect(results) as any).toHaveNoViolations();
+    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1024 });
+    window.dispatchEvent(new Event('resize'));
+  }, 10000);
+});

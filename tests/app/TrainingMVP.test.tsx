@@ -112,7 +112,7 @@ describe('Phase 3.1 — Training MVP Acceptance', () => {
       fireEvent.click(screen.getAllByText('Beginner drills')[0]);
       // Should see training mode bar
       await waitFor(() => {
-        expect(screen.getByText(/TRAINING/)).toBeTruthy();
+        expect(screen.getByText(/BEGINNER DRILLS/)).toBeTruthy();
       });
     });
 
@@ -121,20 +121,20 @@ describe('Phase 3.1 — Training MVP Acceptance', () => {
       render(<App engineClient={engine} />);
       fireEvent.click(screen.getAllByText('Beginner drills')[0]);
       await waitFor(() => {
-        expect(screen.getByText(/TRAINING/)).toBeTruthy();
+        expect(screen.getByText(/BEGINNER DRILLS/)).toBeTruthy();
       });
       // The App should pass the same engineClient through
       // Verify by checking classifyMove gets called when we submit
     });
 
-    it('Exit Training returns to Home', async () => {
+    it('Exit drills returns to Home', async () => {
       const engine = createMockEngine();
       render(<App engineClient={engine} />);
       fireEvent.click(screen.getAllByText('Beginner drills')[0]);
       await waitFor(() => {
-        expect(screen.getByText(/TRAINING/)).toBeTruthy();
+        expect(screen.getByText(/BEGINNER DRILLS/)).toBeTruthy();
       });
-      fireEvent.click(screen.getByText('Exit Training'));
+      fireEvent.click(screen.getByText('Exit drills'));
       await waitFor(() => {
         expect(screen.getAllByText('Beginner drills')[0]).toBeTruthy();
       });
@@ -210,17 +210,17 @@ describe('Phase 3.1 — Training MVP Acceptance', () => {
   });
 
   // ==========================================================================
-  // §4: TRAINING MODE BAR
+  // §4: BEGINNER DRILLS MODE BAR
   // ==========================================================================
   describe('§4 Training Mode Bar', () => {
-    it('shows exact format: TRAINING · Exercise {k} of 10 · Answer hidden until you submit', async () => {
+    it('shows exact format: BEGINNER DRILLS · Exercise {k} of 10 · Answer hidden until you submit', async () => {
       const engine = createMockEngine();
       const exercises = getFixedSession();
       render(<TrainingScreen engineClient={engine} exercises={exercises} onExit={vi.fn()} />);
       await waitFor(() => {
         expect(screen.getByText(/What happens/)).toBeTruthy();
       });
-      expect(screen.getByText(/TRAINING · Exercise 1 of 10 · Answer hidden until you submit/)).toBeTruthy();
+      expect(screen.getByText(/BEGINNER DRILLS · Exercise 1 of 10 · Answer hidden until you submit/)).toBeTruthy();
     });
 
     it('mode bar does not use classification colors (green/blue/red/yellow)', async () => {
@@ -230,7 +230,7 @@ describe('Phase 3.1 — Training MVP Acceptance', () => {
       await waitFor(() => {
         expect(screen.getByText(/What happens/)).toBeTruthy();
       });
-      const modeBar = screen.getByText(/TRAINING · Exercise/).closest('div');
+      const modeBar = screen.getByText(/BEGINNER DRILLS · Exercise/).closest('div');
       if (modeBar) {
         const bg = (modeBar as HTMLElement).style.background || (modeBar as HTMLElement).style.backgroundColor;
         // Must not be classification green (#2e7d32), blue (#1565c0), red (#c62828), yellow (#E3B12C)
@@ -688,7 +688,7 @@ describe('Phase 3.1 — Training MVP Acceptance', () => {
       await waitFor(() => {
         expect(screen.getByText(/Session Complete/i)).toBeTruthy();
       });
-      expect(screen.getByText(/of/)).toBeTruthy();
+      expect(screen.getByText((_, el) => el?.textContent === '1 of 1correct')).toBeTruthy();
       expect(screen.getByText('Train again')).toBeTruthy();
       expect(screen.getByText('Download my results')).toBeTruthy();
     });

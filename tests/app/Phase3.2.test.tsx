@@ -244,8 +244,8 @@ describe('Phase 3.2 — Core Acceptance', () => {
       
       await screen.findByText(/Session Complete/);
       // c of g correct where c=4, g=8, n=2
-      expect(screen.getByText(/4 of 8/)).toBeTruthy();
-      expect(screen.getAllByText(/not sure/i)[0]).toBeTruthy();
+      expect(screen.getByText((_, el) => el?.textContent === '4 of 8correct')).toBeTruthy();
+      expect(screen.getByText((_, el) => el?.textContent === '2not sure')).toBeTruthy();
       
       // Should display list of all 10 exercises
       const listItems = container.querySelectorAll('li');
@@ -275,7 +275,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
       
       // Should show exercise 1 of 10 again
       await waitFor(() => {
-        expect(screen.getByText(/TRAINING · Exercise 1 of 10/)).toBeTruthy();
+        expect(screen.getByText(/BEGINNER DRILLS · Exercise 1 of 10/)).toBeTruthy();
       });
       // Records should contain 11 total now (10 from old, 1 when we submit the new one)
       expect(getAllRecords().length).toBe(10);

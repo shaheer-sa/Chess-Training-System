@@ -18,6 +18,7 @@ interface BoardProps {
   focusedSquare?: number;
   setFocusedSquare?: (sq: number) => void;
   readOnly?: boolean;
+  showBadgesOnReadOnly?: boolean;
   arrow?: { from: Square; to: Square } | null;
 }
 
@@ -29,7 +30,7 @@ const getSquareName = (index: number) => {
 
 export const Board: React.FC<BoardProps> = ({
   position, flipped, onSquareClick, selectedSquare, destinationSquare, moves, expandedLevel, exchangeStep, selectedDestInfo,
-  focusedSquare = 0, setFocusedSquare, readOnly = false, arrow
+  focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow
 }) => {
   const displayBoard: Map<number, { role: string, color: string }> = new Map();
   for (let i = 0; i < 64; i++) {
@@ -103,16 +104,16 @@ export const Board: React.FC<BoardProps> = ({
     const piece = displayBoard.get(index);
     const pieceStr = piece ? `${piece.color === 'white' ? 'white' : 'black'} ${piece.role}` : 'empty';
     
-    const isSelected = !readOnly && selectedSquare === index;
+    const isSelected = (!readOnly || showBadgesOnReadOnly) && selectedSquare === index;
     const moveInfo = moves.find(m => m.move.to === sqName);
-    const isDestination = !readOnly && !!moveInfo;
-    const isSelectedDest = !readOnly && destinationSquare === index;
+    const isDestination = (!readOnly || showBadgesOnReadOnly) && !!moveInfo;
+    const isSelectedDest = (!readOnly || showBadgesOnReadOnly) && destinationSquare === index;
 
     const isReplaying = expandedLevel >= 3 && exchangeStep > 0;
     const isReplayLandingSquare = isReplaying && sqName === selectedDestInfo?.exchange?.bestLine[exchangeStep - 1]?.to;
 
     let ariaLabel = `${sqName}, ${pieceStr}`;
-    if (!readOnly && !isReplaying && isDestination && moveInfo) {
+    if ((!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && moveInfo) {
       const badge = BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO];
       ariaLabel += `, legal destination, ${badge.text}`;
     }
@@ -165,7 +166,7 @@ export const Board: React.FC<BoardProps> = ({
             style={{ width: '80%', height: '80%', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1 }}
           />
         )}
-        {!readOnly && !isReplaying && isDestination && !piece && (
+        {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && !piece && (
           <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(21, 23, 27, 0.42)' }} />
         )}
         {(rank === (flipped ? 7 : 0)) && (
@@ -178,10 +179,10 @@ export const Board: React.FC<BoardProps> = ({
             {sqName[1]}
           </div>
         )}
-        {!readOnly && !isReplaying && isDestination && piece && (
+        {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && piece && (
           <div style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid rgba(21, 23, 27, 0.42)', borderRadius: '50%', boxSizing: 'border-box' }} />
         )}
-        {!readOnly && !isReplaying && isDestination && moveInfo && (
+        {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && moveInfo && (
           <div style={{
             position: 'absolute', top: '-4px', right: '-4px', backgroundColor: BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].color,
             color: BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].textColor, padding: '2px', borderRadius: '6px',
