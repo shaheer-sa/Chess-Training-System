@@ -688,7 +688,7 @@ describe('Phase 3.1 — Training MVP Acceptance', () => {
       await waitFor(() => {
         expect(screen.getByText(/Session Complete/i)).toBeTruthy();
       });
-      expect(screen.getByText(/correct/i)).toBeTruthy();
+      expect(screen.getByText(/\d+\s+of\s+\d+\s+correct/i)).toBeTruthy();
       expect(screen.getByText('Train again')).toBeTruthy();
       expect(screen.getByText('Download my results')).toBeTruthy();
     });

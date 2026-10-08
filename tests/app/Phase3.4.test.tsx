@@ -267,7 +267,7 @@ describe('Phase 3.4 — Async Race Conditions and Prefetch', () => {
       const mockResult = createClassifyResult({ from: 'e2', to: 'e4' }, getFixedSession()[0].fen);
       if (mockResult.ok) {
         mockResult.value.exchange!.bestLine = [
-          { fenBefore: '', fenAfter: '', side: 'white', capturer: { square: 'e2', role: 'pawn', color: 'white' }, to: 'e4', captured: { square: 'e4', role: 'pawn', color: 'black' }, balanceAfter: 0 } as unknown as import('../../src/engine/types').ExchangeStep
+          { fenBefore: '', fenAfter: '', side: 'white', capturer: { square: 'e2', role: 'pawn', color: 'white' }, to: 'e4', captured: { square: 'e4', role: 'pawn', color: 'black' }, balanceAfter: 0 } as unknown as import('../../src/engine/types.js').ExchangeStep
         ];
       }
       

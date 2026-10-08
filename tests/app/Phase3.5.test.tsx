@@ -1,4 +1,4 @@
-﻿/** @vitest-environment jsdom */
+/** @vitest-environment jsdom */
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
@@ -126,7 +126,7 @@ describe('Phase 3.5 � Freeze Blockers', () => {
 
       expect(bar).toBeDefined();
       const style = bar!.getAttribute('style')!.toLowerCase();
-      expect(style).toMatch(/#4a148c/);
+      expect(style).toMatch(/#4a148c|rgb\(74,\s*20,\s*140\)/);
     });
   });
 });

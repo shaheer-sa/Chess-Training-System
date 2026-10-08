@@ -295,7 +295,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
               fenBefore: fen, fenAfter: fen, mover: { color: 'white', role: 'pawn', from: move.from, to: move.to },
               materialFromMove: 0, see: 0, captureOptions: [],
               bestLine: [
-                { side: 'white', capturer: { square: 'e4', role: 'pawn', color: 'white' }, to: 'd5', captured: { square: 'd5', role: 'pawn', color: 'black' }, balanceAfter: -100 } as unknown as import('../../src/engine/types').ExchangeStep
+                { side: 'white', capturer: { square: 'e4', role: 'pawn', color: 'white' }, to: 'd5', captured: { square: 'd5', role: 'pawn', color: 'black' }, balanceAfter: -100 } as unknown as import('../../src/engine/types.js').ExchangeStep
               ]
             },
             destination: { fenBefore: fen, fenAfter: fen, mover: { color: 'white', role: 'pawn', from: move.from, to: move.to }, givesCheck: false, geometricAttackers: [], geometricDefenders: [], legalCaptures: [] },

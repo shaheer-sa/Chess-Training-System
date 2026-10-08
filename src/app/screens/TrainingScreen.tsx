@@ -130,11 +130,16 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
         <p>{n} not sure</p>
         
         <ul style={{ margin: '20px 0' }}>
-          {firstAttempts.map((r, i) => (
-            <li key={i}>
-              {r.exerciseId}: {r.answer} (Actual: {r.correctLabel})
-            </li>
-          ))}
+          {firstAttempts.map((r, i) => {
+            const answerLabel = r.answer === 'not_sure' ? 'Not sure' : (BADGE_INFO[r.answer as keyof typeof BADGE_INFO]?.text ?? r.answer);
+            const grade = r.correct === true ? 'Correct' : r.answer === 'not_sure' ? 'Not graded' : 'Not quite';
+            const correctLabel = BADGE_INFO[r.correctLabel as keyof typeof BADGE_INFO]?.text ?? r.correctLabel;
+            return (
+              <li key={i}>
+                {i + 1}. {answerLabel} — {grade} (answer: {correctLabel})
+              </li>
+            );
+          })}
         </ul>
 
         <button onClick={onExit} style={{ marginRight: '10px' }}>Home</button>
@@ -252,7 +257,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
         <strong>Chess Training System</strong>
         <button onClick={onExit}>Exit Training</button>
       </header>
-      <div style={{ background: '#1a1a1a', color: '#fff', padding: '10px', textAlign: 'center' }}>
+      <div style={{ background: '#4a148c', color: '#fff', padding: '10px', textAlign: 'center' }}>
         TRAINING · Exercise {currentIndex + 1} of {exercises.length} · Answer hidden until you submit
       </div>
 
@@ -363,7 +368,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
                                   value={val}
                                   checked={confidence === val}
                                   onChange={() => setConfidence(val)}
-                                  style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+                                  style={{ marginRight: '10px' }}
                                 />
                                 {lvl}
                               </label>
