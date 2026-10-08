@@ -113,12 +113,30 @@ describe('explain module', () => {
     expect(result.primary).toBe("Your opponent is forced to capture here — this trainer can't judge the result simply.");
   });
 
+  it('X11 (CASTLING_NOT_ANALYZED)', async () => {
+    const c = await getClassification('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1', 'e1', 'g1');
+    const result = explain(c as unknown as MoveClassification);
+    expect(result.primary).toBe("Castling isn't analyzed by this trainer yet.");
+  });
+
+  it('X12 (DEFENDER_UNAVAILABLE)', async () => {
+    const c = await getClassification('k6r/8/8/8/7p/2Q5/4N3/7K w - - 0 1', 'e2', 'g3');
+    const result = explain(c as unknown as MoveClassification);
+    expect(result.primary).toBe("Your queen on c3 can't legally take back here.");
+  });
+
+  it('X13 (EXCHANGE_LINE_MATE)', async () => {
+    const c = await getClassification('4r2k/8/8/8/8/8/3B1PPP/q2R2K1 w - - 0 1', 'd2', 'e1');
+    const result = explain(c as unknown as MoveClassification);
+    expect(result.primary).toBe("The capture sequence on this square ends with you getting checkmated.");
+  });
+
   describe('Additional templates', () => {
     it('CASTLING_NOT_ANALYZED', () => {
       const result = explain({
         move: { from: 'e1', to: 'e2' },
         reasons: [{ code: 'CASTLING_NOT_ANALYZED', squares: [] }]
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       } as unknown as MoveClassification);
       expect(result.primary).toBe("Castling isn't analyzed by this trainer yet.");
     });
@@ -126,7 +144,7 @@ describe('explain module', () => {
       const result = explain({
         move: { from: 'e1', to: 'e2' },
         reasons: [{ code: 'EXCHANGE_LINE_MATE', squares: [] }]
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       } as unknown as MoveClassification);
       expect(result.primary).toBe("The capture sequence on this square ends with you getting checkmated.");
     });
@@ -135,7 +153,7 @@ describe('explain module', () => {
         move: { from: 'e1', to: 'e2' },
         exchange: { fenAfter: 'k7/8/8/8/8/8/8/4K3 w - - 0 1' },
         reasons: [{ code: 'DEFENDER_UNAVAILABLE', squares: ['e4'] }]
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       } as unknown as MoveClassification);
       // Wait, we need a piece on e4 in the fenAfter for the template "Your {role} on {sq}...". 
       // I'll just check if it contains the substring.
@@ -162,7 +180,7 @@ describe('explain module', () => {
     it('DELIVERS_MATE over NOT_ATTACKED', () => {
       const result = explain({
         move: { from: 'e1', to: 'e2' },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         reasons: [{ code: 'NOT_ATTACKED' }, { code: 'DELIVERS_MATE' }]
       } as unknown as MoveClassification);
       expect(result.primary).toBe("This is checkmate.");
@@ -173,7 +191,7 @@ describe('explain module', () => {
       const result = explain({
         move: { from: 'e1', to: 'e2' },
         netMaterial: 100,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         reasons: [{ code: 'NOT_ATTACKED' }, { code: 'WINS_MATERIAL' }]
       } as unknown as MoveClassification);
       expect(result.primary).toBe("You win material here (+1 pawn).");
@@ -183,7 +201,7 @@ describe('explain module', () => {
     it('ALLOWS_MATE_IN_ONE over lower priority', () => {
       const result = explain({
         move: { from: 'e1', to: 'e2' },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         reasons: [
           { code: 'CAUSES_STALEMATE' },
           { code: 'ALLOWS_MATE_IN_ONE', moves: [{ from: 'h8', to: 'h1' }] }
@@ -195,7 +213,7 @@ describe('explain module', () => {
     it('Informational reasons never become primary', () => {
       const result = explain({
         move: { from: 'e1', to: 'e2' },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         reasons: [{ code: 'GIVES_CHECK' }]
       } as unknown as MoveClassification);
       expect(result.primary).toBe("");
@@ -205,12 +223,12 @@ describe('explain module', () => {
     it('Input reason ordering must not affect output', () => {
       const result1 = explain({
         move: { from: 'e1', to: 'e2' },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         reasons: [{ code: 'WINS_MATERIAL' }, { code: 'DELIVERS_MATE' }]
       } as unknown as MoveClassification);
       const result2 = explain({
         move: { from: 'e1', to: 'e2' },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         reasons: [{ code: 'DELIVERS_MATE' }, { code: 'WINS_MATERIAL' }]
       } as unknown as MoveClassification);
       expect(result1).toEqual(result2);
