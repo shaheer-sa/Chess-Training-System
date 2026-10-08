@@ -66,8 +66,9 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
 
         <div style={{ flex: '1 1 400px', maxWidth: '480px' }}>
           {heroPos && (
-            <div aria-hidden="true" style={{ background: 'var(--panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-              <Board 
+            <div style={{ background: 'var(--panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <div aria-hidden="true">
+                <Board 
                 position={heroPos}
                 flipped={false}
                 selectedSquare={44} // e6 is index 44
@@ -79,6 +80,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
                 readOnly={true}
                 showBadgesOnReadOnly={true}
               />
+              </div>
               {destInfo && caption && (
                 <div style={{ marginTop: '16px', padding: '12px', background: 'var(--bg-sunken)', borderRadius: '6px', border: '1px solid var(--border-strong)', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                   <div style={{ background: BADGE_INFO[destInfo.label as keyof typeof BADGE_INFO].color, color: BADGE_INFO[destInfo.label as keyof typeof BADGE_INFO].textColor, padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.85rem' }}>
@@ -104,13 +106,15 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
           <h2 style={{ fontSize: '1.25rem', color: 'var(--text)', marginBottom: '8px' }}>Analyze a position</h2>
           <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>Set up any board state and see the material consequences of every move.</p>
         </a>
-        <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+        <a 
+          href="/" onClick={(e) => { e.preventDefault(); onNavigate('play'); }}
+          style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border-strong)', textDecoration: 'none', display: 'block', minHeight: '44px' }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
             <h2 style={{ fontSize: '1.25rem', color: 'var(--text)', margin: 0 }}>Play</h2>
-            <span style={{ fontSize: '0.75rem', background: 'var(--bg-sunken)', color: 'var(--text-faint)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border-strong)' }}>Coming soon</span>
           </div>
-          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>Play against the engine with real-time feedback.</p>
-        </div>
+          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>Two players on one board, with hints for whoever is to move. Playing the computer is coming soon.</p>
+        </a>
         <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
             <h2 style={{ fontSize: '1.25rem', color: 'var(--text)', margin: 0 }}>Review a game</h2>

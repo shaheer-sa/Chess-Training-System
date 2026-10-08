@@ -17,9 +17,9 @@ export const ExchangeControls: React.FC<ExchangeControlsProps> = ({ expandedLeve
 
   return (
     <div style={{ display: 'flex', gap: '5px' }}>
-      <button onClick={() => setExchangeStep(0)} disabled={exchangeStep === 0}>Back to position</button>
-      <button onClick={() => setExchangeStep(Math.max(1, exchangeStep - 1))} disabled={exchangeStep <= 1}>{prevLabel}</button>
-      <button onClick={() => setExchangeStep(Math.min(selectedDestInfo.exchange!.bestLine.length, exchangeStep + 1))} disabled={exchangeStep === selectedDestInfo.exchange!.bestLine.length}>{nextLabel}</button>
+      <button style={{ minHeight: "44px", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 16px" }} onClick={() => setExchangeStep(0)} disabled={exchangeStep === 0}>Back to position</button>
+      <button style={{ minHeight: "44px", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 16px" }} onClick={() => setExchangeStep(Math.max(1, exchangeStep - 1))} disabled={exchangeStep <= 1}>{prevLabel}</button>
+      <button style={{ minHeight: "44px", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 16px" }} onClick={() => setExchangeStep(Math.min(selectedDestInfo.exchange!.bestLine.length, exchangeStep + 1))} disabled={exchangeStep === selectedDestInfo.exchange!.bestLine.length}>{nextLabel}</button>
     </div>
   );
 };

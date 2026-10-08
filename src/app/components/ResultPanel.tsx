@@ -89,7 +89,7 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
           {expandedLevel < 2 && (
             <button 
               onClick={() => setExpandedLevel(2)}
-              style={{ background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '1rem', fontWeight: 500 }}
+              style={{ background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '1rem', fontWeight: 500, minHeight: '44px', display: 'inline-flex', alignItems: 'center' }}
             >
               Show why
             </button>
@@ -97,7 +97,7 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
           {expandedLevel < 3 && selectedDestInfo.exchange && selectedDestInfo.exchange.bestLine.length > 0 && (
             <button 
               onClick={() => setExpandedLevel(3)}
-              style={{ background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '1rem', fontWeight: 500 }}
+              style={{ background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '1rem', fontWeight: 500, minHeight: '44px', display: 'inline-flex', alignItems: 'center' }}
             >
               Show the exchange
             </button>

@@ -29,6 +29,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   const initPos = initSetup?.isOk ? Chess.fromSetup(initSetup.unwrap()).unwrap() : null;
 
   const [fen, setFen] = useState(initialFen || '');
+  const [showMovesFor, setShowMovesFor] = useState<'white'|'black'>(initPos ? initPos.turn : 'white');
   const [inputFen, setInputFen] = useState(initialFen || '');
   const [validFen, setValidFen] = useState(!!initPos || !initialFen);
   const [position, setPosition] = useState<Chess | null>(initPos);
@@ -115,18 +116,26 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     return `${file}${rank}`;
   };
 
+
+  const getEffectiveFen = () => {
+    if (!position || showMovesFor === position.turn) return fen;
+    const setup = position.toSetup();
+    setup.turn = showMovesFor;
+    setup.epSquare = undefined;
+    return fenOps.makeFen(setup);
+  };
+
   const onSquareClick = async (index: number) => {
     if (!position) return;
     const piece = position.board.get(index);
     const color = piece ? piece.color : null;
-    const turn = position.turn;
-
+    
     // If a destination is currently selected, clicking anything resets or selects new
     if (destinationSquare !== null) {
       setDestinationSquare(null);
     }
 
-    if (color === turn) {
+    if (color === showMovesFor) {
       // F6: tap again to cancel
       if (selectedSquare === index) {
         resetSelection();
@@ -148,7 +157,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
 
       const algSquare = getSquareName(index) as Square;
       try {
-        const res = await engineClient.classifyMovesFrom(fen, algSquare);
+        const effectiveFen = getEffectiveFen();
+        const res = await engineClient.classifyMovesFrom(effectiveFen, algSquare);
         if (requestToken.current !== currentToken) return;
         if (res.ok) {
           setMoves(res.value);
@@ -183,6 +193,26 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
         messageTimer.current = setTimeout(() => setResultMessage(''), 3000);
       }
     }
+  };
+
+
+  const canSwitchTo = (targetColor: 'white'|'black') => {
+    if (!position) return false;
+    if (position.turn === targetColor) return true;
+    const setup = position.toSetup();
+    setup.turn = targetColor;
+    setup.epSquare = undefined;
+    const testFen = fenOps.makeFen(setup);
+    const testSetup = fenOps.parseFen(testFen);
+    if (!testSetup.isOk) return false;
+    const posRes = Chess.fromSetup(testSetup.unwrap());
+    return posRes.isOk;
+  };
+
+  const handleToggle = (targetColor: 'white'|'black') => {
+    if (showMovesFor === targetColor) return;
+    setShowMovesFor(targetColor);
+    resetSelection();
   };
 
   const selectedDestInfo = (destinationSquare !== null ? moves.find(m => m.move.to === getSquareName(destinationSquare)) : null) || null;
@@ -253,6 +283,31 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               <input aria-label="FEN" type="text" value={inputFen} onChange={handleFenChange} style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', borderRadius: '6px', fontSize: '0.9rem', fontFamily: 'IBM Plex Mono, monospace', minHeight: '44px' }} 
               />
             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Show moves for</span>
+                <div style={{ display: 'flex', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px' }}>
+                  <button
+                    aria-pressed={showMovesFor === 'white'}
+                    onClick={() => handleToggle('white')}
+                    disabled={!canSwitchTo('white')}
+                    title={!canSwitchTo('white') ? "Not available - White is in check." : ""}
+                    style={{ minHeight: '36px', padding: '0 16px', background: showMovesFor === 'white' ? 'var(--panel)' : 'transparent', border: showMovesFor === 'white' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: !canSwitchTo('white') ? 'var(--text-faint)' : 'var(--text)', fontWeight: 'bold', cursor: !canSwitchTo('white') ? 'not-allowed' : 'pointer' }}
+                  >
+                    White
+                  </button>
+                  <button
+                    aria-pressed={showMovesFor === 'black'}
+                    onClick={() => handleToggle('black')}
+                    disabled={!canSwitchTo('black')}
+                    title={!canSwitchTo('black') ? "Not available - Black is in check." : ""}
+                    style={{ minHeight: '36px', padding: '0 16px', background: showMovesFor === 'black' ? 'var(--panel)' : 'transparent', border: showMovesFor === 'black' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: !canSwitchTo('black') ? 'var(--text-faint)' : 'var(--text)', fontWeight: 'bold', cursor: !canSwitchTo('black') ? 'not-allowed' : 'pointer' }}
+                  >
+                    Black
+                  </button>
+                </div>
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button 
                 onClick={() => setFlipped(!flipped)}
@@ -272,6 +327,11 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
           <div style={{ display: 'flex', flexWrap: 'wrap', maxWidth: '1320px', margin: '0 auto', width: '100%' }}>
             
             <div className="board-container" style={{ flex: '1 1 400px', maxWidth: '640px', display: 'flex', flexDirection: 'column' }}>
+            {position && showMovesFor !== position.turn && (
+              <div style={{ background: 'var(--panel-hover)', color: 'var(--text)', padding: '12px', borderRadius: '6px', marginBottom: '16px', border: '1px solid var(--border)', fontSize: '0.95rem' }}>
+                Showing {showMovesFor === 'white' ? "White's" : "Black's"} options as if it were {showMovesFor === 'white' ? "White's" : "Black's"} turn.
+              </div>
+            )}
               {expandedLevel >= 3 && exchangeStep > 0 && selectedDestInfo?.exchange && (
                 <div style={{ padding: '12px', textAlign: 'center', fontWeight: 600, color: 'var(--text-2)' }}>
                   Showing the exchange — step {exchangeStep} of {selectedDestInfo.exchange.bestLine.length}

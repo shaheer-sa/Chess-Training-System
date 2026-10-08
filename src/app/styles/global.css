@@ -104,3 +104,13 @@ input:focus-visible,
     padding-right: 16px !important;
   }
 }
+
+
+.app-header-inner {
+  padding: 0 24px !important;
+}
+@media (max-width: 768px) {
+  .app-header-inner {
+    padding: 0 16px !important;
+  }
+}

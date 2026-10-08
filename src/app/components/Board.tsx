@@ -20,6 +20,9 @@ interface BoardProps {
   readOnly?: boolean;
   showBadgesOnReadOnly?: boolean;
   arrow?: { from: Square; to: Square } | null;
+  lastMove?: { from: number; to: number };
+  checkSquare?: number;
+  legalDestinations?: number[];
 }
 
 const getSquareName = (index: number) => {
@@ -31,7 +34,8 @@ const getSquareName = (index: number) => {
 export const Board: React.FC<BoardProps> = ({
 
   position, flipped, onSquareClick, selectedSquare, destinationSquare, moves, expandedLevel, exchangeStep, selectedDestInfo,
-  focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow
+  focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow,
+  lastMove, checkSquare, legalDestinations
 }) => {
   const [hasFocus, setHasFocus] = React.useState(false);
   const displayBoard: Map<number, { role: string, color: string }> = new Map();
@@ -118,6 +122,12 @@ export const Board: React.FC<BoardProps> = ({
     if ((!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && moveInfo) {
       const badge = BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO];
       ariaLabel += `, legal destination, ${badge.text}`;
+    } else if (legalDestinations?.includes(index) && !isDestination) {
+      ariaLabel += `, legal destination`;
+    }
+    
+    if (checkSquare === index) {
+      ariaLabel += `, in check`;
     }
 
     let marker = '';
@@ -160,7 +170,13 @@ export const Board: React.FC<BoardProps> = ({
         {isReplayLandingSquare && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'var(--board-last)', pointerEvents: 'none' }} />
         )}
+        {lastMove && (lastMove.from === index || lastMove.to === index) && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'var(--board-last)', pointerEvents: 'none' }} />
+        )}
         
+        {checkSquare === index && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(circle, rgba(212,92,28,0.65) 0%, rgba(212,92,28,0) 70%)', pointerEvents: 'none' }} />
+        )}
         {piece && (
           <Piece 
             color={piece.color === 'white' ? 'w' : 'b'} 
@@ -169,7 +185,10 @@ export const Board: React.FC<BoardProps> = ({
           />
         )}
         {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && !piece && (
-          <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(21, 23, 27, 0.42)' }} />
+          <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(21, 23, 27, 0.42)', pointerEvents: 'none', zIndex: 2 }} />
+        )}
+        {legalDestinations?.includes(index) && !isDestination && !piece && (
+          <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(21, 23, 27, 0.42)', pointerEvents: 'none', zIndex: 2 }} />
         )}
         {(rank === (flipped ? 7 : 0)) && (
           <div aria-hidden="true" className="mono" style={{ position: 'absolute', bottom: 2, right: 4, fontSize: '12px', fontWeight: 600, color: 'var(--board-coord)', zIndex: 0 }}>
@@ -182,7 +201,10 @@ export const Board: React.FC<BoardProps> = ({
           </div>
         )}
         {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && piece && (
-          <div style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid rgba(21, 23, 27, 0.42)', borderRadius: '50%', boxSizing: 'border-box' }} />
+          <div style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid rgba(21, 23, 27, 0.42)', borderRadius: '50%', boxSizing: 'border-box', pointerEvents: 'none', zIndex: 2 }} />
+        )}
+        {legalDestinations?.includes(index) && !isDestination && piece && (
+          <div style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid rgba(21, 23, 27, 0.42)', borderRadius: '50%', boxSizing: 'border-box', pointerEvents: 'none', zIndex: 2 }} />
         )}
         {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && moveInfo && (
           <div style={{

@@ -7,8 +7,9 @@ import TrainingScreen from './screens/TrainingScreen.js';
 import { buildSession } from './training/session.js';
 import { EXERCISES } from './training/exercises.js';
 import { AppShell } from './components/AppShell.js';
+import { PlayScreen } from './screens/PlayScreen.js';
 
-export type ScreenName = 'home' | 'help' | 'analysis' | 'training';
+export type ScreenName = 'home' | 'help' | 'analysis' | 'training' | 'play';
 
 export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) => {
   const [currentScreen, setCurrentScreen] = useState<ScreenName>('home');
@@ -33,6 +34,7 @@ export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) 
       {currentScreen === 'help' && <Help onNavigate={navigate} />}
       {currentScreen === 'analysis' && <AnalysisScreen engineClient={engineClient} initialFen={initialFen} onNavigate={navigate} />}
       {currentScreen === 'training' && <TrainingScreen key={sessionKey} engineClient={engineClient} exercises={exercises} onExit={() => navigate('home')} onTrainAgain={() => setSessionKey(k => k + 1)} />}
+      {currentScreen === 'play' && <PlayScreen engineClient={engineClient} onNavigate={navigate} />}
     </AppShell>
   );
 };

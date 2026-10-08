@@ -37,6 +37,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
 
   const navLinks: { label: string; screen: ScreenName }[] = [
     { label: 'Analyze', screen: 'analysis' },
+    { label: 'Play', screen: 'play' },
     { label: 'Beginner drills', screen: 'training' },
     { label: 'How labels work', screen: 'help' },
   ];
@@ -74,11 +75,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
           style={{
             maxWidth: '1320px',
             margin: '0 auto',
-            padding: '0 24px',
+            
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             minHeight: '60px',
+            padding: '0 24px', /* fallback */
             gap: '16px',
           }}
         >
