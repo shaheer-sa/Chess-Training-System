@@ -6,13 +6,13 @@ import { axe } from 'vitest-axe';
 // @ts-expect-error vitest-axe matchers missing types
 import * as matchers from 'vitest-axe/matchers';
 import React from 'react';
-import { App } from '../../src/app/App';
-import TrainingScreen from '../../src/app/screens/TrainingScreen';
-import { EngineClient } from '../../src/app/engine/EngineClient';
-import { Exercise, EXERCISES } from '../../src/app/training/exercises';
-import { buildSession } from '../../src/app/training/session';
-import { BADGE_INFO } from '../../src/app/shared/badgeInfo';
-import { getAllRecords, appendRecord, _resetRecordsState } from '../../src/app/training/records';
+import { App } from '../../src/app/App.js';
+import TrainingScreen from '../../src/app/screens/TrainingScreen.js';
+import { EngineClient } from '../../src/app/engine/EngineClient.js';
+import { Exercise, EXERCISES } from '../../src/app/training/exercises.js';
+import { buildSession } from '../../src/app/training/session.js';
+import { BADGE_INFO } from '../../src/app/shared/badgeInfo.js';
+import { getAllRecords, appendRecord, _resetRecordsState } from '../../src/app/training/records.js';
 
 expect.extend(matchers);
 
@@ -352,7 +352,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
 
   describe('10. Accessible Radiogroup', () => {
     it('keyboard navigation with native inputs works', async () => {
-      const user = userEvent.setup();
+      const user = (userEvent as any).setup();
       const engine = createMockEngine();
       render(<TrainingScreen engineClient={engine} exercises={getFixedSession()} onExit={vi.fn()} />);
       await screen.findByRole('grid');

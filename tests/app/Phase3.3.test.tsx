@@ -79,6 +79,9 @@ describe('Phase 3.3 — Final P0 Defects', () => {
   afterEach(() => {
     cleanup();
   });
+  afterEach(() => {
+    cleanup();
+  });
 
   describe('1. Atomic Exercise Transitions', () => {
     it('Next immediately enters loading state and hides previous answer', async () => {

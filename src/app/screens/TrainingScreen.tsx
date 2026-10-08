@@ -24,6 +24,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
   const [loading, setLoading] = useState(true);
   const [engineError, setEngineError] = useState(false);
   const [result, setResult] = useState<MoveClassification | null>(null);
+  const [loadedExerciseKey, setLoadedExerciseKey] = useState<string | null>(null);
   
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [confidence, setConfidence] = useState<'low'|'medium'|'high'|null>(null);
@@ -39,6 +40,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
 
   const submittingRef = useRef(false);
   const prefetchCache = useRef<Record<string, Promise<Result<MoveClassification>>>>({});
+  const currentKeyRef = useRef<string | null>(null);
 
   const currentEx = exercises[currentIndex];
   const isComplete = currentIndex >= exercises.length;
@@ -52,15 +54,17 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
       prefetchCache.current[key] = engineClient.classifyMove(ex.fen, { from: ex.from, to: ex.to, promotion: ex.promotion as any });
     }
 
-    if (index === currentIndex) {
+    if (index === currentIndex || currentKeyRef.current === key) {
       setLoading(true);
       setEngineError(false);
       
       prefetchCache.current[key].then(res => {
-        // Guard against stale resolution
-        if (exercises[currentIndex]?.id !== ex.id) return;
+        // Guard against stale resolution using the current active key
+        if (currentKeyRef.current !== key) return;
+        
         if (res.ok) {
           setResult(res.value);
+          setLoadedExerciseKey(key);
           setLoading(false);
           setStartTime(Date.now());
         } else {
@@ -68,7 +72,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
           setLoading(false);
         }
       }).catch(() => {
-        if (exercises[currentIndex]?.id !== ex.id) return;
+        if (currentKeyRef.current !== key) return;
         setEngineError(true);
         setLoading(false);
       });
@@ -77,16 +81,11 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
 
   useEffect(() => {
     if (isComplete) return;
-    setResult(null);
-    setSelectedAnswer(null);
-    setConfidence(null);
-    setSubmitted(false);
-    setAttempt(1);
-    setExpandedLevel(1);
-    setExchangeStep(0);
-    setUserFlipped(null);
-    submittingRef.current = false;
+    const ex = exercises[currentIndex];
+    currentKeyRef.current = `${ex.id}-${ex.fen}-${ex.from}-${ex.to}`;
     
+    // We do NOT reset state here anymore, it is handled atomically in handleNext / init
+    // But on mount or try again, we might need to load
     loadExercise(currentIndex);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, isComplete]); // currentEx, engineClient intentionally omitted to prevent double triggering
@@ -127,6 +126,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
           ))}
         </ul>
 
+        <button onClick={onExit} style={{ marginRight: '10px' }}>Home</button>
         <button onClick={onTrainAgain || onExit} style={{ marginRight: '10px' }}>Train again</button>
         <button onClick={handleDownload}>Download my results</button>
       </div>
@@ -188,6 +188,28 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
     submittingRef.current = false;
   };
 
+  const handleNext = () => {
+    const nextIndex = currentIndex + 1;
+    setCurrentIndex(nextIndex);
+    
+    setResult(null);
+    setSelectedAnswer(null);
+    setConfidence(null);
+    setSubmitted(false);
+    setAttempt(1);
+    setExpandedLevel(1);
+    setExchangeStep(0);
+    setUserFlipped(null);
+    submittingRef.current = false;
+    setLoading(true);
+    setLoadedExerciseKey(null);
+    
+    if (nextIndex < exercises.length) {
+      const nextEx = exercises[nextIndex];
+      currentKeyRef.current = `${nextEx.id}-${nextEx.fen}-${nextEx.from}-${nextEx.to}`;
+    }
+  };
+
   let feedback = '';
   if (submitted && result) {
     if (selectedAnswer === 'not_sure') feedback = 'Not graded';
@@ -218,7 +240,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
 
       <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, padding: '4px' }}>
         <div style={{ flex: '1 1 352px', maxWidth: '600px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          {!loading && !engineError && (
+          {!loading && !engineError && loadedExerciseKey === `${currentEx.id}-${currentEx.fen}-${currentEx.from}-${currentEx.to}` && (
             <>
               <div style={{ alignSelf: 'flex-end', marginBottom: '8px' }}>
                 <button onClick={() => setUserFlipped(!displayFlipped)}>Flip Board</button>
@@ -259,7 +281,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
         </div>
 
         <div style={{ flex: '1 1 300px', padding: '20px', background: '#f9f9f9', margin: '4px' }}>
-          {loading ? (
+          {loading || (!engineError && loadedExerciseKey !== `${currentEx.id}-${currentEx.fen}-${currentEx.from}-${currentEx.to}`) ? (
             <h2>Loading exercise…</h2>
           ) : engineError ? (
             <div>
@@ -347,7 +369,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
                   />
 
                   <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                    <button onClick={() => setCurrentIndex(i => i + 1)} style={{ padding: '10px', flex: 1, background: '#004d40', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                    <button onClick={handleNext} style={{ padding: '10px', flex: 1, background: '#004d40', color: '#fff', border: 'none', cursor: 'pointer' }}>
                       Next
                     </button>
                     <button onClick={handleTryAgain} style={{ padding: '10px', flex: 1, background: '#fff', border: '1px solid #ccc', cursor: 'pointer' }}>

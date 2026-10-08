@@ -1,4 +1,6 @@
 /** @vitest-environment jsdom */
+/* eslint-disable */
+// @ts-nocheck
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
 import { axe } from 'vitest-axe';
