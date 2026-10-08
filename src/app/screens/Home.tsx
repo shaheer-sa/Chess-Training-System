@@ -51,13 +51,13 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
             <button 
               onClick={() => onNavigate('analysis')}
-              style={{ background: 'var(--accent-btn)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '6px', fontSize: '1rem', fontWeight: 600, cursor: 'pointer' }}
+              style={{ background: 'var(--accent-btn)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '6px', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
             >
               Analyze a position
             </button>
             <button 
               onClick={() => onNavigate('training')}
-              style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '12px 24px', borderRadius: '6px', fontSize: '1rem', fontWeight: 600, cursor: 'pointer' }}
+              style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '12px 24px', borderRadius: '6px', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
             >
               Beginner drills
             </button>
@@ -66,7 +66,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
 
         <div style={{ flex: '1 1 400px', maxWidth: '480px' }}>
           {heroPos && (
-            <div style={{ background: 'var(--panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <div aria-hidden="true" style={{ background: 'var(--panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)' }}>
               <Board 
                 position={heroPos}
                 flipped={false}
@@ -81,8 +81,9 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
               />
               {destInfo && caption && (
                 <div style={{ marginTop: '16px', padding: '12px', background: 'var(--bg-sunken)', borderRadius: '6px', border: '1px solid var(--border-strong)', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                  <div style={{ background: BADGE_INFO[destInfo.label as keyof typeof BADGE_INFO].color, color: BADGE_INFO[destInfo.label as keyof typeof BADGE_INFO].textColor, padding: '4px', borderRadius: '4px', display: 'flex' }}>
+                  <div style={{ background: BADGE_INFO[destInfo.label as keyof typeof BADGE_INFO].color, color: BADGE_INFO[destInfo.label as keyof typeof BADGE_INFO].textColor, padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.85rem' }}>
                     <LabelIcon kind={destInfo.label as 'safe'|'even_trade'|'loses_material'|'unclear'} />
+                    <span>{BADGE_INFO[destInfo.label as keyof typeof BADGE_INFO].text}</span>
                   </div>
                   <div style={{ fontSize: '0.9rem', color: 'var(--text-2)', lineHeight: 1.4 }}>
                     {caption}

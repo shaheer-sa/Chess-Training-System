@@ -44,6 +44,11 @@ describe('Accessibility - Other Screens', () => {
     Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 500 });
     window.dispatchEvent(new Event('resize'));
     const { container } = render(<AppShell currentScreen="home" onNavigate={() => {}}><Home onNavigate={() => {}} /></AppShell>);
+    
+    // jsdom doesn't apply media queries, so manually hide desktop nav
+    const desktopNav = container.querySelector('.desktop-nav') as HTMLElement;
+    if (desktopNav) desktopNav.style.display = 'none';
+
     const btn = container.querySelector('button[aria-label="Open navigation menu"]');
     if (btn) fireEvent.click(btn);
     const results = await axe(container);

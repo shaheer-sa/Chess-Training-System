@@ -61,6 +61,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <header
+        className="app-header"
         style={{
           background: 'var(--panel)',
           borderBottom: '1px solid var(--border)',
@@ -130,10 +131,10 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
 
         {/* Mobile menu */}
         {menuOpen && (
-          <div
+          <nav
             id="mobile-menu"
             ref={menuRef}
-            role="menu"
+            aria-label="Main navigation"
             style={{
               borderTop: '1px solid var(--border)',
               background: 'var(--panel)',
@@ -144,7 +145,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
               <a
                 key={screen}
                 href="/"
-                role="menuitem"
                 aria-current={currentScreen === screen ? 'page' : undefined}
                 onClick={(e) => { e.preventDefault(); onNavigate(screen); setMenuOpen(false); }}
                 style={{
@@ -157,7 +157,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
                 {label}
               </a>
             ))}
-          </div>
+          </nav>
         )}
       </header>
 

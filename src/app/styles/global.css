@@ -85,3 +85,22 @@ input:focus-visible,
     animation: none !important;
   }
 }
+
+@media (max-width: 768px) {
+  .app-header {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .analysis-toolbar {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .mode-bar {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .page-content {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}

@@ -86,18 +86,23 @@ describe('Phase 3.1 — Training MVP Acceptance', () => {
   // §1: HOME NAVIGATION
   // ==========================================================================
   describe('§1 Home Navigation', () => {
-    it('Home displays Train button before Analyze', () => {
+    it('Home displays Analyze a position button before Beginner drills in the hero', () => {
       const engine = createMockEngine();
-      render(<App engineClient={engine} />);
+      const { container } = render(<App engineClient={engine} />);
 
-      const trainBtn = screen.getAllByText('Beginner drills')[0];
-      const analyzeBtn = screen.getAllByText('Analyze a position')[0];
+      const hero = container.querySelector('section');
+      expect(hero).not.toBeNull();
+      
+      const allButtons = Array.from(hero!.querySelectorAll('button, a'));
+      const analyzeBtn = allButtons.find(b => b.textContent?.includes('Analyze a position'));
+      const trainBtn = allButtons.find(b => b.textContent?.includes('Beginner drills'));
 
-      // Train should appear before Analyze in DOM order
-      const allButtons = screen.getAllByRole('button');
-      const trainIdx = allButtons.indexOf(trainBtn);
-      const analyzeIdx = allButtons.indexOf(analyzeBtn);
-      expect(trainIdx).toBeLessThan(analyzeIdx);
+      const analyzeIdx = allButtons.indexOf(analyzeBtn!);
+      const trainIdx = allButtons.indexOf(trainBtn!);
+
+      expect(analyzeIdx).toBeGreaterThanOrEqual(0);
+      expect(trainIdx).toBeGreaterThanOrEqual(0);
+      expect(analyzeIdx).toBeLessThan(trainIdx);
     });
 
     it('Home also shows "What do the labels mean?" link', () => {

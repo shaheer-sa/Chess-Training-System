@@ -29,9 +29,11 @@ const getSquareName = (index: number) => {
 };
 
 export const Board: React.FC<BoardProps> = ({
+
   position, flipped, onSquareClick, selectedSquare, destinationSquare, moves, expandedLevel, exchangeStep, selectedDestInfo,
   focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow
 }) => {
+  const [hasFocus, setHasFocus] = React.useState(false);
   const displayBoard: Map<number, { role: string, color: string }> = new Map();
   for (let i = 0; i < 64; i++) {
     const p = position.board.get(i);
@@ -130,7 +132,7 @@ export const Board: React.FC<BoardProps> = ({
       <div
         id={`sq-${index}`}
         key={index}
-        tabIndex={index === focusedSquare ? 0 : -1}
+        tabIndex={readOnly ? -1 : (index === focusedSquare ? 0 : -1)}
         role="gridcell"
         aria-label={ariaLabel}
         onKeyDown={(e) => handleKeyDown(e, index)}
@@ -147,7 +149,7 @@ export const Board: React.FC<BoardProps> = ({
           left: `${(flipped ? 7 - file : file) * 12.5}%`,
           top: `${(flipped ? rank : 7 - rank) * 12.5}%`,
           boxSizing: 'border-box',
-          boxShadow: index === focusedSquare ? 'inset 0 0 0 3px #ffffff, inset 0 0 0 6px var(--board-ink)' : (isSelected ? 'inset 0 0 0 4px var(--board-ink)' : 'none'),
+          boxShadow: (hasFocus && index === focusedSquare) ? 'inset 0 0 0 3px #ffffff, inset 0 0 0 6px var(--board-ink)' : (isSelected ? 'inset 0 0 0 4px var(--board-ink)' : 'none'),
           border: (!isReplaying && isSelectedDest) ? '3px dashed var(--board-ink)' : isReplayLandingSquare ? '3px dashed var(--board-ink)' : 'none',
           display: 'flex',
           justifyContent: 'center',
@@ -217,7 +219,12 @@ export const Board: React.FC<BoardProps> = ({
   }
 
   return (
-    <div role="grid" aria-label="Chess board" style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid var(--border-strong)', boxSizing: 'border-box', overflow: 'hidden', borderRadius: '4px' }}>
+    <div 
+      role="grid" 
+      aria-label="Chess board" 
+      onFocus={() => setHasFocus(true)} 
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHasFocus(false); }}
+      style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid var(--border-strong)', boxSizing: 'border-box', overflow: 'hidden', borderRadius: '4px' }}>
       {rows}
       {readOnly && arrow && (() => {
         const fromFile = arrow.from.charCodeAt(0) - 97;

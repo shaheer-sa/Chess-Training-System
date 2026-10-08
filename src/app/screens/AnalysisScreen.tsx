@@ -213,7 +213,10 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
         {liveText}
       </div>
 
-      <div style={{ background: 'var(--panel)', color: 'var(--text-muted)', padding: '10px 24px', textAlign: 'center', fontSize: '0.85rem', borderBottom: '1px solid var(--border)' }}>
+      <div className="mode-bar" style={{ background: 'var(--panel)', color: 'var(--text-muted)', padding: '10px 24px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', fontSize: '0.85rem', borderBottom: '1px solid var(--border)' }}>
+        <svg aria-hidden="true" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+        </svg>
         ANALYSIS · Results are shown immediately
       </div>
       
@@ -247,19 +250,19 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
           <div className="analysis-toolbar" style={{ background: 'var(--panel)', padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
             <div style={{ flex: 1, minWidth: '280px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="mono" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>FEN</span>
-              <input aria-label="FEN" type="text" value={inputFen} onChange={handleFenChange} style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', borderRadius: '6px', fontSize: '0.9rem', fontFamily: 'IBM Plex Mono, monospace' }} 
+              <input aria-label="FEN" type="text" value={inputFen} onChange={handleFenChange} style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', borderRadius: '6px', fontSize: '0.9rem', fontFamily: 'IBM Plex Mono, monospace', minHeight: '44px' }} 
               />
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button 
                 onClick={() => setFlipped(!flipped)}
-                style={{ background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem' }}
+                style={{ background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
               >
                 Flip Board
               </button>
               <button 
                 onClick={() => { resetSelection(); setFen(''); setInputFen(''); }}
-                style={{ background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem' }}
+                style={{ background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
               >
                 Change position
               </button>
@@ -290,7 +293,9 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               
               <div style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'space-between', background: 'var(--panel)', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ flex: 1 }}>
-                  <div aria-hidden="true" style={{ fontSize: '0.95rem', color: 'var(--text-2)' }}>{liveText}</div>
+                  {!(selectedDestInfo && !(expandedLevel >= 3 && exchangeStep > 0)) && (
+                    <div aria-hidden="true" style={{ fontSize: '0.95rem', color: 'var(--text-2)' }}>{liveText}</div>
+                  )}
                   {showAnalyzingIndicator && <div aria-hidden="true" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>Checking moves…</div>}
                 </div>
                 {selectedDestInfo && (
