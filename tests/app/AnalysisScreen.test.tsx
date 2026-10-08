@@ -744,5 +744,63 @@ describe('Analysis Screen', () => {
       });
       unmount();
     });
+
+    it('Level 3 Phase 2C.5 R1: Hide overlays during replay', async () => {
+      const client = new DirectEngineClient();
+      render(<AnalysisScreen engineClient={client} initialFen="6k1/8/8/8/3p4/8/4P3/2B3K1 w - - 0 1" />);
+      
+      fireEvent.click(screen.getByLabelText(/e2, white pawn/));
+      fireEvent.click(await screen.findByLabelText(/e4, empty/));
+      
+      // Initially e4 has "legal destination" in aria-label
+      expect(screen.getByLabelText(/e4, empty, legal destination/)).toBeTruthy();
+
+      fireEvent.click(await screen.findByText('Show the exchange'));
+      fireEvent.click(await screen.findByText('Next'));
+      
+      await waitFor(() => {
+        // e3 label is "e3, black pawn" without "legal destination"
+        expect(screen.getByLabelText('e3, black pawn')).toBeTruthy();
+        
+        // no square label contains "legal destination"
+        expect(screen.queryByLabelText(/legal destination/)).toBeNull();
+        
+        // caption directly above or below board
+        expect(screen.getByText('Showing the exchange — step 1 of 2')).toBeTruthy();
+      });
+
+      fireEvent.click(screen.getByText('Back to position'));
+      
+      await waitFor(() => {
+        // e4 label again contains "legal destination"
+        expect(screen.getByLabelText(/e4, empty, legal destination/)).toBeTruthy();
+      });
+    });
+
+    it('Level 3 Phase 2C.5 R2: Controls positioned under the board', async () => {
+      const client = new DirectEngineClient();
+      render(<AnalysisScreen engineClient={client} initialFen="6k1/8/8/8/3p4/8/4P3/2B3K1 w - - 0 1" />);
+      
+      fireEvent.click(screen.getByLabelText(/e2, white pawn/));
+      fireEvent.click(await screen.findByLabelText(/e4, empty/));
+      
+      fireEvent.click(await screen.findByText('Show the exchange'));
+      
+      const nextBtn = await screen.findByText('Next');
+      const board = screen.getByLabelText('Chess board');
+      
+      // The Next button, the board grid, and the near-board message area should share the same parent container
+      // The near-board message area is right next to the board, so let's find the board's parent container:
+      const leftPanel = board.parentElement;
+      
+      // Assert the Next button is inside leftPanel
+      expect(leftPanel?.contains(nextBtn)).toBe(true);
+      
+      // Assert that we removed the duplicate controls from the result panel
+      // (The result panel is the right-side element).
+      // Since 'Next' only appears once, findByText('Next') works uniquely, 
+      // but let's check it's strictly in the left panel.
+      expect(screen.getAllByText('Next').length).toBe(1);
+    });
   });
 });
