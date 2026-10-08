@@ -8,14 +8,18 @@ export default defineConfig({
     projects: [
       {
         name: 'engine',
-        include: ['tests/engine/**/*.test.ts', 'tests/spike/**/*.test.ts'],
-        environment: 'node',
+        test: {
+          include: ['tests/engine/**/*.test.ts', 'tests/spike/**/*.test.ts'],
+          environment: 'node',
+        }
       },
       {
         name: 'app',
-        include: ['tests/app/**/*.test.tsx', 'tests/app/**/*.test.ts'],
-        environment: 'jsdom',
-        setupFiles: ['tests/app/setup.ts'],
+        test: {
+          include: ['tests/app/**/*.test.tsx', 'tests/app/**/*.test.ts'],
+          environment: 'jsdom',
+          setupFiles: ['tests/app/setup.ts'],
+        }
       }
     ]
   }
