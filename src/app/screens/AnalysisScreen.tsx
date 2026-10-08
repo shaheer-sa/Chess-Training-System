@@ -311,7 +311,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               </div>
               {(!canSwitchTo('white') || !canSwitchTo('black')) && (
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-faint)' }}>
-                  {!canSwitchTo('white') ? 'White cannot move (in check or invalid state).' : 'Black cannot move (in check or invalid state).'}
+                  {position && position.isCheck() ? `Not available — ${position.turn === 'white' ? 'White' : 'Black'} is in check.` : 'Not available for this position.'}
                 </div>
               )}
 

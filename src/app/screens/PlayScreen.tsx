@@ -6,7 +6,7 @@ import { Board } from '../components/Board.js';
 import { explain } from '../explain/explain.js';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { LabelIcon } from '../components/LabelIcon.js';
-import { GameState, newGame, legalDestinations, playMove, undo, outcome } from '../play/game.js';
+import { GameState, newGame, legalDestinations, playMove, undo, outcome, previewSan, isPromotionMove } from '../play/game.js';
 
 
 interface PlayScreenProps {
@@ -16,7 +16,6 @@ interface PlayScreenProps {
 }
 
 import { parseSquare } from 'chessops';
-import { makeSan } from 'chessops/san';
 
 const getPieceName = (c: 'w'|'b', r: string) => {
   const p = r.toLowerCase();
@@ -35,7 +34,7 @@ const formatSquare = (index: number) => {
 };
 
 export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen, onNavigate }) => {
-  const [game, setGame] = useState<GameState>(() => { console.log('INIT PLAYSCREEN WITH FEN:', initialFen); return newGame(initialFen); });
+  const [game, setGame] = useState<GameState>(() => newGame(initialFen));
   const [hintsOn, setHintsOn] = useState(true);
   const [flipped, setFlipped] = useState(false);
   
@@ -51,7 +50,6 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen
 
   const pos = Chess.fromSetup(fenOps.parseFen(game.currentFen).unwrap()).unwrap();
   const gameOutcome = outcome(game);
-console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
   const readOnly = !!gameOutcome;
 
   // Moves list info (storing move classifications for dot rendering)
@@ -88,7 +86,7 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
   };
 
   const handleSquareClick = (index: number) => {
-    if (readOnly && !selectedSquare) return;
+    if (readOnly) return;
     
     if (promotionMove) return; // Wait for dialog
     
@@ -141,10 +139,10 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
   const executeMove = (fromIdx: number, toIdx: number, promoRole?: Role) => {
     const fromStr = formatSquare(fromIdx);
     const toStr = formatSquare(toIdx);
-    const piece = pos.board.get(fromIdx);
     
     // Check if promotion is needed
-    if (!promoRole && piece?.role === 'pawn' && (toIdx >> 3 === 0 || toIdx >> 3 === 7)) {
+    const promotes = isPromotionMove(game, fromIdx, toIdx);
+    if (!promoRole && promotes) {
       setPromotionMove({ from: fromStr, to: toStr });
       return;
     }
@@ -158,10 +156,12 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
       resetSelection();
       setPromotionMove(null);
       
+      // The engine analyses queen promotion only: no label for under-promotions.
+      if (promotes && promoRole !== 'queen') return;
       const token = ++requestToken.current;
       moveTokens.current[moveIndex] = token;
       // Classify the move to add a dot to the move list
-      engineClient.classifyMove(fenBefore, { from: fromStr, to: toStr, promotion: promoRole || (piece?.role === 'pawn' ? 'queen' : undefined) }).then(res => {
+      engineClient.classifyMove(fenBefore, { from: fromStr, to: toStr, promotion: promotes ? 'queen' : undefined }).then(res => {
         if (moveTokens.current[moveIndex] === token && res && res.ok) {
            setMoveListInfo(prev => ({ ...prev, [moveIndex]: res.value }));
         }
@@ -170,7 +170,19 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
   };
 
   const handleUndo = () => {
-    setGame(undo(game));
+    const nextGame = undo(game);
+    const keep = nextGame.moves.length;
+    // Drop labels and pending classification requests for undone moves.
+    for (const k of Object.keys(moveTokens.current)) {
+      if (Number(k) >= keep) delete moveTokens.current[Number(k)];
+    }
+    setMoveListInfo(prev => {
+      const next: Record<number, MoveClassification> = {};
+      for (const [k, v] of Object.entries(prev)) if (Number(k) < keep) next[Number(k)] = v;
+      return next;
+    });
+    setPromotionMove(null);
+    setGame(nextGame);
     resetSelection();
   };
 
@@ -207,25 +219,9 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
     
     if (pos.isCheck()) return 'Check';
     
-    const newMoves = game.moves.slice(0, -1);
-    const prevPos = Chess.fromSetup(fenOps.parseFen(game.startFen).unwrap()).unwrap();
-    for (const m of newMoves) {
-      const pPromo = m.uci.length > 4 ? m.uci[4] : undefined;
-      const pR = pPromo === 'q' ? 'queen' : pPromo === 'r' ? 'rook' : pPromo === 'b' ? 'bishop' : pPromo === 'n' ? 'knight' : undefined;
-      prevPos.play({ from: parseSquare(m.uci.substring(0, 2))!, to: parseSquare(m.uci.substring(2, 4))!, promotion: pR });
-    }
-    
     const lastMove = game.moves[game.moves.length - 1];
-    const fromStr = lastMove.uci.substring(0, 2);
-    const toStr = lastMove.uci.substring(2, 4);
-    const fromIdx = parseSquare(fromStr)!;
-        const p = prevPos.board.get(fromIdx);
-    
-    if (p) {
-      const colorText = p.color === 'white' ? 'White' : 'Black';
-      return `${colorText} ${p.role} ${fromStr} to ${toStr}`;
-    }
-    return lastMove.san;
+    const colorText = lastMove.color === 'white' ? 'White' : 'Black';
+    return `${colorText} ${lastMove.role} ${lastMove.uci.slice(0, 2)} to ${lastMove.uci.slice(2, 4)}`;
   };
   
   const currentStatusText = formatStatusMove();
@@ -260,12 +256,7 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
             const mInfo = movesInfo.find(m => m.move.to === destStr);
             const isPreview = previewSquare === destIdx;
             
-            // To figure out SAN, we need a legal move
-            const legalMove = pos.dests(selectedSquare).has(destIdx) ? { from: selectedSquare, to: destIdx } : undefined;
-            let sanMoveString: string = destStr;
-            if (legalMove) {
-              try { sanMoveString = makeSan(pos, legalMove); } catch { /* ignore */ }
-            }
+            const sanMoveString = previewSan(game, selectedSquare, destIdx) ?? destStr;
             
             return (
               <button 
@@ -292,7 +283,7 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
                   </div>
                 )}
                 {isPreview && (
-                  <div style={{ marginTop: '8px', background: 'var(--accent)', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', textAlign: 'center' }}>
+                  <div style={{ marginTop: '8px', background: 'var(--accent-btn)', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', textAlign: 'center' }}>
                     Play {sanMoveString}
                   </div>
                 )}
@@ -316,7 +307,7 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
   } : undefined;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
 
       
       <div className="mode-bar" style={{ background: 'var(--panel)', color: 'var(--text-muted)', padding: '10px 24px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', fontSize: '0.85rem', borderBottom: '1px solid var(--border)' }}>
@@ -324,15 +315,15 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
         PLAY · Two players · Hints {hintsOn ? 'on' : 'off'}
       </div>
 
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px', overflowY: 'auto' }}>
+      <div className="play-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px' }}>
         
         {/* Top Controls */}
         <div style={{ width: '100%', maxWidth: '800px', display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '16px', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px' }}>
             <button aria-pressed="true" style={{ minHeight: '44px', padding: '8px 16px', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text)', fontWeight: 'bold', cursor: 'default' }}>Two players</button>
             <button aria-disabled="true" style={{ minHeight: '44px', padding: '8px 16px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'not-allowed' }}>vs Computer (Coming soon)</button>
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', minHeight: '44px' }}>
               <input type="checkbox" checked={hintsOn} onChange={(e) => { setHintsOn(e.target.checked); resetSelection(); }} />
               Show hints
@@ -346,11 +337,11 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', width: '100%', maxWidth: '1000px' }}>
           
-          <div style={{ flex: '1 1 400px', display: 'flex', flexDirection: 'column' }}>
+          <div className="play-board-col" style={{ flex: '1 1 400px', display: 'flex', flexDirection: 'column' }}>
             {/* Player strip (opponent) */}
             <div style={{ background: 'var(--panel)', padding: '12px 16px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', border: '1px solid var(--border)', borderBottom: 'none', display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ fontWeight: 'bold' }}>{flipped ? 'White' : 'Black'}</span>
-              {pos.turn === (flipped ? 'white' : 'black') && <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>to move</span>}
+              {pos.turn === (flipped ? 'white' : 'black') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
             </div>
             
             <div style={{ width: '100%', position: 'relative' }}>
@@ -390,7 +381,7 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
             {/* Player strip (self) */}
             <div style={{ background: 'var(--panel)', padding: '12px 16px', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', border: '1px solid var(--border)', borderTop: 'none', display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ fontWeight: 'bold' }}>{flipped ? 'Black' : 'White'}</span>
-              {pos.turn === (flipped ? 'black' : 'white') && <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>to move</span>}
+              {pos.turn === (flipped ? 'black' : 'white') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
             </div>
             
             {/* Status Line */}
@@ -404,7 +395,7 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
               <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--accent)', textAlign: 'center' }}>
                 <h2>Game Over</h2>
                 <p style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{statusText}</p>
-                <button onClick={handleNewGame} style={{ minHeight: '44px', padding: '8px 24px', background: 'var(--accent)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}>New game</button>
+                <button onClick={handleNewGame} style={{ minHeight: '44px', padding: '8px 24px', background: 'var(--accent-btn)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}>New game</button>
               </div>
             )}
             
@@ -429,7 +420,7 @@ console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 };

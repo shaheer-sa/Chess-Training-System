@@ -72,15 +72,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
         }}
       >
         <div
+          className="app-header-inner"
           style={{
             maxWidth: '1320px',
             margin: '0 auto',
-            
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             minHeight: '60px',
-            padding: '0 24px', /* fallback */
             gap: '16px',
           }}
         >
@@ -106,7 +105,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
             ref={menuBtnRef}
             aria-expanded={menuOpen}
             aria-controls="mobile-menu"
-            aria-label="Open navigation menu"
+            aria-label="Menu"
             onClick={() => setMenuOpen(o => !o)}
             style={{
               display: 'none',
@@ -192,7 +191,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
             href="https://github.com/shaheer-sa/chess-training-system"
             target="_blank"
             rel="noopener noreferrer"
-            style={{ color: 'var(--accent-text)' }}
+            style={{ color: 'var(--accent-text)', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
           >
             Source on GitHub
           </a>

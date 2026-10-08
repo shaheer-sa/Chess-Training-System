@@ -859,7 +859,7 @@ describe('Analysis Screen', () => {
       await waitFor(() => {
         const blackBtn = screen.getByRole('button', { name: 'Black' });
         expect(blackBtn.getAttribute('disabled')).not.toBeNull();
-        expect(screen.getByText(/Black cannot move/i)).toBeTruthy();
+        expect(screen.getByText('Not available — White is in check.')).toBeTruthy();
       });
     });
   });
