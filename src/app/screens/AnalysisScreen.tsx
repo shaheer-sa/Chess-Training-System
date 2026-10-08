@@ -282,14 +282,17 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     const isDestination = !!moveInfo;
     const isSelectedDest = destinationSquare === index;
 
+    const isReplaying = expandedLevel >= 3 && exchangeStep > 0;
+    const isReplayLandingSquare = isReplaying && sqName === selectedDestInfo?.exchange?.bestLine[exchangeStep - 1]?.to;
+
     let ariaLabel = `${sqName}, ${pieceStr}`;
-    if (isDestination && moveInfo) {
+    if (!isReplaying && isDestination && moveInfo) {
       const badge = BADGE_INFO[moveInfo.label];
       ariaLabel += `, legal destination, ${badge.text}`;
     }
 
     let marker = '';
-    if (expandedLevel >= 2) {
+    if (!isReplaying && expandedLevel >= 2) {
       const aIndex = attackers.findIndex(a => a.square === sqName);
       if (aIndex !== -1) marker = `A${aIndex + 1}`;
       const dIndex = defenders.findIndex(d => d.square === sqName);
@@ -317,7 +320,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
           left: `${(flipped ? 7 - file : file) * 12.5}%`,
           top: `${(flipped ? rank : 7 - rank) * 12.5}%`,
           boxSizing: 'border-box',
-          border: isSelected ? '3px solid #333' : isSelectedDest ? '3px dashed #1a1a1a' : 'none',
+          border: (!isReplaying && isSelected) ? '3px solid #333' : (!isReplaying && isSelectedDest) ? '3px dashed #1a1a1a' : isReplayLandingSquare ? '3px dashed #1a1a1a' : 'none',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
@@ -331,7 +334,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
             style={{ width: '80%', height: '80%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
           />
         )}
-        {isDestination && !piece && (
+        {/* Replay step landing square indicator is handled in the border style above */}
+        {!isReplaying && isDestination && !piece && (
           <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: '#222', border: '2px solid #fff' }} />
         )}
         {(rank === (flipped ? 7 : 0)) && (
@@ -344,10 +348,10 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
             {getSquareName(index)[1]}
           </div>
         )}
-        {isDestination && piece && (
+        {!isReplaying && isDestination && piece && (
           <div style={{ position: 'absolute', width: '90%', height: '90%', border: '3px dashed #1a1a1a', borderRadius: '50%', boxSizing: 'border-box' }} />
         )}
-        {isDestination && moveInfo && (
+        {!isReplaying && isDestination && moveInfo && (
           <div style={{
             position: 'absolute', top: 2, right: 2, backgroundColor: BADGE_INFO[moveInfo.label].color,
             color: BADGE_INFO[moveInfo.label].textColor, fontSize: '10px', padding: '2px 4px', borderRadius: '4px', fontWeight: 'bold',
@@ -435,13 +439,27 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       {position && (
         <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, padding: '4px' }}>
           <div style={{ flex: '1 1 352px', maxWidth: '600px', margin: '0 auto' }}>
+            {expandedLevel >= 3 && exchangeStep > 0 && selectedDestInfo?.exchange && (
+              <div style={{ textAlign: 'center', marginBottom: '8px', fontWeight: 'bold' }}>
+                Showing the exchange — step {exchangeStep} of {selectedDestInfo.exchange.bestLine.length}
+              </div>
+            )}
             <div role="grid" aria-label="Chess board" style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid #ccc', boxSizing: 'border-box' }}>
               {rows}
             </div>
             
-            <div style={{ marginTop: '10px', minHeight: '30px' }}>
-              <div aria-hidden="true">{liveText}</div>
-              {showAnalyzingIndicator && <div aria-hidden="true">Checking moves…</div>}
+            <div style={{ marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, minHeight: '30px' }}>
+                <div aria-hidden="true">{liveText}</div>
+                {showAnalyzingIndicator && <div aria-hidden="true">Checking moves…</div>}
+              </div>
+              {expandedLevel >= 3 && selectedDestInfo?.exchange && selectedDestInfo.exchange.bestLine.length > 0 && (
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  <button onClick={() => setExchangeStep(0)} disabled={exchangeStep === 0}>Back to position</button>
+                  <button onClick={() => setExchangeStep(Math.max(1, exchangeStep - 1))} disabled={exchangeStep <= 1}>Prev</button>
+                  <button onClick={() => setExchangeStep(Math.min(selectedDestInfo.exchange!.bestLine.length, exchangeStep + 1))} disabled={exchangeStep === selectedDestInfo.exchange!.bestLine.length}>Next</button>
+                </div>
+              )}
             </div>
             
             <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
@@ -480,11 +498,6 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 {expandedLevel >= 3 && selectedDestInfo.exchange && selectedDestInfo.exchange.bestLine.length > 0 && (
                   <div style={{ marginTop: '20px', padding: '10px', background: '#eef' }}>
                     <strong>Exchange:</strong>
-                    <div style={{ marginTop: '5px' }}>
-                      <button onClick={() => setExchangeStep(0)} disabled={exchangeStep === 0}>Back to position</button>
-                      <button onClick={() => setExchangeStep(Math.max(1, exchangeStep - 1))} disabled={exchangeStep <= 1}>Prev</button>
-                      <button onClick={() => setExchangeStep(Math.min(selectedDestInfo.exchange!.bestLine.length, exchangeStep + 1))} disabled={exchangeStep === selectedDestInfo.exchange!.bestLine.length}>Next</button>
-                    </div>
                     {exchangeStep > 0 && (
                       <div style={{ marginTop: '10px' }}>
                         <div>{stepText}</div>
