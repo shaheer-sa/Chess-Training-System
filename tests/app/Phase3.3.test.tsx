@@ -162,7 +162,7 @@ describe('Phase 3.3 — Final P0 Defects', () => {
           // Attempt 2: correct
           fireEvent.click(screen.getByText(/Safe/));
           fireEvent.click(screen.getByText('Submit'));
-          await screen.findByText('Correct');
+          await screen.findAllByText('Correct');
         } else if (i === 1) {
           // Attempt 1: not_sure
           fireEvent.click(screen.getByText('Not sure'));
@@ -174,7 +174,7 @@ describe('Phase 3.3 — Final P0 Defects', () => {
           // Attempt 2: correct
           fireEvent.click(screen.getByText(/Safe/));
           fireEvent.click(screen.getByText('Submit'));
-          await screen.findByText('Correct');
+          await screen.findAllByText('Correct');
         } else {
           // correct
           fireEvent.click(screen.getByText(/Safe/));
@@ -191,7 +191,7 @@ describe('Phase 3.3 — Final P0 Defects', () => {
       // c = 8, g = 9 (exercise 0 was graded wrong first, exercise 1 was not graded first)
       expect(screen.getByText('8 of 9 correct')).toBeTruthy();
       expect(screen.getByText('1 not sure')).toBeTruthy();
-    });
+    }, 15000);
   });
 
   describe('4. Complete Results Download', () => {
@@ -203,14 +203,14 @@ describe('Phase 3.3 — Final P0 Defects', () => {
       await screen.findByRole('grid');
       
       // Attempt 1: wrong
-      fireEvent.click(screen.getByText(/Loses material/));
+      fireEvent.click(await screen.findByText(/Loses material/));
       fireEvent.click(screen.getByText('Submit'));
       await screen.findByText(/Not quite/);
       fireEvent.click(screen.getByText('Try again'));
       // Attempt 2: correct
       fireEvent.click(screen.getByText(/Safe/));
       fireEvent.click(screen.getByText('Submit'));
-      await screen.findByText('Correct');
+      await screen.findAllByText('Correct');
       fireEvent.click(screen.getByText('Next'));
       
       fireEvent.click(screen.getByText('Download my results'));

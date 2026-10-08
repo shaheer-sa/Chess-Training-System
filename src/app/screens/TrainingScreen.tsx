@@ -200,6 +200,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
   };
 
   const handleNext = () => {
+    requestTokenRef.current += 1;
     const nextIndex = currentIndex + 1;
     setCurrentIndex(nextIndex);
     
@@ -231,6 +232,11 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
         : selectedAnswer;
       feedback = `Not quite — you chose ${chosenLabel}`;
     }
+  }
+
+  let liveAnnouncement = '';
+  if (submitted && result && expandedLevel >= 3 && exchangeStep > 0) {
+    liveAnnouncement = getStepText(result, exchangeStep);
   }
 
   const handleRetryLoad = () => {
@@ -297,12 +303,21 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
             <h2>Loading exercise…</h2>
           ) : engineError ? (
             <div>
-              <h2 aria-live="polite">An error occurred while loading this exercise.</h2>
+              <h2 role="status" aria-live="polite">An error occurred while loading this exercise.</h2>
               <button onClick={handleRetryLoad}>Retry</button>
             </div>
           ) : (
             <>
-              <h2 aria-live="polite">{submitted ? feedback : questionText}</h2>
+              <h2>
+                <span role="status" aria-live="polite">
+                  <span>{submitted ? feedback : questionText}</span>
+                  {liveAnnouncement && (
+                    <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', border: 0 }}>
+                      {liveAnnouncement}
+                    </span>
+                  )}
+                </span>
+              </h2>
               
               {!submitted && (
                 <div style={{ marginTop: '20px' }}>

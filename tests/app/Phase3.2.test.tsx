@@ -295,7 +295,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
               fenBefore: fen, fenAfter: fen, mover: { color: 'white', role: 'pawn', from: move.from, to: move.to },
               materialFromMove: 0, see: 0, captureOptions: [],
               bestLine: [
-                { capturer: { square: 'e4' }, to: 'd5', captured: { square: 'd5', role: 'pawn' }, balanceAfter: -100 }
+                { side: 'white', capturer: { square: 'e4', role: 'pawn', color: 'white' }, to: 'd5', captured: { square: 'd5', role: 'pawn', color: 'black' }, balanceAfter: -100 } as unknown as import('../../src/engine/types').ExchangeStep
               ]
             },
             destination: { fenBefore: fen, fenAfter: fen, mover: { color: 'white', role: 'pawn', from: move.from, to: move.to }, givesCheck: false, geometricAttackers: [], geometricDefenders: [], legalCaptures: [] },
@@ -309,7 +309,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
       fireEvent.click(screen.getByText(/Safe/));
       fireEvent.click(screen.getByText('Submit'));
       
-      await screen.findByText('Correct');
+      await screen.findAllByText('Correct');
       
       // Replay is level 3
       fireEvent.click(screen.getByText('Show why'));
@@ -320,7 +320,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
       expect(screen.getByText('Back to position')).toBeTruthy();
       
       fireEvent.click(screen.getByText('Next step'));
-      expect(screen.getByText(/takes pawn on d5/)).toBeTruthy();
+      expect(screen.getAllByText(/takes pawn on d5/).length).toBeGreaterThan(0);
       expect(screen.getByText(/Balance: -1/)).toBeTruthy();
       
       // Ensure the step and next exercise are separate
