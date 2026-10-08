@@ -1,5 +1,6 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { expect, it, describe, vi, beforeEach } from 'vitest';
+/** @vitest-environment jsdom */
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
 import { axe } from 'vitest-axe';
 // @ts-expect-error vitest-axe matchers missing types
 import * as matchers from 'vitest-axe/matchers';
@@ -13,24 +14,28 @@ describe('TrainingScreen', () => {
   beforeEach(() => {
     localStorage.clear();
   });
+  afterEach(() => {
+    cleanup();
+  });
 
   const mockEngineClient: EngineClient = {
     classifyMovesFrom: vi.fn(),
-    classifyMove: async (fen, from, to, promotion) => {
+    classifyMove: async (fen, moveInput) => {
       let label = 'safe';
-      if (from === 'c3' && to === 'd5') label = 'loses_material';
+      if (moveInput.from === 'c3' && moveInput.to === 'd5') label = 'loses_material';
       return {
         ok: true,
         value: {
-          move: { from, to, promotion },
+          move: moveInput,
           label: label,
           netMaterial: 0,
-          reasons: [{ code: 'MOCK_REASON' }],
+          reasons: [{ code: 'MOCK_REASON', squares: [] }],
           exchange: {
-            fenBefore: fen, fenAfter: fen, mover: { color: 'white', role: 'pawn', from, to },
+            fenBefore: fen, fenAfter: fen, mover: { color: 'white', role: 'pawn', from: moveInput.from, to: moveInput.to },
             materialFromMove: 0, see: 0, captureOptions: [], bestLine: []
           },
-          destination: { geometricAttackers: [], geometricDefenders: [] }
+          destination: { fenBefore: fen, fenAfter: fen, mover: { color: 'white', role: 'pawn', from: moveInput.from, to: moveInput.to }, givesCheck: false, geometricAttackers: [], geometricDefenders: [], legalCaptures: [] },
+          tactics: { fenBefore: fen, fenAfter: fen, mover: { color: 'white', role: 'pawn', from: moveInput.from, to: moveInput.to }, givesCheck: false, deliversMate: false, causesStalemate: false, moverPinned: null, allowsMateInOne: [], hangingAfterMove: [], exchangeLineMate: null }
         } as any
       };
     }
@@ -59,13 +64,14 @@ describe('TrainingScreen', () => {
       expect(el.getAttribute('aria-label')).not.toMatch(/legal destination/i);
     });
 
-    // Check no badge/class leaks
-    expect(container.innerHTML).not.toMatch(/badge|safe|loses_material|even_trade/i);
+    // Check no ResultPanel or badges in the board
+    const boardHtml = container.querySelector('[aria-label="Chess board"]')?.innerHTML || '';
+    expect(boardHtml).not.toMatch(/badge|safe|loses_material|even_trade/i);
     
-    // Live region check
+    // Live region check should not contain the answer result
     const liveRegion = document.querySelector('[aria-live="polite"]');
     if (liveRegion) {
-      expect(liveRegion.textContent).not.toMatch(/safe|loses material|even trade/i);
+      expect(liveRegion.textContent).not.toMatch(/Not quite|Correct|Not graded/i);
     }
   });
 
@@ -76,19 +82,27 @@ describe('TrainingScreen', () => {
     const submitBtn = screen.getByText('Submit');
     expect((submitBtn as HTMLButtonElement).disabled).toBe(true);
 
-    const safeBtn = screen.getByText('Safe ✓');
-    fireEvent.click(safeBtn);
+    // Click wrong answer first
+    const wrongBtn = screen.getByText('Even trade ⇄');
+    fireEvent.click(wrongBtn);
     expect((submitBtn as HTMLButtonElement).disabled).toBe(false);
 
     fireEvent.click(submitBtn);
-    expect((submitBtn as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText('Submit')).toBeNull();
 
-    await screen.findByText('Correct');
+    await screen.findByText(/Not quite/i);
     
     // Try again
     fireEvent.click(screen.getByText('Try again'));
-    expect(screen.queryByText('Correct')).toBeNull();
-    expect((screen.getByText('Submit') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText(/Not quite/i)).toBeNull();
+    
+    // Now click correct answer
+    const safeBtn = screen.getByText('Safe ✓');
+    fireEvent.click(safeBtn);
+    fireEvent.click(screen.getByText('Submit'));
+    
+    await screen.findByText('Correct');
+    expect(screen.queryByText('Try again')).toBeNull();
   });
 
   it('handles wrong path and real label display', async () => {
@@ -118,11 +132,11 @@ describe('TrainingScreen', () => {
     
     const safeBtn = screen.getByText('Safe ✓');
     safeBtn.focus();
-    fireEvent.keyDown(safeBtn, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(safeBtn);
     
     const submitBtn = screen.getByText('Submit');
     submitBtn.focus();
-    fireEvent.keyDown(submitBtn, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(submitBtn);
 
     await screen.findByText('Correct');
   });

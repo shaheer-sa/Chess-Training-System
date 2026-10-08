@@ -25,7 +25,11 @@ describe('Training Exercises', () => {
 
   for (const ex of EXERCISES) {
     it(`exercise ${ex.id} has correct label and is a legal non-castling move`, () => {
-      const c = classifyMove(ex.fen, ex.from, ex.to, ex.promotion);
+      const res = classifyMove(ex.fen, { from: ex.from, to: ex.to, promotion: ex.promotion as any });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+      const c = res.value;
+      
       expect(c).toBeDefined();
       expect(c.label).toBe(idToExpectedLabel.get(ex.id));
       
