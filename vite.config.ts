@@ -7,15 +7,15 @@ export default defineConfig({
   test: {
     projects: [
       {
-        name: 'engine',
         test: {
+          name: 'engine',
           include: ['tests/engine/**/*.test.ts', 'tests/spike/**/*.test.ts'],
           environment: 'node',
         }
       },
       {
-        name: 'app',
         test: {
+          name: 'app',
           include: ['tests/app/**/*.test.tsx', 'tests/app/**/*.test.ts'],
           environment: 'jsdom',
           setupFiles: ['tests/app/setup.ts'],
