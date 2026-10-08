@@ -1,8 +1,7 @@
 /** @vitest-environment jsdom */
-import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
-import { axe } from 'vitest-axe';
 // @ts-expect-error vitest-axe matchers missing types
 import * as matchers from 'vitest-axe/matchers';
 import React from 'react';
@@ -11,8 +10,7 @@ import TrainingScreen from '../../src/app/screens/TrainingScreen.js';
 import { EngineClient } from '../../src/app/engine/EngineClient.js';
 import { Exercise, EXERCISES } from '../../src/app/training/exercises.js';
 import { buildSession } from '../../src/app/training/session.js';
-import { BADGE_INFO } from '../../src/app/shared/badgeInfo.js';
-import { getAllRecords, appendRecord, _resetRecordsState } from '../../src/app/training/records.js';
+import { getAllRecords, _resetRecordsState } from '../../src/app/training/records.js';
 
 expect.extend(matchers);
 
@@ -24,15 +22,15 @@ function seededRng(seed = 42) {
   };
 }
 
-function deferred<T>() {
+function deferred<T = unknown>() {
   let resolve!: (value: T) => void;
-  let reject!: (reason?: any) => void;
+  let reject!: (reason?: unknown) => void;
   const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
   return { promise, resolve, reject };
 }
 
 function createMockEngine(overrides?: Partial<EngineClient>) {
-  const classifyMove = vi.fn().mockImplementation(async (fen: string, move: any) => {
+  const classifyMove = vi.fn().mockImplementation(async (fen: string, move: { from: string, to: string, promotion?: string }) => {
     return {
       ok: true,
       value: {
@@ -82,7 +80,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
 
   describe('1. Loading State', () => {
     it('hides board, arrow, question, and answers completely while loading', async () => {
-      const d = deferred<any>();
+      const d = deferred<unknown>();
       const engine = createMockEngine({ classifyMove: vi.fn().mockReturnValue(d.promise) });
       const { container } = render(<TrainingScreen engineClient={engine} exercises={getFixedSession()} onExit={vi.fn()} />);
       
@@ -111,8 +109,8 @@ describe('Phase 3.2 — Core Acceptance', () => {
 
   describe('2. Prefetch', () => {
     it('prefetches next exercise on submit and uses it on next', async () => {
-      const d1 = deferred<any>();
-      const d2 = deferred<any>();
+      const d1 = deferred<unknown>();
+      const d2 = deferred<unknown>();
       const engine = createMockEngine();
       engine.classifyMove = vi.fn()
         .mockReturnValueOnce(d1.promise)
@@ -147,7 +145,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
 
   describe('3. Handle Engine Errors', () => {
     it('handles ok=false and Promise rejection gracefully', async () => {
-      const d1 = deferred<any>();
+      const d1 = deferred<unknown>();
       const engine = createMockEngine({ classifyMove: vi.fn().mockReturnValue(d1.promise) });
       render(<TrainingScreen engineClient={engine} exercises={getFixedSession()} onExit={vi.fn()} />);
       
@@ -163,8 +161,8 @@ describe('Phase 3.2 — Core Acceptance', () => {
       expect(getAllRecords().length).toBe(0);
       
       // Reject case
-      const d2 = deferred<any>();
-      (engine.classifyMove as any).mockReturnValue(d2.promise);
+      const d2 = deferred<unknown>();
+      (engine.classifyMove as import("vitest").Mock).mockReturnValue(d2.promise);
       fireEvent.click(screen.getByText('Retry'));
       expect(screen.getByText('Loading exercise…')).toBeTruthy();
       
@@ -288,7 +286,7 @@ describe('Phase 3.2 — Core Acceptance', () => {
     it('supports step narration, next/prev exchange step, readOnly bounds', async () => {
       const engine = createMockEngine();
       const { classifyMove } = engine;
-      (classifyMove as any).mockImplementation(async (fen: string, move: any) => {
+      (classifyMove as import("vitest").Mock).mockImplementation(async (fen: string, move: { from: string, to: string, promotion?: string }) => {
         return {
           ok: true,
           value: {
@@ -352,7 +350,8 @@ describe('Phase 3.2 — Core Acceptance', () => {
 
   describe('10. Accessible Radiogroup', () => {
     it('keyboard navigation with native inputs works', async () => {
-      const user = (userEvent as any).setup();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = (userEvent as unknown as { setup: () => any }).setup();
       const engine = createMockEngine();
       render(<TrainingScreen engineClient={engine} exercises={getFixedSession()} onExit={vi.fn()} />);
       await screen.findByRole('grid');

@@ -1,8 +1,6 @@
 /** @vitest-environment jsdom */
-/* eslint-disable */
-// @ts-nocheck
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
+import { expect, it, describe, vi, beforeEach, afterEach } from "vitest";
 import { axe } from 'vitest-axe';
 // @ts-expect-error vitest-axe matchers missing types
 import * as matchers from 'vitest-axe/matchers';
@@ -38,12 +36,12 @@ describe('TrainingScreen', () => {
           },
           destination: { fenBefore: fen, fenAfter: fen, mover: { color: 'white', role: 'pawn', from: moveInput.from, to: moveInput.to }, givesCheck: false, geometricAttackers: [], geometricDefenders: [], legalCaptures: [] },
           tactics: { fenBefore: fen, fenAfter: fen, mover: { color: 'white', role: 'pawn', from: moveInput.from, to: moveInput.to }, givesCheck: false, deliversMate: false, causesStalemate: false, moverPinned: null, allowsMateInOne: [], hangingAfterMove: [], exchangeLineMate: null }
-        } as any
+        } as unknown as import("../../src/engine/index.js").MoveClassification
       };
     }
   };
 
-  const getDummyExercises = () => [
+  const getDummyExercises = (): import("../../src/app/training/exercises.js").Exercise[] => [
     { id: 'E10', difficulty: 1, fen: '4k3/1P6/8/8/8/8/8/R3K3 w Q - 0 1', from: 'b7', to: 'b8', promotion: 'queen' },
     { id: 'E02', difficulty: 1, fen: '4k3/8/8/3n4/8/8/8/3RK3 w - - 0 1', from: 'd1', to: 'd5' },
     { id: 'E03', difficulty: 1, fen: '4k3/8/4p3/8/8/2N5/8/4K3 w - - 0 1', from: 'c3', to: 'd5' }
@@ -146,11 +144,13 @@ describe('TrainingScreen', () => {
   it('axe a11y checks', async () => {
     const { container } = render(<TrainingScreen engineClient={mockEngineClient} exercises={[getDummyExercises()[1]]} onExit={vi.fn()} />);
     await screen.findByText(/What happens\?/);
+    //@ts-expect-error type missing
     expect(await axe(container)).toHaveNoViolations();
     
     fireEvent.click(screen.getByText('Safe ✓'));
     fireEvent.click(screen.getByText('Submit'));
     await screen.findByText('Correct');
+    //@ts-expect-error type missing
     expect(await axe(container)).toHaveNoViolations();
   });
 });

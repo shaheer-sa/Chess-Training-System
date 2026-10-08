@@ -1,13 +1,12 @@
 /** @vitest-environment jsdom */
-import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
-import { App } from '../../src/app/App.js';
 import TrainingScreen from '../../src/app/screens/TrainingScreen.js';
 import { EngineClient } from '../../src/app/engine/EngineClient.js';
 import { Exercise, EXERCISES } from '../../src/app/training/exercises.js';
 import { buildSession } from '../../src/app/training/session.js';
-import { _resetRecordsState, getAllRecords } from '../../src/app/training/records.js';
+import { _resetRecordsState } from '../../src/app/training/records.js';
 
 // --- Deterministic RNG ---
 function seededRng(seed = 42) {
@@ -18,15 +17,15 @@ function seededRng(seed = 42) {
   };
 }
 
-function deferred<T>() {
+function deferred<T = unknown>() {
   let resolve!: (value: T) => void;
-  let reject!: (reason?: any) => void;
+  let reject!: (reason?: unknown) => void;
   const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
   return { promise, resolve, reject };
 }
 
 function createMockEngine(overrides?: Partial<EngineClient>) {
-  const classifyMove = vi.fn().mockImplementation(async (fen: string, move: any) => {
+  const classifyMove = vi.fn().mockImplementation(async (fen: string, move: { from: string, to: string, promotion?: string }) => {
     return {
       ok: true,
       value: {
@@ -79,14 +78,11 @@ describe('Phase 3.3 — Final P0 Defects', () => {
   afterEach(() => {
     cleanup();
   });
-  afterEach(() => {
-    cleanup();
-  });
 
   describe('1. Atomic Exercise Transitions', () => {
     it('Next immediately enters loading state and hides previous answer', async () => {
-      const d1 = deferred<any>();
-      const d2 = deferred<any>();
+      const d1 = deferred<unknown>();
+      const d2 = deferred<unknown>();
       const engine = createMockEngine();
       engine.classifyMove = vi.fn()
         .mockReturnValueOnce(d1.promise)
@@ -117,8 +113,8 @@ describe('Phase 3.3 — Final P0 Defects', () => {
 
   describe('2. Actual Async Request Invalidation', () => {
     it('ignores stale success/rejection from a previous exercise', async () => {
-      const d1 = deferred<any>();
-      const d2 = deferred<any>();
+      const d1 = deferred<unknown>();
+      const d2 = deferred<unknown>();
       const engine = createMockEngine();
       engine.classifyMove = vi.fn()
         .mockReturnValueOnce(d1.promise)
@@ -219,7 +215,7 @@ describe('Phase 3.3 — Final P0 Defects', () => {
       
       fireEvent.click(screen.getByText('Download my results'));
       
-      const calls = (window.URL.createObjectURL as any).mock.calls;
+      const calls = (window.URL.createObjectURL as import("vitest").Mock).mock.calls;
       expect(calls.length).toBe(1);
       const blob = calls[0][0] as Blob;
       

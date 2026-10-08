@@ -41,6 +41,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
   const submittingRef = useRef(false);
   const prefetchCache = useRef<Record<string, Promise<Result<MoveClassification>>>>({});
   const currentKeyRef = useRef<string | null>(null);
+  const requestTokenRef = useRef(0);
 
   const currentEx = exercises[currentIndex];
   const isComplete = currentIndex >= exercises.length;
@@ -51,16 +52,19 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
     const key = `${ex.id}-${ex.fen}-${ex.from}-${ex.to}`;
 
     if (!prefetchCache.current[key]) {
-      prefetchCache.current[key] = engineClient.classifyMove(ex.fen, { from: ex.from, to: ex.to, promotion: ex.promotion as any });
+      const p = engineClient.classifyMove(ex.fen, { from: ex.from, to: ex.to, promotion: ex.promotion as import("../../engine/index.js").Role | undefined });
+      prefetchCache.current[key] = p;
+      p.catch(() => {});
     }
 
     if (index === currentIndex || currentKeyRef.current === key) {
       setLoading(true);
       setEngineError(false);
+      requestTokenRef.current += 1;
       
+      const myToken = requestTokenRef.current;
       prefetchCache.current[key].then(res => {
-        // Guard against stale resolution using the current active key
-        if (currentKeyRef.current !== key) return;
+        if (requestTokenRef.current !== myToken) return;
         
         if (res.ok) {
           setResult(res.value);
@@ -72,12 +76,18 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
           setLoading(false);
         }
       }).catch(() => {
-        if (currentKeyRef.current !== key) return;
+        if (requestTokenRef.current !== myToken) return;
         setEngineError(true);
         setLoading(false);
       });
     }
   };
+
+  useEffect(() => {
+    return () => {
+      requestTokenRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (isComplete) return;
@@ -86,8 +96,9 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
     
     // We do NOT reset state here anymore, it is handled atomically in handleNext / init
     // But on mount or try again, we might need to load
+    requestTokenRef.current += 1;
     loadExercise(currentIndex);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [currentIndex, isComplete]); // currentEx, engineClient intentionally omitted to prevent double triggering
 
   if (isComplete) {
@@ -95,7 +106,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
     
     // Compute summary correctly
     // g = graded first attempts, c = correct first attempts, n = not sure first attempts
-    const firstAttempts = exercises.map(ex => sessionRecords.find(r => r.exerciseId === ex.id && r.attempt === 1)).filter(Boolean) as any[];
+    const firstAttempts = exercises.map(ex => sessionRecords.find(r => r.exerciseId === ex.id && r.attempt === 1)).filter(Boolean) as import("../training/records.js").TrainingRecord[];
     
     const c = firstAttempts.filter(r => r.correct === true).length;
     const n = firstAttempts.filter(r => r.answer === 'not_sure').length;
@@ -162,7 +173,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
       sessionId,
       exerciseId: currentEx.id,
       attempt,
-      answer: selectedAnswer as any,
+      answer: selectedAnswer as "safe" | "even_trade" | "loses_material" | "unclear" | "not_sure",
       confidence,
       correctLabel: result.label,
       correct: isCorrect,
@@ -225,6 +236,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
   const handleRetryLoad = () => {
     const key = `${currentEx.id}-${currentEx.fen}-${currentEx.from}-${currentEx.to}`;
     delete prefetchCache.current[key]; // force fresh request
+    requestTokenRef.current += 1;
     loadExercise(currentIndex);
   };
 
@@ -327,7 +339,7 @@ export default function TrainingScreen({ engineClient, exercises, onExit, onTrai
                         <legend style={{ fontWeight: 'bold', marginBottom: '10px' }}>Confidence (optional):</legend>
                         <div style={{ display: 'flex', gap: '10px' }}>
                           {['Low', 'Medium', 'High'].map(lvl => {
-                            const val = lvl.toLowerCase() as any;
+                            const val = lvl.toLowerCase() as "low" | "medium" | "high";
                             return (
                               <label key={lvl} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', background: confidence === val ? '#e0e0e0' : '#fff', border: '1px solid #ccc', cursor: 'pointer' }}>
                                 <input

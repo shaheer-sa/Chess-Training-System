@@ -198,6 +198,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();

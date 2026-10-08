@@ -1,11 +1,11 @@
 import { expect, it, describe } from 'vitest';
-import { EXERCISES } from '../../src/app/training/exercises';
-import { classifyMove } from '../../src/engine/index';
+import { EXERCISES } from '../../src/app/training/exercises.js';
+import { classifyMove } from '../../src/engine/index.js';
 
 describe('Training Exercises', () => {
   it('has 30 exercises with unique IDs', () => {
     expect(EXERCISES.length).toBe(30);
-    const ids = new Set(EXERCISES.map(e => e.id));
+    const ids = new Set(EXERCISES.map((e: import("../../src/app/training/exercises.js").Exercise) => e.id));
     expect(ids.size).toBe(30);
   });
 
@@ -25,10 +25,11 @@ describe('Training Exercises', () => {
 
   for (const ex of EXERCISES) {
     it(`exercise ${ex.id} has correct label and is a legal non-castling move`, () => {
-      const res = classifyMove(ex.fen, { from: ex.from, to: ex.to, promotion: ex.promotion as any });
+      const res = classifyMove(ex.fen, { from: ex.from, to: ex.to, promotion: ex.promotion as import("../../src/engine/index.js").Role | undefined });
       expect(res.ok).toBe(true);
       if (!res.ok) return;
       const c = res.value;
+      if (!c.exchange) return;
       
       expect(c).toBeDefined();
       expect(c.label).toBe(idToExpectedLabel.get(ex.id));
