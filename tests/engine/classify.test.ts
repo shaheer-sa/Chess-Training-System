@@ -104,6 +104,10 @@ describe('Move Classification (Phase 1E)', () => {
       {
         id: 'B1', fen: '3r2k1/5ppp/8/8/8/8/4R3/4R1K1 w - - 0 1', move: { from: 'e2', to: 'd2' },
         label: 'safe', netMaterial: 0, reasons: ['CAPTURE_ALLOWS_MATE']
+      },
+      {
+        id: 'B1b', fen: '3k4/8/8/3r4/8/8/7K/1NRRR3 w - - 0 1', move: { from: 'b1', to: 'd2' },
+        label: 'safe', netMaterial: 0, reasons: ['CAPTURE_ALLOWS_MATE', 'OPPONENT_CAPTURE_LOSES']
       }
     ];
 
@@ -116,6 +120,26 @@ describe('Move Classification (Phase 1E)', () => {
         expect(res.value.label).toBe(fx.label);
         expect(res.value.netMaterial).toBe(fx.netMaterial);
         expect(res.value.reasons.map(r => r.code)).toEqual(fx.reasons);
+
+        if (fx.id === 'B1') {
+          const r = res.value.reasons.find(r => r.code === 'CAPTURE_ALLOWS_MATE');
+          expect(r?.squares).toEqual(['d8']);
+          expect(r?.moves).toEqual([{ from: 'e1', to: 'e8', promotion: undefined }]);
+        }
+
+        if (fx.id === 'B1b') {
+          const r = res.value.reasons.find(r => r.code === 'CAPTURE_ALLOWS_MATE');
+          expect(r?.squares).toEqual(['d5']);
+          expect(r?.moves).toEqual([{ from: 'd1', to: 'd2', promotion: undefined }]);
+        }
+
+        if (fx.id === 'B2a' || fx.id === 'B2b') {
+          expect(res.value.tactics?.hangingAfterMove).toContainEqual({
+            piece: { square: 'g2', role: 'rook', color: 'white' },
+            opponentGain: 200,
+            cause: 'other'
+          });
+        }
       });
     }
 

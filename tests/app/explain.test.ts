@@ -87,6 +87,12 @@ describe('explain module', () => {
     expect(result.primary).toBe("This move leaves your opponent no legal moves — the game ends in a draw.");
   });
 
+  it('B1', async () => {
+    const c = await getClassification('3r2k1/5ppp/8/8/8/8/4R3/4R1K1 w - - 0 1', 'e2', 'd2');
+    const result = explain(c as unknown as MoveClassification);
+    expect(result.primary).toBe("If your opponent takes, you can checkmate them: rook e1→e8.");
+  });
+
   it('X7', async () => {
     const c = await getClassification('4k3/8/8/2n5/2b5/8/2KP4/8 w - - 0 1', 'd2', 'd3');
     const result = explain(c as unknown as MoveClassification);

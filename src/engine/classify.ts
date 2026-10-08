@@ -44,28 +44,26 @@ export function classifyMove(fen: string, moveInput: MoveInput): Result<MoveClas
       replayPos.play({ from: fromAlgebraic(opt.capturer.square), to: fromAlgebraic(opt.captureSquare), promotion: opt.promotion });
       
       let refuted = false;
-      if (!replayPos.isCheck()) {
-        const afterCapFen = makeFen(replayPos.toSetup());
-        const lmRes = getLegalMoves(afterCapFen);
-        if (lmRes.ok) {
-          const matingList = [];
-          for (const m of lmRes.value) {
-            const tempPos = replayPos.clone();
-            tempPos.play({ from: fromAlgebraic(m.from), to: fromAlgebraic(m.to), promotion: m.promotion });
-            if (tempPos.isCheck()) {
-              const replyFen = makeFen(tempPos.toSetup());
-              const lmRes2 = getLegalMoves(replyFen);
-              if (lmRes2.ok && lmRes2.value.length === 0) {
-                matingList.push(m);
-              }
+      const afterCapFen = makeFen(replayPos.toSetup());
+      const lmRes = getLegalMoves(afterCapFen);
+      if (lmRes.ok) {
+        const matingList = [];
+        for (const m of lmRes.value) {
+          const tempPos = replayPos.clone();
+          tempPos.play({ from: fromAlgebraic(m.from), to: fromAlgebraic(m.to), promotion: m.promotion });
+          if (tempPos.isCheck()) {
+            const replyFen = makeFen(tempPos.toSetup());
+            const lmRes2 = getLegalMoves(replyFen);
+            if (lmRes2.ok && lmRes2.value.length === 0) {
+              matingList.push(m);
             }
           }
-          if (matingList.length > 0) {
-            matingList.sort((a, b) => fromAlgebraic(a.from) !== fromAlgebraic(b.from) ? fromAlgebraic(a.from) - fromAlgebraic(b.from) : fromAlgebraic(a.to) - fromAlgebraic(b.to));
-            refuted = true;
-            refutedCapturers.push(opt.capturer.square);
-            matingMoves.push({ from: matingList[0].from, to: matingList[0].to, promotion: matingList[0].promotion });
-          }
+        }
+        if (matingList.length > 0) {
+          matingList.sort((a, b) => fromAlgebraic(a.from) !== fromAlgebraic(b.from) ? fromAlgebraic(a.from) - fromAlgebraic(b.from) : fromAlgebraic(a.to) - fromAlgebraic(b.to));
+          refuted = true;
+          refutedCapturers.push(opt.capturer.square);
+          matingMoves.push({ from: matingList[0].from, to: matingList[0].to, promotion: matingList[0].promotion });
         }
       }
       
