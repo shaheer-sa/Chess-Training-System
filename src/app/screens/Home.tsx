@@ -9,7 +9,7 @@ import { explain } from '../explain/explain.js';
 import { LabelIcon } from '../components/LabelIcon.js';
 
 interface HomeProps {
-  onNavigate: (screen: ScreenName) => void;
+  onNavigate: (screen: ScreenName, fen?: string) => void;
   engineClient?: EngineClient;
 }
 

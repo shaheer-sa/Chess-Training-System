@@ -4,7 +4,7 @@ import { Logo } from './Logo.js';
 
 interface AppShellProps {
   children: React.ReactNode;
-  onNavigate: (screen: ScreenName) => void;
+  onNavigate: (screen: ScreenName, fen?: string) => void;
   currentScreen: ScreenName;
 }
 

@@ -55,11 +55,15 @@ export const playMove = (game: GameState, from: Square, to: Square, promotion?: 
   
   const move: Move = { from, to, promotion };
   
+  if (!pos.isLegal(move)) {
+    return null; // illegal move
+  }
+  
   let san: string;
   try {
     san = makeSan(pos, move);
   } catch {
-    return null; // illegal move
+    return null;
   }
   
   const uci = makeUci(move);

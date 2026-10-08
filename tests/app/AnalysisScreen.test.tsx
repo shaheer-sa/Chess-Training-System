@@ -803,4 +803,65 @@ describe('Analysis Screen', () => {
       expect(screen.getAllByText('Next').length).toBe(1);
     });
   });
+
+  describe('Show moves for (Phase 5A)', () => {
+    it('resets Analysis side selection when positions change', async () => {
+      const client = new MockEngineClient();
+      render(<AnalysisScreen engineClient={client} onNavigate={() => {}} />);
+      // Select first sample
+      fireEvent.click(screen.getByText('Position 1'));
+      await waitFor(() => expect(screen.getByLabelText('FEN')).toBeTruthy());
+      
+      // Should default to White for Fool's Mate starting position
+      expect(screen.getByRole('button', { name: 'White' }).getAttribute('aria-pressed')).toBe('true');
+      
+      // Switch to Black
+      fireEvent.click(screen.getByRole('button', { name: 'Black' }));
+      expect(screen.getByRole('button', { name: 'Black' }).getAttribute('aria-pressed')).toBe('true');
+      
+      // Change FEN to a black-to-move position
+      const fenInput = screen.getByLabelText('FEN');
+      fireEvent.change(fenInput, { target: { value: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1' } });
+      
+      // Should auto-reset to Black since the FEN specifies Black to move
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Black' }).getAttribute('aria-pressed')).toBe('true');
+      });
+    });
+
+    it('legal opposite-side selection', async () => {
+      const client = new MockEngineClient();
+      render(<AnalysisScreen engineClient={client} onNavigate={() => {}} />);
+      fireEvent.click(screen.getByText('Position 1'));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'White' })).toBeTruthy());
+      
+      // Start pos is legal for both sides to "show moves for"
+      const blackBtn = screen.getByRole('button', { name: 'Black' });
+      expect(blackBtn.getAttribute('disabled')).toBeNull();
+      
+      fireEvent.click(blackBtn);
+      expect(blackBtn.getAttribute('aria-pressed')).toBe('true');
+      
+      // Indicator text
+      expect(screen.getByText(/Showing Black's options as if it were Black's turn/i)).toBeTruthy();
+    });
+
+    it('disabled illegal selection', async () => {
+      const client = new MockEngineClient();
+      render(<AnalysisScreen engineClient={client} onNavigate={() => {}} />);
+      fireEvent.click(screen.getByText('Position 1'));
+      await waitFor(() => expect(screen.getByLabelText('FEN')).toBeTruthy());
+      
+      // Set to a position where White is in check (so Black cannot pretend it is their turn)
+      const fenInput = screen.getByLabelText('FEN');
+      fireEvent.change(fenInput, { target: { value: '4k3/8/8/8/8/8/8/4K2r w - - 0 1' } }); // White king in check
+      
+      await waitFor(() => {
+        const blackBtn = screen.getByRole('button', { name: 'Black' });
+        expect(blackBtn.getAttribute('disabled')).not.toBeNull();
+        expect(screen.getByText(/Black cannot move/i)).toBeTruthy();
+      });
+    });
+  });
+
 });

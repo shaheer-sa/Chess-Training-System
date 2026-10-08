@@ -11,6 +11,7 @@ import { GameState, newGame, legalDestinations, playMove, undo, outcome } from '
 
 interface PlayScreenProps {
   engineClient: EngineClient;
+  initialFen?: string;
   onNavigate?: (screen: 'home' | 'help' | 'analysis', initialFen?: string) => void;
 }
 
@@ -33,8 +34,8 @@ const formatSquare = (index: number) => {
   return `${file}${rank}` as Square;
 };
 
-export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate }) => {
-  const [game, setGame] = useState<GameState>(() => newGame());
+export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen, onNavigate }) => {
+  const [game, setGame] = useState<GameState>(() => { console.log('INIT PLAYSCREEN WITH FEN:', initialFen); return newGame(initialFen); });
   const [hintsOn, setHintsOn] = useState(true);
   const [flipped, setFlipped] = useState(false);
   
@@ -50,11 +51,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
 
   const pos = Chess.fromSetup(fenOps.parseFen(game.currentFen).unwrap()).unwrap();
   const gameOutcome = outcome(game);
+console.log('RENDER GAME OUTCOME:', gameOutcome, 'FEN:', game.currentFen);
   const readOnly = !!gameOutcome;
 
   // Moves list info (storing move classifications for dot rendering)
   const [moveListInfo, setMoveListInfo] = useState<Record<number, MoveClassification>>({});
-  const moveToken = useRef(0);
+  const moveTokens = useRef<Record<number, number>>({});
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -156,10 +158,11 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       resetSelection();
       setPromotionMove(null);
       
-      const token = ++moveToken.current;
+      const token = ++requestToken.current;
+      moveTokens.current[moveIndex] = token;
       // Classify the move to add a dot to the move list
       engineClient.classifyMove(fenBefore, { from: fromStr, to: toStr, promotion: promoRole || (piece?.role === 'pawn' ? 'queen' : undefined) }).then(res => {
-        if (token === moveToken.current && res && res.ok) {
+        if (moveTokens.current[moveIndex] === token && res && res.ok) {
            setMoveListInfo(prev => ({ ...prev, [moveIndex]: res.value }));
         }
       }).catch(() => {});
@@ -177,6 +180,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     }
     setGame(newGame());
     setMoveListInfo({});
+    moveTokens.current = {};
     resetSelection();
     setFlipped(false);
   };
@@ -368,13 +372,16 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               
               {promotionMove && (
                 <div role="dialog" aria-modal="true" ref={promoDialogRef} tabIndex={-1} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                  <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', gap: '16px' }}>
+                  <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ fontWeight: 'bold', textAlign: 'center' }}>Choose promotion</div>
+                    <div style={{ display: 'flex', gap: '16px' }}>
                     {(['queen', 'rook', 'bishop', 'knight'] as Role[]).map(role => (
                       <button key={role} onClick={() => executeMove(parseSquare(promotionMove.from)!, parseSquare(promotionMove.to)!, role)} style={{ minHeight: '44px', padding: '12px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--text)', textTransform: 'capitalize' }}>
                         {role}
                       </button>
                     ))}
                     <button onClick={() => setPromotionMove(null)} style={{ minHeight: '44px', padding: '12px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--text)' }}>Cancel</button>
+                    </div>
                   </div>
                 </div>
               )}

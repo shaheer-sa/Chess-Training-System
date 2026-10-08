@@ -16,9 +16,9 @@ export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) 
   const [initialFen, setInitialFen] = useState<string>('');
   const [sessionKey, setSessionKey] = useState(0);
 
-  const navigate = (screen: ScreenName) => {
+  const navigate = (screen: ScreenName, fen?: string) => {
     if (screen === 'analysis' && currentScreen !== 'analysis') {
-      setInitialFen('');
+      setInitialFen(fen || '');
     }
     if (screen === 'training' && currentScreen !== 'training') {
       setSessionKey(k => k + 1);

@@ -64,6 +64,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     setMoves([]);
     setResultMessage('');
     setEngineError(false);
+        
     setAnalyzing(false);
     setShowAnalyzingIndicator(false);
     setExpandedLevel(1);
@@ -91,6 +92,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
           setPosition(newPos);
           setValidFen(true);
           setFlipped(newPos.turn === 'black');
+          setShowMovesFor(newPos.turn);
         } else {
           setValidFen(false);
           setPosition(null);
@@ -291,8 +293,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                     aria-pressed={showMovesFor === 'white'}
                     onClick={() => handleToggle('white')}
                     disabled={!canSwitchTo('white')}
-                    title={!canSwitchTo('white') ? "Not available - White is in check." : ""}
-                    style={{ minHeight: '36px', padding: '0 16px', background: showMovesFor === 'white' ? 'var(--panel)' : 'transparent', border: showMovesFor === 'white' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: !canSwitchTo('white') ? 'var(--text-faint)' : 'var(--text)', fontWeight: 'bold', cursor: !canSwitchTo('white') ? 'not-allowed' : 'pointer' }}
+                    
+                    style={{ minHeight: '44px', padding: '0 16px', background: showMovesFor === 'white' ? 'var(--panel)' : 'transparent', border: showMovesFor === 'white' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: !canSwitchTo('white') ? 'var(--text-faint)' : 'var(--text)', fontWeight: 'bold', cursor: !canSwitchTo('white') ? 'not-allowed' : 'pointer' }}
                   >
                     White
                   </button>
@@ -300,13 +302,19 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                     aria-pressed={showMovesFor === 'black'}
                     onClick={() => handleToggle('black')}
                     disabled={!canSwitchTo('black')}
-                    title={!canSwitchTo('black') ? "Not available - Black is in check." : ""}
-                    style={{ minHeight: '36px', padding: '0 16px', background: showMovesFor === 'black' ? 'var(--panel)' : 'transparent', border: showMovesFor === 'black' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: !canSwitchTo('black') ? 'var(--text-faint)' : 'var(--text)', fontWeight: 'bold', cursor: !canSwitchTo('black') ? 'not-allowed' : 'pointer' }}
+                    
+                    style={{ minHeight: '44px', padding: '0 16px', background: showMovesFor === 'black' ? 'var(--panel)' : 'transparent', border: showMovesFor === 'black' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: !canSwitchTo('black') ? 'var(--text-faint)' : 'var(--text)', fontWeight: 'bold', cursor: !canSwitchTo('black') ? 'not-allowed' : 'pointer' }}
                   >
                     Black
                   </button>
                 </div>
               </div>
+              {(!canSwitchTo('white') || !canSwitchTo('black')) && (
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-faint)' }}>
+                  {!canSwitchTo('white') ? 'White cannot move (in check or invalid state).' : 'Black cannot move (in check or invalid state).'}
+                </div>
+              )}
+
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button 
