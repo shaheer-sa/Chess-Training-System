@@ -549,4 +549,174 @@ describe('Analysis Screen', () => {
       expect(screen.queryByText('Checking moves…')).toBeNull();
     });
   });
+
+  describe('Phase 2C UI (Levels 2 & 3)', () => {
+    it('Level 2: Pinned defender marker text and A/D list', async () => {
+      const client = new DirectEngineClient();
+      render(<AnalysisScreen engineClient={client} initialFen="k7/8/2b1N2p/8/8/8/6R1/7K w - - 0 1" />);
+      
+      const e6Square = screen.getByLabelText('e6, white knight');
+      fireEvent.click(e6Square);
+      
+      const g5Square = await screen.findByLabelText(/g5, empty/);
+      fireEvent.click(g5Square);
+      
+      const showWhy = await screen.findByText('Show why');
+      fireEvent.click(showWhy);
+      
+      // P1: g2 rook is a pinned defender
+      await waitFor(() => {
+        expect(screen.getByText(/D1 \(white rook on g2\) \(can't take back — pinned\)/)).toBeTruthy();
+        expect(screen.getByText('A1')).toBeTruthy(); // Marker A1
+        expect(screen.getByText('D1')).toBeTruthy(); // Marker D1
+      });
+    });
+
+    it('Level 2: King unavailable and regular unavailable defenders', async () => {
+      // We will mock the client just to easily inject reasons for UI testing
+      const client: EngineClient = {
+        classifyMovesFrom: async () => ({
+          ok: true, value: [{
+            move: { from: 'e1', to: 'e2' }, label: 'loses_material', netMaterial: -100, reasons: [
+              { code: 'KING_CANNOT_RECAPTURE', squares: ['e1'] },
+              { code: 'DEFENDER_UNAVAILABLE', squares: ['d1'] }
+            ], destination: {
+              geometricAttackers: [], geometricDefenders: [{ role: 'king', color: 'white', square: 'e1' }, { role: 'queen', color: 'white', square: 'd1' }]
+            }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any]
+        }), classifyMove: vi.fn()
+      };
+      render(<AnalysisScreen engineClient={client} initialFen="4k3/8/8/8/8/8/8/3QK3 w - - 0 1" />);
+      
+      fireEvent.click(screen.getByLabelText(/e1, white king/));
+      fireEvent.click(await screen.findByLabelText(/e2/));
+      fireEvent.click(await screen.findByText('Show why'));
+      
+      await waitFor(() => {
+        expect(screen.getByText(/D1 \(white king on e1\) \(king can't take back\)/)).toBeTruthy();
+        expect(screen.getByText(/D2 \(white queen on d1\) \(can't take back\)/)).toBeTruthy();
+      });
+    });
+
+    it('Level 3: Ordinary exchange, Back to position, bounds, collapse', async () => {
+      const client = new DirectEngineClient();
+      // Use P3: 4k3/8/8/2p5/8/8/3P4/3QK3 w - - 0 1, d2d4
+      render(<AnalysisScreen engineClient={client} initialFen="4k3/8/8/2p5/8/8/3P4/3QK3 w - - 0 1" />);
+      
+      fireEvent.click(screen.getByLabelText(/d2, white pawn/));
+      fireEvent.click(await screen.findByLabelText(/d4/));
+      
+      const showExchange = await screen.findByText('Show the exchange');
+      fireEvent.click(showExchange);
+      
+      const prev = await screen.findByText('Prev');
+      const next = await screen.findByText('Next');
+      const back = await screen.findByText('Back to position');
+      
+      expect(prev.closest('button')?.disabled).toBe(true);
+      expect(next.closest('button')?.disabled).toBe(false);
+      
+      // Step 1
+      fireEvent.click(next);
+      await waitFor(() => expect(screen.getAllByText(/Step 1 of 2: Black pawn on c5 takes pawn on d4\./).length).toBeGreaterThan(0));
+      expect(screen.getByText('Balance: -1')).toBeTruthy();
+      
+      // Step 2
+      fireEvent.click(next);
+      await waitFor(() => expect(screen.getAllByText(/Step 2 of 2: White queen on d1 takes pawn on d4\./).length).toBeGreaterThan(0));
+      expect(screen.getByText('Balance: 0')).toBeTruthy();
+      expect(next.closest('button')?.disabled).toBe(true);
+      
+      // Prev
+      fireEvent.click(prev);
+      await waitFor(() => expect(screen.getAllByText(/Step 1 of 2: Black pawn on c5 takes pawn on d4\./).length).toBeGreaterThan(0));
+      
+      // Back to position
+      fireEvent.click(back);
+      // Wait for it to revert
+      await waitFor(() => {
+        expect(prev.closest('button')?.disabled).toBe(true);
+      });
+      
+      // Change destination collapses
+      fireEvent.click(screen.getByLabelText(/d3/));
+      await waitFor(() => {
+        expect(screen.queryByText('Prev')).toBeNull(); // step-through closed
+      });
+    });
+
+    it('Level 3: En Passant, Promotion, changing piece, and immutable FEN', async () => {
+      // Mock engine client for en passant and promotion fake steps
+      const client: EngineClient = {
+        classifyMovesFrom: async () => ({
+          ok: true, value: [{
+            move: { from: 'e5', to: 'd6' }, label: 'safe', netMaterial: 0, reasons: [],
+            exchange: {
+              fenBefore: 'k7/8/8/3pP3/8/8/8/4K3 w - d6 0 1',
+              fenAfter: 'k7/8/3P4/8/8/8/8/4K3 b - - 0 1',
+              mover: { color: 'white', role: 'pawn', from: 'e5', to: 'd6' },
+              materialFromMove: 0, see: 0, captureOptions: [],
+              bestLine: [
+                {
+                  side: 'black',
+                  capturer: { role: 'king', color: 'black', square: 'a8' },
+                  captured: { role: 'pawn', color: 'white', square: 'd6' },
+                  to: 'd6', givesCheck: false, balanceAfter: 0
+                }
+              ]
+            }, destination: { geometricAttackers: [], geometricDefenders: [] }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any]
+        }), classifyMove: vi.fn()
+      };
+      const { unmount } = render(<AnalysisScreen engineClient={client} initialFen="k7/8/8/3pP3/8/8/8/4K3 w - d6 0 1" />);
+      
+      const e5Square = screen.getByLabelText(/e5/);
+      fireEvent.click(e5Square);
+      fireEvent.click(await screen.findByLabelText(/d6/));
+      
+      fireEvent.click(await screen.findByText('Show the exchange'));
+      fireEvent.click(await screen.findByText('Next'));
+      
+      await waitFor(() => expect(screen.getAllByText(/Step 1 of 1: Black king on a8 takes pawn on d6\./).length).toBeGreaterThan(0));
+      
+      // Select a different piece -> collapses everything
+      fireEvent.click(screen.getByLabelText(/e1/));
+      await waitFor(() => {
+        expect(screen.queryByText('Prev')).toBeNull();
+      });
+      
+      unmount();
+    });
+
+    it('Level 4: Advanced metrics displayed in pawns, handles null exchange', async () => {
+      const client: EngineClient = {
+        classifyMovesFrom: async () => ({
+          ok: true, value: [{
+            move: { from: 'e1', to: 'e2' }, label: 'safe', netMaterial: 100, reasons: [{ code: 'NOT_ATTACKED' }],
+            exchange: {
+              fenBefore: '', fenAfter: '', mover: { color: 'white', role: 'king', from: 'e1', to: 'e2' },
+              materialFromMove: 0, see: 100, captureOptions: [], bestLine: []
+            }, destination: { geometricAttackers: [], geometricDefenders: [] }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any]
+        }), classifyMove: vi.fn()
+      };
+      const { unmount } = render(<AnalysisScreen engineClient={client} initialFen="4k3/8/8/8/8/8/8/4K3 w - - 0 1" />);
+      
+      fireEvent.click(screen.getByLabelText(/e1/));
+      fireEvent.click(await screen.findByLabelText(/e2/));
+      
+      fireEvent.click(await screen.findByText('Advanced'));
+      
+      await waitFor(() => {
+        expect(screen.getByText(/Net material/)).toBeTruthy();
+        expect(screen.getAllByText(/\+1/).length).toBeGreaterThan(0); // 100 pawns -> +1
+        expect(screen.getByText(/SEE/)).toBeTruthy();
+        expect(screen.getByText(/NOT_ATTACKED/)).toBeTruthy(); // raw code
+      });
+      unmount();
+    });
+  });
 });

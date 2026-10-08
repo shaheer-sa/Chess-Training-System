@@ -27,6 +27,13 @@ export const BADGE_INFO = {
   unclear: { icon: '?', text: 'Unclear', meaning: 'This needs deeper calculation than this trainer does — check it yourself.', color: '#f57f17', textColor: '#000000' },
 } as const;
 
+function formatPawns(cp: number): string {
+  const pawns = cp / 100;
+  const sign = pawns > 0 ? '+' : '';
+  const plural = Math.abs(pawns) === 1 ? 'pawn' : 'pawns';
+  return `${sign}${pawns} ${plural}`;
+}
+
 export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, initialFen, onNavigate }) => {
   const initSetup = initialFen ? fenOps.parseFen(initialFen) : null;
   const initPos = initSetup?.isOk ? Chess.fromSetup(initSetup.unwrap()).unwrap() : null;
@@ -490,12 +497,12 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 {expandedLevel >= 4 && (
                   <div style={{ marginTop: '20px', fontSize: '12px', background: '#333', color: '#fff', padding: '10px' }}>
                     <strong>Advanced:</strong>
-                    <div>Net material: {selectedDestInfo.netMaterial / 100} pawns</div>
+                    <div>Net material: {formatPawns(selectedDestInfo.netMaterial)}</div>
                     <div>Reasons: {selectedDestInfo.reasons.map(r => r.code).join(', ')}</div>
                     {selectedDestInfo.exchange && (
                       <>
-                        <div>Material from move: {selectedDestInfo.exchange.materialFromMove / 100}</div>
-                        <div>SEE: {selectedDestInfo.exchange.see / 100}</div>
+                        <div>Material from move: {formatPawns(selectedDestInfo.exchange.materialFromMove)}</div>
+                        <div>SEE: {formatPawns(selectedDestInfo.exchange.see)}</div>
                       </>
                     )}
                   </div>
