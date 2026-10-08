@@ -18,8 +18,15 @@ export const Home: React.FC<HomeProps> = ({ onNavigate }) => {
       </p>
 
       <button 
+        onClick={() => onNavigate('training')}
+        style={{ padding: '16px 48px', fontSize: '18px', background: '#004d40', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', marginBottom: '20px', width: '300px' }}
+      >
+        Train
+      </button>
+
+      <button 
         onClick={() => onNavigate('analysis')}
-        style={{ padding: '16px 48px', fontSize: '18px', background: '#333', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', marginBottom: '20px' }}
+        style={{ padding: '16px 48px', fontSize: '18px', background: '#333', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', marginBottom: '20px', width: '300px' }}
       >
         Analyze a position
       </button>

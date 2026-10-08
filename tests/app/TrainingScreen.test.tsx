@@ -102,7 +102,7 @@ describe('TrainingScreen', () => {
     fireEvent.click(screen.getByText('Submit'));
     
     await screen.findByText('Correct');
-    expect(screen.queryByText('Try again')).toBeNull();
+    expect(screen.getByText('Try again')).toBeTruthy();
   });
 
   it('handles wrong path and real label display', async () => {

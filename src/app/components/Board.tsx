@@ -1,7 +1,7 @@
 import React from 'react';
 import { Chess, fen as fenOps } from 'chessops';
 import { Piece } from './Piece.js';
-import { BADGE_INFO } from '../screens/AnalysisScreen.js';
+import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { MoveClassification, Square } from '../../engine/types.js';
 
 interface BoardProps {
@@ -212,22 +212,28 @@ export const Board: React.FC<BoardProps> = ({
   return (
     <div role="grid" aria-label="Chess board" style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid #ccc', boxSizing: 'border-box' }}>
       {rows}
-      {readOnly && arrow && (
-        <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 20 }}>
-          <defs>
-            <marker id="arrowhead" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
-              <polygon points="0 0, 4 2, 0 4" fill="rgba(0,0,0,0.5)" />
-            </marker>
-          </defs>
-          <line 
-            x1={`${((arrow.from.charCodeAt(0) - 97 + 0.5) / 8) * 100}%`}
-            y1={`${((7 - (arrow.from.charCodeAt(1) - 49) + 0.5) / 8) * 100}%`}
-            x2={`${((arrow.to.charCodeAt(0) - 97 + 0.5) / 8) * 100}%`}
-            y2={`${((7 - (arrow.to.charCodeAt(1) - 49) + 0.5) / 8) * 100}%`}
-            stroke="rgba(0,0,0,0.5)" strokeWidth="3" markerEnd="url(#arrowhead)" 
-          />
-        </svg>
-      )}
+      {readOnly && arrow && (() => {
+        const fromFile = arrow.from.charCodeAt(0) - 97;
+        const fromRank = arrow.from.charCodeAt(1) - 49;
+        const toFile = arrow.to.charCodeAt(0) - 97;
+        const toRank = arrow.to.charCodeAt(1) - 49;
+        
+        const x1 = (flipped ? 7 - fromFile : fromFile) * 12.5 + 6.25;
+        const y1 = (flipped ? fromRank : 7 - fromRank) * 12.5 + 6.25;
+        const x2 = (flipped ? 7 - toFile : toFile) * 12.5 + 6.25;
+        const y2 = (flipped ? toRank : 7 - toRank) * 12.5 + 6.25;
+        
+        return (
+          <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 20 }}>
+            <defs>
+              <marker id="arrowhead" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
+                <polygon points="0 0, 4 2, 0 4" fill="rgba(0,0,0,0.5)" />
+              </marker>
+            </defs>
+            <line x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke="rgba(0,0,0,0.5)" strokeWidth="3" markerEnd="url(#arrowhead)" />
+          </svg>
+        );
+      })()}
     </div>
   );
 };

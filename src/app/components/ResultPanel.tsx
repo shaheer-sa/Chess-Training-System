@@ -1,6 +1,6 @@
 import React from 'react';
 import { MoveClassification } from '../../engine/types.js';
-import { BADGE_INFO, formatPawns } from '../screens/AnalysisScreen.js';
+import { BADGE_INFO, formatPawns } from '../shared/badgeInfo.js';
 import { explain } from '../explain/explain.js';
 
 interface ResultPanelProps {
