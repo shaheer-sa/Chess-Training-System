@@ -133,3 +133,12 @@ input:focus-visible,
 .rv-fade-in-panel {
   animation: rv-fade-in 120ms ease-out;
 }
+
+@keyframes rv-spin {
+  to { transform: rotate(360deg); }
+}
+
+.rv-spinner {
+  flex-shrink: 0;
+  animation: rv-spin 0.9s linear infinite;
+}

@@ -90,6 +90,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
               <a
                 key={screen}
                 href="/"
+                className="rv-hover"
                 aria-current={currentScreen === screen ? 'page' : undefined}
                 onClick={(e) => { e.preventDefault(); onNavigate(screen); }}
                 style={navItemStyle(screen)}
@@ -145,6 +146,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
               <a
                 key={screen}
                 href="/"
+                className="rv-hover"
                 aria-current={currentScreen === screen ? 'page' : undefined}
                 onClick={(e) => { e.preventDefault(); onNavigate(screen); setMenuOpen(false); }}
                 style={{
@@ -162,7 +164,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
       </header>
 
       <main style={{ flex: 1 }}>
-        {children}
+        <div key={currentScreen} className="rv-fade-in-screen">
+          {children}
+        </div>
       </main>
 
       <footer

@@ -5,6 +5,7 @@ import { Board } from '../components/Board.js';
 import { MoveClassification } from '../../engine/types.js';
 import { Chess, fen as fenOps } from 'chessops';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
+import { Spinner } from '../components/Spinner.js';
 import { explain } from '../explain/explain.js';
 import { LabelIcon } from '../components/LabelIcon.js';
 
@@ -82,6 +83,11 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
                 showBadgesOnReadOnly={true}
               />
               </div>
+              {moves.length === 0 && (
+                <div style={{ marginTop: '16px', minHeight: '232px', display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Spinner /> Checking squares…</span>
+                </div>
+              )}
               {moves.length > 0 && (
                 <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {['safe', 'even_trade', 'loses_material', 'unclear'].map(label => {
@@ -110,6 +116,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
       {/* Mode Cards */}
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
         <a 
+          className="home-card rv-hover"
           href="/" onClick={(e) => { e.preventDefault(); onNavigate('analysis'); }}
           style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border-strong)', textDecoration: 'none', display: 'block' }}
         >
@@ -117,6 +124,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
           <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>Set up any board state and see the material consequences of every move.</p>
         </a>
         <a 
+          className="home-card rv-hover"
           href="/" onClick={(e) => { e.preventDefault(); onNavigate('play'); }}
           style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border-strong)', textDecoration: 'none', display: 'block', minHeight: '44px' }}
         >

@@ -33,6 +33,7 @@ interface BoardProps {
   animationKey?: string | number;
   draggableSquares?: number[];
   onPieceDrop?: (from: number, to: number) => void;
+  onPieceDragStart?: (from: number) => void;
 }
 
 const getSquareName = (index: number) => {
@@ -46,7 +47,7 @@ export const Board: React.FC<BoardProps> = ({
   focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow,
   lastMove, checkSquare, legalDestinations,
   onSquarePointerDown, onSquarePointerUp, onSquarePointerCancel, onSquareMouseEnter, onSquareMouseLeave,
-  animateMoves, animationKey, draggableSquares, onPieceDrop
+  animateMoves, animationKey, draggableSquares, onPieceDrop, onPieceDragStart
 }) => {
   
   const [hasFocus, setHasFocus] = React.useState(false);
@@ -94,7 +95,9 @@ export const Board: React.FC<BoardProps> = ({
     }
   }, [animateMoves, animationKey, lastAnimKey, flipped]);
 
-  // Drag state
+  // Drag state (Play only: active when draggableSquares/onPieceDrop are passed)
+  const boardRef = React.useRef<HTMLDivElement>(null);
+  const suppressClickRef = React.useRef(false);
   const [dragState, setDragState] = React.useState<{
     isActive: boolean;
     startIndex: number;
@@ -103,67 +106,54 @@ export const Board: React.FC<BoardProps> = ({
     currentX: number;
     currentY: number;
     hoverIndex: number | null;
+    ghostSize: number;
   } | null>(null);
 
+  const squareAt = (x: number, y: number): number | null => {
+    const cell = document.elementsFromPoint(x, y).find(el => el.getAttribute('role') === 'gridcell' && el.id.startsWith('sq-') && boardRef.current?.contains(el));
+    return cell ? parseInt(cell.id.slice(3), 10) : null;
+  };
+
   const handlePointerDownInternal = (e: React.PointerEvent, index: number) => {
+    suppressClickRef.current = false;
     if (onSquarePointerDown) onSquarePointerDown(index, e.pointerType);
-    
-    // Start drag if draggable
-    if (draggableSquares?.includes(index)) {
-      e.currentTarget.setPointerCapture(e.pointerId);
-      setDragState({
-        isActive: false,
-        startIndex: index,
-        startX: e.clientX,
-        startY: e.clientY,
-        currentX: e.clientX,
-        currentY: e.clientY,
-        hoverIndex: null
-      });
-    }
+    if (e.button !== 0 || readOnly || !onPieceDrop || !draggableSquares?.includes(index)) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const width = boardRef.current?.getBoundingClientRect().width ?? 0;
+    setDragState({ isActive: false, startIndex: index, startX: e.clientX, startY: e.clientY, currentX: e.clientX, currentY: e.clientY, hoverIndex: null, ghostSize: (width / 8) * 1.1 });
   };
 
   const handlePointerMoveInternal = (e: React.PointerEvent) => {
     if (!dragState) return;
-    
-    const dx = e.clientX - dragState.startX;
-    const dy = e.clientY - dragState.startY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    if (!dragState.isActive && distance > 6) {
-      setDragState(prev => prev ? { ...prev, isActive: true, currentX: e.clientX, currentY: e.clientY } : null);
-    } else if (dragState.isActive) {
-      // Find element under pointer
-      const elements = document.elementsFromPoint(e.clientX, e.clientY);
-      const gridcell = elements.find(el => el.getAttribute('role') === 'gridcell');
-      let hoverIndex: number | null = null;
-      if (gridcell && gridcell.id && gridcell.id.startsWith('sq-')) {
-        hoverIndex = parseInt(gridcell.id.replace('sq-', ''), 10);
-      }
-      setDragState(prev => prev ? { ...prev, currentX: e.clientX, currentY: e.clientY, hoverIndex } : null);
+    const moved = Math.hypot(e.clientX - dragState.startX, e.clientY - dragState.startY);
+    if (!dragState.isActive && moved <= 6) return;
+    if (!dragState.isActive) {
+      if (onSquarePointerCancel) onSquarePointerCancel(dragState.startIndex); // a drag is never a long-press
+      if (onPieceDragStart) onPieceDragStart(dragState.startIndex);
     }
+    const hoverIndex = squareAt(e.clientX, e.clientY);
+    setDragState(prev => prev ? { ...prev, isActive: true, currentX: e.clientX, currentY: e.clientY, hoverIndex } : null);
+  };
+
+  const endDrag = (e: React.PointerEvent, drop: boolean) => {
+    if (!dragState) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    if (dragState.isActive) {
+      suppressClickRef.current = true; // the click that follows a drag must not select/deselect
+      const dropIndex = drop ? squareAt(e.clientX, e.clientY) : null;
+      if (onPieceDrop && dropIndex !== null && dropIndex !== dragState.startIndex) onPieceDrop(dragState.startIndex, dropIndex);
+    }
+    setDragState(null);
   };
 
   const handlePointerUpInternal = (e: React.PointerEvent, index: number) => {
     if (onSquarePointerUp) onSquarePointerUp(index);
-    if (!dragState) return;
-    e.currentTarget.releasePointerCapture(e.pointerId);
-    
-    if (dragState.isActive && onPieceDrop) {
-      const dropIndex = dragState.hoverIndex;
-      if (dropIndex !== null && dropIndex !== dragState.startIndex) {
-        onPieceDrop(dragState.startIndex, dropIndex);
-      }
-    }
-    
-    setDragState(null);
+    endDrag(e, true);
   };
-  
+
   const handlePointerCancelInternal = (e: React.PointerEvent, index: number) => {
     if (onSquarePointerCancel) onSquarePointerCancel(index);
-    if (!dragState) return;
-    e.currentTarget.releasePointerCapture(e.pointerId);
-    setDragState(null);
+    endDrag(e, false);
   };
 
   const displayBoard: Map<number, { role: string, color: string }> = new Map();
@@ -276,7 +266,7 @@ export const Board: React.FC<BoardProps> = ({
         aria-label={ariaLabel}
         onKeyDown={(e) => handleKeyDown(e, index)}
         onClick={(e) => {
-          if (dragState && dragState.isActive) { e.stopPropagation(); return; }
+          if (suppressClickRef.current) { suppressClickRef.current = false; e.stopPropagation(); return; }
           if (setFocusedSquare) setFocusedSquare(index);
           if (onSquareClick && !readOnly) onSquareClick(index);
         }}
@@ -308,7 +298,7 @@ export const Board: React.FC<BoardProps> = ({
           justifyContent: 'center',
           alignItems: 'center',
           cursor: readOnly ? 'default' : 'pointer',
-          touchAction: draggableSquares?.includes(index) ? 'none' : 'manipulation'
+          ...(onPieceDrop ? { touchAction: draggableSquares?.includes(index) ? 'none' : 'manipulation' } : {})
         }}
       >
         {isReplayLandingSquare && (
@@ -393,6 +383,7 @@ export const Board: React.FC<BoardProps> = ({
 
   return (
     <div 
+      ref={boardRef}
       role="grid" 
       aria-label="Chess board" 
       onFocus={() => setHasFocus(true)} 
@@ -410,8 +401,8 @@ export const Board: React.FC<BoardProps> = ({
             left: dragState.currentX,
             top: dragState.currentY,
             transform: 'translate(-50%, -50%)',
-            width: 'calc(min(100vw, 800px) / 8 * 1.1)', // Approx 1.1x square size
-            height: 'calc(min(100vw, 800px) / 8 * 1.1)',
+            width: `${dragState.ghostSize}px`,
+            height: `${dragState.ghostSize}px`,
             pointerEvents: 'none',
             zIndex: 1000
           }}>

@@ -50,8 +50,9 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const [analyzing, setAnalyzing] = useState(false);
   
   
-  const [promotionMove, setPromotionMove] = useState<{from: string, to: string} | null>(null);
-  const lastActionRef = useRef<'tap'|'drag'|'undo'|'new'>('new');
+  const [promotionMove, setPromotionMove] = useState<{ from: string; to: string; dragged: boolean } | null>(null);
+  // Slide animation for the last tap/keyboard move only (never for drag, undo, new game or a restored game).
+  const [anim, setAnim] = useState<{ moves: { from: number; to: number }[]; key: number } | null>(null);
 
   
   const requestToken = useRef(0);
@@ -94,23 +95,13 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const pos = Chess.fromSetup(fenOps.parseFen(game.currentFen).unwrap()).unwrap();
   
   const handlePieceDrop = (from: number, to: number) => {
-    if (legalDestinations(game, from).includes(to)) {
-      if (isPromotionMove(game, from, to)) {
-        setPromotionMove({ from: (String.fromCharCode(97 + (from & 7)) + String.fromCharCode(49 + (from >> 3))), to: (String.fromCharCode(97 + (to & 7)) + String.fromCharCode(49 + (to >> 3))) });
-      } else {
-        lastActionRef.current = 'drag';
-        const next = playMove(game, from, to);
-        if (next) onGameStateChange(next, hintsOn);
-      }
-      setSelectedSquare(null);
-      setPreviewSquare(null);
-    }
+    if (legalDestinations(game, from).includes(to)) executeMove(from, to, undefined, true);
+    // Illegal drop: the piece stays on its square and stays selected (selected at drag start).
   };
 
-
-
-
-  
+  const handlePieceDragStart = (from: number) => {
+    if (selectedSquare !== from) handleSquareClick(from);
+  };
 
   const gameOutcome = outcome(game);
   const readOnly = !!gameOutcome;
@@ -123,18 +114,6 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     }
   }
 
-  let animateMoves: { from: number; to: number }[] = [];
-  let animationKey: number | undefined = undefined;
-  if (lastActionRef.current === 'tap' && game.moves.length > 0) {
-    const lastGameMove = game.moves[game.moves.length - 1];
-    const fromStr = lastGameMove.uci.slice(0, 2);
-    const toStr = lastGameMove.uci.slice(2, 4);
-    const fromSq = (fromStr.charCodeAt(0) - 97) + (fromStr.charCodeAt(1) - 49) * 8;
-    const toSq = (toStr.charCodeAt(0) - 97) + (toStr.charCodeAt(1) - 49) * 8;
-    const castling = castlingRookMove(fromSq, toSq);
-    animateMoves = castling ? [{ from: fromSq, to: toSq }, castling] : [{ from: fromSq, to: toSq }];
-    animationKey = game.moves.length;
-  }
 
   
 
@@ -232,14 +211,14 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     }
   };
 
-  const executeMove = (fromIdx: number, toIdx: number, promoRole?: Role) => {
+  const executeMove = (fromIdx: number, toIdx: number, promoRole?: Role, dragged = false) => {
     const fromStr = formatSquare(fromIdx);
     const toStr = formatSquare(toIdx);
     
     // Check if promotion is needed
     const promotes = isPromotionMove(game, fromIdx, toIdx);
     if (!promoRole && promotes) {
-      setPromotionMove({ from: fromStr, to: toStr });
+      setPromotionMove({ from: fromStr, to: toStr, dragged });
       return;
     }
     
@@ -248,6 +227,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       const moveIndex = newGameSt.moves.length - 1;
       const fenBefore = game.currentFen;
       
+      const rook = castlingRookMove(fromIdx, toIdx);
+      setAnim(dragged ? null : { moves: rook ? [{ from: fromIdx, to: toIdx }, rook] : [{ from: fromIdx, to: toIdx }], key: newGameSt.moves.length });
       onGameStateChange(newGameSt, hintsOn);
       resetSelection();
       setPromotionMove(null);
@@ -278,6 +259,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       return next;
     });
     setPromotionMove(null);
+    setAnim(null);
     onGameStateChange(nextGame, hintsOn);
     resetSelection();
   };
@@ -287,6 +269,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       if (!window.confirm("Start a new game? The current game will be lost.")) return;
     }
     onGameStateChange(newGame(), hintsOn);
+    setAnim(null);
     setMoveListInfo({});
     moveTokens.current = {};
     resetSelection();
@@ -383,7 +366,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     if (i < 0) return null;
     const info = moveListInfo[i];
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--panel)', borderRadius: '8px', border: '2px solid var(--accent)', padding: '16px' }}>
+      <div key={`last-${i}`} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--panel)', borderRadius: '8px', border: '2px solid var(--accent)', padding: '16px' }}>
         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Last move</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span className="mono" style={{ fontWeight: 'bold' }}>{Math.floor(i / 2) + 1}{i % 2 === 0 ? '.' : '...'} {game.moves[i].san}</span>
@@ -418,7 +401,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     }
     
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px' }}>
+      <div key={`sel-${selectedSquare}`} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px' }}>
         <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{pieceName} on {sqName} — where it can go</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
           {dests.map(destIdx => {
@@ -455,13 +438,13 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     return (
       <div style={{ marginTop: '12px', height: '128px', overflowY: 'auto', boxSizing: 'border-box', padding: '12px', background: 'var(--panel)', borderRadius: '6px', border: active ? '2px solid var(--accent)' : '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {active ? (
-          <>
+          <div key={`pv-${previewSquare}`} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span className="mono" style={{ fontWeight: 'bold' }}>{san}</span>
               {info && labelChip(info)}
             </div>
             {info && moveDetails(info)}
-          </>
+          </div>
         ) : (
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
             {selectedSquare === null ? 'Select a piece, then hover, focus, long-press or drag to preview the move.' : 'Hover, focus, long-press or drag a piece to preview the move.'}
@@ -543,8 +526,9 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 onSquareMouseLeave={handleMouseLeave}
                 draggableSquares={sideToMoveSquares}
                 onPieceDrop={handlePieceDrop}
-                animateMoves={animateMoves}
-                animationKey={animationKey}
+                onPieceDragStart={handlePieceDragStart}
+                animateMoves={anim?.moves}
+                animationKey={anim?.key}
               />
               
               {promotionMove && (
@@ -553,7 +537,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                     <div style={{ fontWeight: 'bold', textAlign: 'center' }}>Choose promotion</div>
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                     {(['queen', 'rook', 'bishop', 'knight'] as Role[]).map(role => (
-                      <button className="rv-hover" key={role} aria-label={PROMO_NAME[role]} onClick={() => executeMove(parseSquare(promotionMove.from)!, parseSquare(promotionMove.to)!, role)} style={{ width: '60px', height: '60px', padding: '6px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}>
+                      <button className="rv-hover" key={role} aria-label={PROMO_NAME[role]} onClick={() => executeMove(parseSquare(promotionMove.from)!, parseSquare(promotionMove.to)!, role, promotionMove.dragged)} style={{ width: '60px', height: '60px', padding: '6px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}>
                         <Piece color={pos.turn === 'white' ? 'w' : 'b'} type={PROMO_TYPE[role]} style={{ width: '100%', height: '100%' }} />
                       </button>
                     ))}
