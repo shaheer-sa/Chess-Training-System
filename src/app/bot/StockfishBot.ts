@@ -8,114 +8,153 @@ export interface BotClient {
   dispose(): void;
 }
 
+interface Search {
+  id: number;
+  resolve: (engineMove: string) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+const STARTUP_TIMEOUT_MS = 15000;
+
+const abortError = (): Error => {
+  const err = new Error('cancelled');
+  err.name = 'AbortError';
+  return err;
+};
+
+/**
+ * Stockfish (UCI) in a Web Worker. One search at a time.
+ *
+ * Response ownership: UCI answers every "go" with exactly one "bestmove". When a running search is
+ * stopped (cancel / superseded), its bestmove still arrives later, so we count those and drop them
+ * (`staleBestmoves`). Requests are numbered (`requestId`): a request that was cancelled or superseded
+ * while it waited for the engine to start never posts "go" and rejects with AbortError.
+ * A timeout or worker error throws the worker away; the next request starts a fresh one.
+ */
 export class StockfishBot implements BotClient {
   private worker: Worker | null = null;
-  private workerReady: Promise<void> | null = null;
-  private currentSearch: { resolve: (move: string) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> | null } | null = null;
+  private ready: Promise<void> | null = null;
+  private failStart: ((err: Error) => void) | null = null;
+  private search: Search | null = null;
+  private staleBestmoves = 0;
+  private requestId = 0;
   private disposed = false;
-  
+
   constructor(
     private createWorker: () => Worker = () => new Worker(new URL('stockfish/stockfish-19-lite-single.js', document.baseURI).href),
     private rng: () => number = Math.random
   ) {}
 
-  private initWorker(): Promise<void> {
-    if (this.workerReady) return this.workerReady;
-    
-    this.worker = this.createWorker();
-    
-    this.workerReady = new Promise((resolve, reject) => {
-      const onMessage = (e: MessageEvent) => {
+  private startWorker(): Promise<void> {
+    if (this.ready) return this.ready;
+    const worker = this.createWorker();
+    this.worker = worker;
+    this.staleBestmoves = 0;
+    this.ready = new Promise<void>((resolve, reject) => {
+      const startTimer = setTimeout(() => {
+        if (worker !== this.worker) return;
+        reject(new Error('engine did not start'));
+        this.discardWorker();
+      }, STARTUP_TIMEOUT_MS);
+      this.failStart = (err: Error) => { clearTimeout(startTimer); reject(err); };
+      worker.addEventListener('message', (e: MessageEvent) => {
+        if (worker !== this.worker) return; // message from a discarded worker
         const line = typeof e.data === 'string' ? e.data : '';
-        if (line === 'uciok') {
-          this.worker?.postMessage('isready');
-        } else if (line === 'readyok') {
-          resolve();
-        } else if (line.startsWith('bestmove ')) {
-          this.handleBestMove(line);
-        }
-      };
-      
-      this.worker!.addEventListener('message', onMessage);
-      this.worker!.addEventListener('error', () => {
-        if (this.currentSearch) {
-          this.currentSearch.reject(new Error('engine error'));
-          if (this.currentSearch.timer) clearTimeout(this.currentSearch.timer);
-          this.currentSearch = null;
-        } else {
-          // If error happens during startup or idle
-          reject(new Error('engine error'));
-        }
+        if (line === 'uciok') worker.postMessage('isready');
+        else if (line === 'readyok') { clearTimeout(startTimer); this.failStart = null; resolve(); }
+        else if (line.startsWith('bestmove ')) this.onBestMove(line);
       });
-      
-      this.worker!.postMessage('uci');
+      worker.addEventListener('error', () => {
+        if (worker !== this.worker) return;
+        this.failStart?.(new Error('engine error'));
+        this.failSearch(new Error('engine error'));
+        this.discardWorker();
+      });
+      worker.postMessage('uci');
     });
-    
-    return this.workerReady;
+    // A failed start must not poison later requests.
+    this.ready.catch(() => undefined);
+    return this.ready;
   }
-  
-  private handleBestMove(line: string) {
-    if (!this.currentSearch) return;
-    const move = parseBestMove(line);
-    const search = this.currentSearch;
-    this.currentSearch = null;
-    if (search.timer) clearTimeout(search.timer);
-    
-    if (!move) {
-      search.reject(new Error('no move'));
-    } else {
-      search.resolve(move);
+
+  private discardWorker(): void {
+    this.failStart?.(new Error('engine stopped')); // wake any request waiting for startup
+    this.failStart = null;
+    this.worker?.terminate();
+    this.worker = null;
+    this.ready = null;
+    this.staleBestmoves = 0;
+  }
+
+  private failSearch(err: Error): void {
+    const s = this.search;
+    if (!s) return;
+    this.search = null;
+    clearTimeout(s.timer);
+    s.reject(err);
+  }
+
+  private onBestMove(line: string): void {
+    if (this.staleBestmoves > 0) {
+      this.staleBestmoves--; // answer to a search that was stopped
+      return;
     }
+    const s = this.search;
+    if (!s) return;
+    this.search = null;
+    clearTimeout(s.timer);
+    const move = parseBestMove(line);
+    if (move) s.resolve(move);
+    else s.reject(new Error('no move'));
   }
 
   async bestMove(game: GameState, level: BotLevel): Promise<string> {
     if (this.disposed) throw new Error('disposed');
-    
     this.cancel();
-    
-    await this.initWorker();
-    
-    return new Promise((resolve, reject) => {
-      const s = levelSettings(level);
-      
-      this.currentSearch = { 
-        resolve: (moveStr: string) => {
-          resolve(chooseMove(moveStr, legalUciMoves(game), s.randomMoveChance, this.rng));
-        }, 
-        reject, 
-        timer: null 
-      };
-      
-      this.worker!.postMessage(`setoption name Skill Level value ${s.skill}`);
-      this.worker!.postMessage(`position fen ${game.currentFen}`);
-      this.worker!.postMessage(`go depth ${s.depth} movetime ${s.movetimeMs}`);
-      
-      this.currentSearch.timer = setTimeout(() => {
-        if (this.currentSearch) {
-          this.worker!.postMessage('stop');
-          this.currentSearch.reject(new Error('timeout'));
-          this.currentSearch = null;
-        }
+    const id = this.requestId;
+
+    try {
+      await this.startWorker();
+    } catch (err) {
+      if (this.disposed) throw new Error('disposed', { cause: err });
+      if (id !== this.requestId) throw abortError();
+      throw err;
+    }
+    // Cancelled, superseded or disposed while the engine was starting.
+    if (this.disposed) throw new Error('disposed');
+    if (id !== this.requestId || !this.worker) throw abortError();
+
+    const worker = this.worker;
+    const s = levelSettings(level);
+    const legal = legalUciMoves(game);
+    const engineMove = await new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (this.search?.id !== id) return;
+        worker.postMessage('stop');
+        this.failSearch(new Error('timeout'));
+        this.discardWorker(); // an engine that missed its deadline is not trusted again
       }, s.movetimeMs + 5000);
+      this.search = { id, resolve, reject, timer };
+      worker.postMessage(`setoption name Skill Level value ${s.skill}`);
+      worker.postMessage(`position fen ${game.currentFen}`);
+      worker.postMessage(`go depth ${s.depth} movetime ${s.movetimeMs}`);
     });
+    return chooseMove(engineMove, legal, s.randomMoveChance, this.rng);
   }
 
   cancel(): void {
-    if (this.currentSearch) {
+    this.requestId++; // invalidates a request still waiting for the engine to start
+    if (this.search) {
       this.worker?.postMessage('stop');
-      const err = new Error('cancelled');
-      err.name = 'AbortError';
-      this.currentSearch.reject(err);
-      if (this.currentSearch.timer) clearTimeout(this.currentSearch.timer);
-      this.currentSearch = null;
+      this.staleBestmoves++;
+      this.failSearch(abortError());
     }
   }
 
   dispose(): void {
     this.disposed = true;
     this.cancel();
-    this.worker?.terminate();
-    this.worker = null;
-    this.workerReady = null;
+    this.discardWorker();
   }
 }

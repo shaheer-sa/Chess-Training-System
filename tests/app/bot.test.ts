@@ -169,4 +169,100 @@ describe('Bot Logic', () => {
       await expect(bot.bestMove(game, 1)).rejects.toThrow('disposed');
     });
   });
+  describe('StockfishBot response ownership (supervisor race tests)', () => {
+    class FakeWorker {
+      posted: string[] = [];
+      terminated = false;
+      private listeners: Record<string, ((e: MessageEvent) => void)[]> = {};
+      postMessage(msg: string): void { this.posted.push(msg); }
+      terminate(): void { this.terminated = true; }
+      addEventListener(type: string, fn: (e: MessageEvent) => void): void { (this.listeners[type] ??= []).push(fn); }
+      emit(line: string): void { for (const fn of this.listeners.message ?? []) fn({ data: line } as MessageEvent); }
+      fail(): void { for (const fn of this.listeners.error ?? []) fn({} as MessageEvent); }
+      ready(): void { this.emit('uciok'); this.emit('readyok'); }
+      goCount(): number { return this.posted.filter(m => m.startsWith('go ')).length; }
+    }
+
+    let workers: FakeWorker[];
+    const factory = () => { const w = new FakeWorker(); workers.push(w); return w as unknown as Worker; };
+    const flush = () => new Promise<void>(r => setTimeout(r, 0));
+    const isAbort = (e: unknown) => e instanceof Error && e.name === 'AbortError';
+
+    beforeEach(() => { workers = []; });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('a cancelled search\'s late bestmove never resolves the next search', async () => {
+      const bot = new StockfishBot(factory, () => 0.9);
+      const p1 = bot.bestMove(newGame(), 4);
+      workers[0].ready(); await flush();
+      bot.cancel();
+      await expect(p1).rejects.toSatisfy(isAbort);
+      const p2 = bot.bestMove(newGame(), 4); await flush();
+      workers[0].emit('bestmove a2a3'); // late answer to the cancelled search
+      workers[0].emit('bestmove e2e4'); // answer to the new search
+      await expect(p2).resolves.toBe('e2e4');
+    });
+
+    it('a new request supersedes a running one; the stale answer is dropped', async () => {
+      const bot = new StockfishBot(factory, () => 0.9);
+      const p1 = bot.bestMove(newGame(), 4);
+      workers[0].ready(); await flush();
+      const p2 = bot.bestMove(newGame(), 4);
+      await expect(p1).rejects.toSatisfy(isAbort);
+      await flush();
+      workers[0].emit('bestmove a2a3');
+      workers[0].emit('bestmove d2d4');
+      await expect(p2).resolves.toBe('d2d4');
+    });
+
+    it('two requests during startup: the first aborts, only one search is started', async () => {
+      const bot = new StockfishBot(factory, () => 0.9);
+      const p1 = bot.bestMove(newGame(), 4);
+      const p2 = bot.bestMove(newGame(), 4);
+      workers[0].ready();
+      await expect(p1).rejects.toSatisfy(isAbort);
+      await flush();
+      expect(workers).toHaveLength(1);
+      expect(workers[0].goCount()).toBe(1);
+      workers[0].emit('bestmove g1f3');
+      await expect(p2).resolves.toBe('g1f3');
+    });
+
+    it('after a timeout the next request uses a fresh engine and ignores the old one', async () => {
+      vi.useFakeTimers();
+      const bot = new StockfishBot(factory, () => 0.9);
+      const p1 = bot.bestMove(newGame(), 1);
+      workers[0].ready(); await vi.advanceTimersByTimeAsync(0);
+      const done = expect(p1).rejects.toThrow('timeout');
+      await vi.advanceTimersByTimeAsync(5050);
+      await done;
+      expect(workers[0].terminated).toBe(true);
+      const p2 = bot.bestMove(newGame(), 1);
+      expect(workers).toHaveLength(2);
+      workers[1].ready(); await vi.advanceTimersByTimeAsync(0);
+      workers[0].emit('bestmove a2a3'); // old engine, must be ignored
+      workers[1].emit('bestmove e2e4');
+      await expect(p2).resolves.toBe('e2e4');
+    });
+
+    it('dispose while the engine is starting rejects the waiting request', async () => {
+      const bot = new StockfishBot(factory, () => 0.9);
+      const p1 = bot.bestMove(newGame(), 4);
+      bot.dispose();
+      await expect(p1).rejects.toThrow('disposed');
+      expect(workers[0].terminated).toBe(true);
+    });
+
+    it('a startup error does not poison later requests', async () => {
+      const bot = new StockfishBot(factory, () => 0.9);
+      const p1 = bot.bestMove(newGame(), 4);
+      workers[0].fail();
+      await expect(p1).rejects.toThrow('engine error');
+      const p2 = bot.bestMove(newGame(), 4);
+      expect(workers).toHaveLength(2);
+      workers[1].ready(); await flush();
+      workers[1].emit('bestmove e2e4');
+      await expect(p2).resolves.toBe('e2e4');
+    });
+  });
 });
