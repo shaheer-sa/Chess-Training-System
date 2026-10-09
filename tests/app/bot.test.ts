@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { levelSettings, BotLevel } from '../../src/app/bot/levels.js';
+import { levelSettings } from '../../src/app/bot/levels.js';
 import { parseBestMove, chooseMove } from '../../src/app/bot/uci.js';
 import { StockfishBot } from '../../src/app/bot/StockfishBot.js';
 import { newGame } from '../../src/app/play/game.js';
@@ -52,10 +52,10 @@ describe('Bot Logic', () => {
   });
 
   describe('StockfishBot', () => {
-    let mockWorker: any;
+    let mockWorker: { postMessage: ReturnType<typeof vi.fn>, terminate: ReturnType<typeof vi.fn>, addEventListener: ReturnType<typeof vi.fn>, removeEventListener: ReturnType<typeof vi.fn> };
     let createWorker: () => Worker;
     let postedMessages: string[];
-    let messageListeners: ((e: any) => void)[];
+    let messageListeners: ((e: MessageEvent) => void)[];
 
     beforeEach(() => {
       postedMessages = [];
@@ -64,15 +64,15 @@ describe('Bot Logic', () => {
       mockWorker = {
         postMessage: vi.fn((msg: string) => { postedMessages.push(msg); }),
         terminate: vi.fn(),
-        addEventListener: vi.fn((type: string, listener: any) => {
+        addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
           if (type === 'message') {
-            messageListeners.push(listener);
+            messageListeners.push(listener as (e: MessageEvent) => void);
           }
         }),
         removeEventListener: vi.fn()
       };
       
-      createWorker = () => mockWorker as any;
+      createWorker = () => mockWorker as unknown as Worker;
     });
 
     afterEach(() => {
@@ -81,7 +81,7 @@ describe('Bot Logic', () => {
 
     const simulateMessage = (data: string) => {
       for (const listener of messageListeners) {
-        listener({ data });
+        listener({ data } as MessageEvent);
       }
     };
 
