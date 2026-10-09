@@ -37,6 +37,7 @@ interface BoardProps {
   draggableSquares?: number[];
   onPieceDrop?: (from: number, to: number) => void;
   onPieceDragStart?: (from: number) => void;
+  onDragOverSquare?: (index: number | null) => void;
 }
 
 const getSquareName = (index: number) => {
@@ -50,7 +51,7 @@ export const Board: React.FC<BoardProps> = ({
   focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow,
   lastMove, checkSquare, legalDestinations,
   onSquarePointerDown, onSquarePointerUp, onSquarePointerCancel, onSquareMouseEnter, onSquareMouseLeave,
-  animateMoves, animationKey, draggableSquares, onPieceDrop, onPieceDragStart
+  animateMoves, animationKey, draggableSquares, onPieceDrop, onPieceDragStart, onDragOverSquare
 }) => {
   
   const [hasFocus, setHasFocus] = React.useState(false);
@@ -135,13 +136,20 @@ export const Board: React.FC<BoardProps> = ({
       if (onPieceDragStart) onPieceDragStart(dragState.startIndex);
     }
     const hoverIndex = squareAt(e.clientX, e.clientY);
-    setDragState(prev => prev ? { ...prev, isActive: true, currentX: e.clientX, currentY: e.clientY, hoverIndex } : null);
+    setDragState(prev => {
+      if (!prev) return null;
+      if (prev.isActive && prev.hoverIndex !== hoverIndex && onDragOverSquare) {
+        onDragOverSquare(hoverIndex);
+      }
+      return { ...prev, isActive: true, currentX: e.clientX, currentY: e.clientY, hoverIndex };
+    });
   };
 
   const endDrag = (e: React.PointerEvent, drop: boolean) => {
     if (!dragState) return;
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     if (dragState.isActive) {
+      if (onDragOverSquare) onDragOverSquare(null);
       suppressClickRef.current = true; // the click that follows a drag must not select/deselect
       const dropIndex = drop ? squareAt(e.clientX, e.clientY) : null;
       if (onPieceDrop && dropIndex !== null && dropIndex !== dragState.startIndex) onPieceDrop(dragState.startIndex, dropIndex);

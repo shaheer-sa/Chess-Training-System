@@ -51,15 +51,15 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
             Pick a piece and every square it can reach is checked: who attacks it, who can really take back, and what the exchange costs you.
           </p>
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-            <button className="rv-hover" 
+            <button className="rv-btn rv-btn--primary" 
               onClick={() => onNavigate('analysis')}
-              style={{ background: 'var(--accent-btn)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '6px', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
+              style={{ fontSize: '1rem' }}
             >
               Analyze a position
             </button>
-            <button className="rv-hover" 
+            <button className="rv-btn" 
               onClick={() => onNavigate('play')}
-              style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '12px 24px', borderRadius: '6px', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
+              style={{ fontSize: '1rem' }}
             >
               Play a game
             </button>
@@ -116,17 +116,15 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
       {/* Mode Cards */}
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
         <a 
-          className="home-card rv-hover"
+          className="rv-card"
           href="/" onClick={(e) => { e.preventDefault(); onNavigate('analysis'); }}
-          style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border-strong)', textDecoration: 'none', display: 'block' }}
         >
           <h2 style={{ fontSize: '1.25rem', color: 'var(--text)', marginBottom: '8px' }}>Analyze a position</h2>
           <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>Set up any board state and see the material consequences of every move.</p>
         </a>
         <a 
-          className="home-card rv-hover"
+          className="rv-card"
           href="/" onClick={(e) => { e.preventDefault(); onNavigate('play'); }}
-          style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border-strong)', textDecoration: 'none', display: 'block', minHeight: '44px' }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
             <h2 style={{ fontSize: '1.25rem', color: 'var(--text)', margin: 0 }}>Play</h2>

@@ -42,20 +42,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
   ];
 
   const navItemStyle = (screen: ScreenName): React.CSSProperties => ({
-    display: 'inline-flex',
-    alignItems: 'center',
-    minHeight: '44px',
-    padding: '0 14px',
-    borderRadius: '6px',
-    background: currentScreen === screen ? 'var(--panel-hover)' : 'transparent',
-    color: 'var(--text-2)',
     fontFamily: 'IBM Plex Sans, sans-serif',
     fontSize: '0.9rem',
-    fontWeight: 500,
-    textDecoration: 'none',
-    cursor: 'pointer',
     border: 'none',
-    whiteSpace: 'nowrap',
   });
 
   return (
@@ -90,7 +79,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
               <a
                 key={screen}
                 href="/"
-                className="rv-hover"
+                className="rv-navlink"
                 aria-current={currentScreen === screen ? 'page' : undefined}
                 onClick={(e) => { e.preventDefault(); onNavigate(screen); }}
                 style={navItemStyle(screen)}
@@ -146,7 +135,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
               <a
                 key={screen}
                 href="/"
-                className="rv-hover"
+                className="rv-navlink"
                 aria-current={currentScreen === screen ? 'page' : undefined}
                 onClick={(e) => { e.preventDefault(); onNavigate(screen); setMenuOpen(false); }}
                 style={{

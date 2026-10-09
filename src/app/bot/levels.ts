@@ -1,5 +1,6 @@
 export type BotLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
+export const LEVEL_ELO: Record<BotLevel, number> = { 1: 400, 2: 700, 3: 1000, 4: 1300, 5: 1600, 6: 2000 };
 export interface LevelSettings {
   skill: number;
   depth: number;

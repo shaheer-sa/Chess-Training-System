@@ -11,6 +11,7 @@ import { GameState, newGame, legalDestinations, playMove, undo, outcome, preview
 import { PlaySettings, isBotTurn, undoPlies } from '../play/playSettings.js';
 import { BotClient, StockfishBot } from '../bot/StockfishBot.js';
 import type { BotLevel } from '../bot/levels.js';
+import { LEVEL_ELO } from '../bot/levels.js';
 import { EngineCheck, EngineCheckClient } from '../bot/EngineCheck.js';
 import { EngineScores, TurnContext, turnContext, engineVerdict } from '../play/engineVerdict.js';
 import { DisplayMove, toDisplay, displayText, hintSan } from '../play/display.js';
@@ -199,7 +200,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   };
 
   const handlePieceDragStart = (from: number) => {
-    if (selectedSquare !== from) handleSquareClick(from);
+    if (selectedSquare !== from) selectPiece(from);
   };
 
   const gameOutcome = outcome(game);
@@ -299,6 +300,34 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     setAnalyzing(false);
   };
 
+  const selectPiece = (index: number) => {
+    setSelectedSquare(index);
+    setPreviewSquare(null);
+    if (hintsOn) {
+      setAnalyzing(true);
+      const token = ++requestToken.current;
+      const sqName = formatSquare(index);
+      engineClient.classifyMovesFrom(game.currentFen, sqName).then(result => {
+        if (token === requestToken.current && result) {
+          setMovesInfo(result.ok ? result.value : []);
+          setAnalyzing(false);
+        }
+      }).catch(() => {
+        if (token === requestToken.current) setAnalyzing(false);
+      });
+    }
+  };
+
+  const handleDragOverSquare = (index: number | null) => {
+    if (index === null) {
+      setPreviewSquare(null);
+    } else if (selectedSquare !== null && legalDestinations(game, selectedSquare).includes(index)) {
+      setPreviewSquare(index);
+    } else {
+      setPreviewSquare(null);
+    }
+  };
+
   const handleSquareClick = (index: number) => {
     if (ignoreClickRef.current) {
       ignoreClickRef.current = false;
@@ -309,26 +338,10 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     
     if (promotionMove) return; // Wait for dialog
     
-    const sqName = formatSquare(index);
-
     if (selectedSquare === null) {
       const piece = pos.board.get(index);
       if (piece && piece.color === pos.turn) {
-        setSelectedSquare(index);
-        setPreviewSquare(null);
-        
-        if (hintsOn) {
-          setAnalyzing(true);
-          const token = ++requestToken.current;
-          engineClient.classifyMovesFrom(game.currentFen, sqName).then(result => {
-            if (token === requestToken.current && result) {
-              setMovesInfo(result.ok ? result.value : []);
-              setAnalyzing(false);
-            }
-          }).catch(() => {
-            if (token === requestToken.current) setAnalyzing(false);
-          });
-        }
+        selectPiece(index);
       }
     } else {
       if (index === selectedSquare) {
@@ -341,7 +354,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
         resetSelection();
         const piece = pos.board.get(index);
         if (piece && piece.color === pos.turn) {
-          handleSquareClick(index); // select new piece
+          selectPiece(index); // select new piece
         }
         return;
       }
@@ -505,16 +518,20 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     if (color === 'white' && matBal > 0) { isAhead = true; amtAhead = matBal; }
     if (color === 'black' && matBal < 0) { isAhead = true; amtAhead = -matBal; }
 
-    if (pieces.length === 0 && !isAhead) return null;
-
     return (
-      <div aria-label={ariaLabel} style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-        {pieces.map((p, i) => (
-          <div key={i} style={{ width: '16px', height: '16px' }} aria-hidden="true">
-            {(() => { const tc = color === 'white' ? 'b' : 'w'; const tt = p === 'knight' ? 'N' : p[0].toUpperCase(); return <Piece color={tc as 'w'|'b'} type={tt as 'P'|'N'|'B'|'R'|'Q'|'K'} />; })()}
-          </div>
-        ))}
-        {isAhead && <span style={{ marginLeft: '6px', fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>+{amtAhead}</span>}
+      <div className="rv-tray" aria-label={ariaLabel || 'Captured: none'}>
+        {pieces.length === 0 && !isAhead ? (
+          <span>No captures yet</span>
+        ) : (
+          <>
+            {pieces.map((p, i) => (
+              <div key={i} aria-hidden="true">
+                {(() => { const tc = color === 'white' ? 'b' : 'w'; const tt = p === 'knight' ? 'N' : p[0].toUpperCase(); return <Piece color={tc as 'w'|'b'} type={tt as 'P'|'N'|'B'|'R'|'Q'|'K'} />; })()}
+              </div>
+            ))}
+            {isAhead && <span style={{ marginLeft: '4px', fontWeight: 'bold' }}>+{amtAhead}</span>}
+          </>
+        )}
       </div>
     );
   };
@@ -636,7 +653,16 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     dests.sort((a, b) => a - b);
     
     if (analyzing || checkPending) {
-       return <div role="status" style={{ padding: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)' }}><span style={{display:"flex",alignItems:"center",gap:"8px"}}><Spinner /> Checking moves…</span></div>;
+       return (
+         <div role="status" style={{ padding: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+           <span style={{display:"flex",alignItems:"center",gap:"8px"}}><Spinner /> Checking moves…</span>
+           <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+             <div className="rv-skeleton" style={{ height: 56 }} />
+             <div className="rv-skeleton" style={{ height: 56 }} />
+             <div className="rv-skeleton" style={{ height: 56 }} />
+           </div>
+         </div>
+       );
     }
     
     return (
@@ -720,26 +746,32 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
         {/* Top Controls */}
         <div style={{ width: '100%', maxWidth: '800px', display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '16px', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', width: '100%' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px', alignSelf: 'flex-start' }}>
-              <button className="rv-hover" aria-pressed={settings.mode === 'two-player'} onClick={() => { if (settings.mode !== 'two-player') { startNewGame({ ...settings, mode: 'two-player' }); } }} style={{ minHeight: '44px', padding: '8px 16px', background: settings.mode === 'two-player' ? 'var(--panel)' : 'transparent', border: settings.mode === 'two-player' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.mode === 'two-player' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.mode === 'two-player' ? 'bold' : 'normal', cursor: 'pointer' }}>Two players</button>
-              <button className="rv-hover" aria-pressed={settings.mode === 'computer'} onClick={() => { if (settings.mode !== 'computer') { startNewGame({ ...settings, mode: 'computer' }); } }} style={{ minHeight: '44px', padding: '8px 16px', background: settings.mode === 'computer' ? 'var(--panel)' : 'transparent', border: settings.mode === 'computer' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.mode === 'computer' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.mode === 'computer' ? 'bold' : 'normal', cursor: 'pointer' }}>vs Computer</button>
+            <div className="rv-seg" style={{ alignSelf: 'flex-start' }}>
+              <button aria-pressed={settings.mode === 'two-player'} onClick={() => { if (settings.mode !== 'two-player') { startNewGame({ ...settings, mode: 'two-player' }); } }}>Two players</button>
+              <button aria-pressed={settings.mode === 'computer'} onClick={() => { if (settings.mode !== 'computer') { startNewGame({ ...settings, mode: 'computer' }); } }}>vs Computer</button>
             </div>
             
             {settings.mode === 'computer' && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>You play:</span>
-                  <div style={{ display: 'flex', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px' }}>
-                    <button className="rv-hover" aria-pressed={settings.humanColor === 'white'} onClick={() => { if (settings.humanColor !== 'white') { startNewGame({ ...settings, humanColor: 'white' }); } }} style={{ minHeight: '44px', padding: '0 16px', background: settings.humanColor === 'white' ? 'var(--panel)' : 'transparent', border: settings.humanColor === 'white' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.humanColor === 'white' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.humanColor === 'white' ? 'bold' : 'normal', cursor: 'pointer' }}>White</button>
-                    <button className="rv-hover" aria-pressed={settings.humanColor === 'black'} onClick={() => { if (settings.humanColor !== 'black') { startNewGame({ ...settings, humanColor: 'black' }); } }} style={{ minHeight: '44px', padding: '0 16px', background: settings.humanColor === 'black' ? 'var(--panel)' : 'transparent', border: settings.humanColor === 'black' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.humanColor === 'black' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.humanColor === 'black' ? 'bold' : 'normal', cursor: 'pointer' }}>Black</button>
+                  <div className="rv-seg">
+                    <button aria-pressed={settings.humanColor === 'white'} onClick={() => { if (settings.humanColor !== 'white') { startNewGame({ ...settings, humanColor: 'white' }); } }}>White</button>
+                    <button aria-pressed={settings.humanColor === 'black'} onClick={() => { if (settings.humanColor !== 'black') { startNewGame({ ...settings, humanColor: 'black' }); } }}>Black</button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Level:</span>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    {([1, 2, 3, 4, 5, 6] as BotLevel[]).map(lvl => (
-                      <button key={lvl} className="rv-hover" aria-label={`Level ${lvl}`} aria-pressed={settings.level === lvl} onClick={() => onChange(game, { ...settings, level: lvl })} style={{ minWidth: '44px', minHeight: '44px', padding: '0 8px', background: settings.level === lvl ? 'var(--panel)' : 'var(--bg-sunken)', border: settings.level === lvl ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: '6px', color: settings.level === lvl ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.level === lvl ? 'bold' : 'normal', cursor: 'pointer' }}>{lvl}</button>
-                    ))}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '12px' }}>Level:</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div className="rv-seg">
+                      {([1, 2, 3, 4, 5, 6] as BotLevel[]).map(lvl => (
+                        <button key={lvl} aria-label={`Level ${lvl}, about ${LEVEL_ELO[lvl]} rating (estimate)`} aria-pressed={settings.level === lvl} onClick={() => onChange(game, { ...settings, level: lvl })} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4px 8px', gap: '2px', lineHeight: 1.1 }}>
+                          <span style={{ fontWeight: 'bold' }}>{lvl}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>&approx;{LEVEL_ELO[lvl]}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ratings are estimates.</div>
                   </div>
                 </div>
               </div>
@@ -750,10 +782,10 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               <input type="checkbox" checked={hintsOn} onChange={(e) => { onChange(game, { ...settings, hintsOn: e.target.checked }); resetSelection(); }} />
               Show hints
             </label>
-            <button className="rv-hover" onClick={handleUndo} disabled={undoPlies(game, settings) === 0} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: undoPlies(game, settings) === 0 ? 'var(--text-muted)' : 'var(--text)', cursor: undoPlies(game, settings) === 0 ? 'not-allowed' : 'pointer' }}>Undo</button>
-            <button className="rv-hover" onClick={() => setFlipped(!flipped)} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Flip board</button>
-            <button className="rv-hover" onClick={handleNewGame} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>New game</button>
-            <button className="rv-hover" onClick={() => onNavigate?.('analysis', game.currentFen)} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Open in Analysis</button>
+            <button className="rv-btn" onClick={handleUndo} disabled={undoPlies(game, settings) === 0}>Undo</button>
+            <button className="rv-btn" onClick={() => setFlipped(!flipped)}>Flip board</button>
+            <button className="rv-btn" onClick={handleNewGame}>New game</button>
+            <button className="rv-btn" onClick={() => onNavigate?.('analysis', game.currentFen)}>Open in Analysis</button>
           </div>
         </div>
 
@@ -769,10 +801,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               </div>
             )}
             {/* Player strip (opponent) */}
-            <div style={{ background: 'var(--panel)', padding: '12px 16px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', border: '1px solid var(--border)', borderBottom: 'none', display: 'flex', justifyContent: 'space-between' }}>
-              {renderStripLabel(flipped ? 'white' : 'black')}
+            <div style={{ background: 'var(--panel)', padding: '12px 16px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', border: '1px solid var(--border)', borderBottom: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                {renderStripLabel(flipped ? 'white' : 'black')}
+                {pos.turn === (flipped ? 'white' : 'black') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
+              </div>
               {renderCaptured(flipped ? 'white' : 'black')}
-              {pos.turn === (flipped ? 'white' : 'black') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
             </div>
             
             <div style={{ width: '100%', position: 'relative' }}>
@@ -798,6 +832,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 draggableSquares={computerThinking || isBotTurn(game, settings) ? [] : sideToMoveSquares}
                 onPieceDrop={handlePieceDrop}
                 onPieceDragStart={handlePieceDragStart}
+                onDragOverSquare={handleDragOverSquare}
                 animateMoves={anim?.moves}
                 animationKey={anim?.key}
               />
@@ -813,17 +848,19 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                       </button>
                     ))}
                     </div>
-                    <button className="rv-hover" onClick={() => setPromotionMove(null)} style={{ minHeight: '44px', padding: '12px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--text)' }}>Cancel</button>
+                    <button className="rv-btn" onClick={() => setPromotionMove(null)}>Cancel</button>
                   </div>
                 </div>
               )}
             </div>
             
             {/* Player strip (self) */}
-            <div style={{ background: 'var(--panel)', padding: '12px 16px', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', border: '1px solid var(--border)', borderTop: 'none', display: 'flex', justifyContent: 'space-between' }}>
-              {renderStripLabel(flipped ? 'black' : 'white')}
+            <div style={{ background: 'var(--panel)', padding: '12px 16px', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', border: '1px solid var(--border)', borderTop: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                {renderStripLabel(flipped ? 'black' : 'white')}
+                {pos.turn === (flipped ? 'black' : 'white') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
+              </div>
               {renderCaptured(flipped ? 'black' : 'white')}
-              {pos.turn === (flipped ? 'black' : 'white') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
             </div>
             
             {renderPreviewSlot()}
@@ -839,14 +876,14 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--accent)', textAlign: 'center' }}>
                 <h2>Game Over</h2>
                 <p style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{statusText}</p>
-                <button className="rv-hover" onClick={handleNewGame} style={{ minHeight: '44px', padding: '8px 24px', background: 'var(--accent-btn)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}>New game</button>
+                <button className="rv-btn rv-btn--primary" onClick={handleNewGame}>New game</button>
               </div>
             )}
             
             {computerError && (
               <div style={{ background: 'var(--panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--danger)', textAlign: 'center' }}>
                 <p style={{ margin: '0 0 16px 0', color: 'var(--danger-text)', fontWeight: 'bold' }}>The computer couldn't move.</p>
-                <button className="rv-hover" onClick={() => { setComputerError(false); setBotRetry(r => r + 1); }} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Try again</button>
+                <button className="rv-btn" onClick={() => { setComputerError(false); setBotRetry(r => r + 1); }}>Try again</button>
               </div>
             )}
             {renderHintPanel()}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { levelSettings } from '../../src/app/bot/levels.js';
+import { levelSettings, LEVEL_ELO } from '../../src/app/bot/levels.js';
 import { parseBestMove, chooseMove } from '../../src/app/bot/uci.js';
 import { StockfishBot } from '../../src/app/bot/StockfishBot.js';
 import { newGame } from '../../src/app/play/game.js';
@@ -13,6 +13,15 @@ describe('Bot Logic', () => {
       expect(levelSettings(4)).toEqual({ skill: 9, depth: 6, movetimeMs: 400, randomMoveChance: 0 });
       expect(levelSettings(5)).toEqual({ skill: 14, depth: 10, movetimeMs: 800, randomMoveChance: 0 });
       expect(levelSettings(6)).toEqual({ skill: 20, depth: 14, movetimeMs: 1500, randomMoveChance: 0 });
+    });
+
+    it('LEVEL_ELO has all six levels and strictly increases', () => {
+      expect(Object.keys(LEVEL_ELO).length).toBe(6);
+      expect(LEVEL_ELO[1]).toBeLessThan(LEVEL_ELO[2]);
+      expect(LEVEL_ELO[2]).toBeLessThan(LEVEL_ELO[3]);
+      expect(LEVEL_ELO[3]).toBeLessThan(LEVEL_ELO[4]);
+      expect(LEVEL_ELO[4]).toBeLessThan(LEVEL_ELO[5]);
+      expect(LEVEL_ELO[5]).toBeLessThan(LEVEL_ELO[6]);
     });
   });
 

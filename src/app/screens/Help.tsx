@@ -73,8 +73,9 @@ export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavi
 
       <div style={{ textAlign: 'center', marginTop: '16px' }}>
         <button 
+          className="rv-btn rv-btn--primary"
           onClick={() => onNavigate('home')}
-          style={{ background: 'var(--accent-btn)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '1.05rem' }}
+          style={{ fontSize: '1.05rem' }}
         >
           Back to Home
         </button>
