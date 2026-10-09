@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { engineVerdict, turnContext, materialForSideToMove, scoreValue, EngineScores } from '../../src/app/play/engineVerdict.js';
 import { EngineCheck, parseInfoLines } from '../../src/app/bot/EngineCheck.js';
+import { tacticInProgress, loadVerdicts, serializeVerdicts, pruneVerdicts, toPlayed, fromPlayed, PlayedVerdicts } from '../../src/app/play/playedVerdicts.js';
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -129,5 +130,42 @@ describe('EngineCheck (fake worker)', () => {
     ec.dispose();
     await expect(p).rejects.toThrow('disposed');
     expect(workers[0].terminated).toBe(true);
+  });
+});
+
+describe('played verdicts (pure)', () => {
+  const W = 'white' as const, B = 'black' as const;
+  type Row = [string, ('white' | 'black')[], PlayedVerdicts, 'white' | 'black', boolean];
+  const rows: Row[] = [
+    ['no tactic played', [W, B, W, B], {}, W, false],
+    ['white just played a tactic → hidden on white\'s next turn', [W, B, W, B, W, B], { 4: 'tactic' }, W, true],
+    ['one white move after the tactic → still hidden', [W, B, W, B], { 0: 'tactic' }, W, true],
+    ['two white moves after the tactic → shown again', [W, B, W, B, W, B], { 0: 'tactic' }, W, false],
+    ["the opponent's tactic does not hide mine", [W, B], { 1: 'tactic' }, W, false],
+    ['after Undo the tactic is still in history → still hidden (derived, not stored state)', [W, B, W, B], { 2: 'tactic' }, W, true],
+    ['danger verdicts never hide anything', [W, B], { 0: 'danger' }, W, false],
+  ];
+  it.each(rows)('%s', (_n, colors, v, color, expected) => {
+    expect(tacticInProgress(colors, v, color)).toBe(expected);
+  });
+
+  it('round-trips through storage and keeps only the shared move prefix', () => {
+    const raw = serializeVerdicts(['e2e4', 'e7e5', 'g1f3'], { 0: 'danger', 2: 'tactic' });
+    expect(loadVerdicts(raw, ['e2e4', 'e7e5', 'g1f3'])).toEqual({ 0: 'danger', 2: 'tactic' });
+    expect(loadVerdicts(raw, ['e2e4', 'e7e5', 'b1c3'])).toEqual({ 0: 'danger' }); // move 3 differs
+    expect(loadVerdicts(raw, ['d2d4'])).toEqual({});
+  });
+
+  it('rejects corrupt storage without throwing', () => {
+    expect(loadVerdicts('{bad json', ['e2e4'])).toEqual({});
+    expect(loadVerdicts(JSON.stringify({ moves: ['e2e4'], verdicts: { 0: 'best-move' } }), ['e2e4'])).toEqual({});
+    expect(loadVerdicts(null, ['e2e4'])).toEqual({});
+  });
+
+  it('prunes undone moves and converts verdicts both ways', () => {
+    expect(pruneVerdicts({ 0: 'danger', 3: 'tactic' }, 2)).toEqual({ 0: 'danger' });
+    expect(fromPlayed(toPlayed({ kind: 'danger', mateAgainst: true }) ?? undefined)).toEqual({ kind: 'danger', mateAgainst: true });
+    expect(fromPlayed(toPlayed({ kind: 'tactic' }) ?? undefined)).toEqual({ kind: 'tactic' });
+    expect(toPlayed({ kind: 'none' })).toBeNull();
   });
 });

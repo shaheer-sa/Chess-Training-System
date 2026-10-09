@@ -14,6 +14,7 @@ import type { BotLevel } from '../bot/levels.js';
 import { EngineCheck, EngineCheckClient } from '../bot/EngineCheck.js';
 import { EngineScores, TurnContext, turnContext, engineVerdict } from '../play/engineVerdict.js';
 import { DisplayMove, toDisplay, displayText, hintSan } from '../play/display.js';
+import { PlayedVerdicts, VERDICTS_KEY, loadVerdicts, serializeVerdicts, pruneVerdicts, tacticInProgress, toPlayed, fromPlayed } from '../play/playedVerdicts.js';
 import { legalUciMoves } from '../play/game.js';
 
 
@@ -61,13 +62,21 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const checkRef = useRef<EngineCheckClient | null>(null);
   const [check, setCheck] = useState<{ fen: string; scores: EngineScores; ctx: TurnContext | null } | null>(null);
   const [checkFailedFen, setCheckFailedFen] = useState<string | null>(null);
-  // While a Tactic the player started is in progress, Tactic labels are hidden for that player (no step-by-step leak).
-  const [tacticGuard, setTacticGuard] = useState<{ color: 'white' | 'black'; turnsLeft: number } | null>(null);
-  // The label/explanation the player saw for a move they played (Last move card + move list).
-  const [playedDisplay, setPlayedDisplay] = useState<Record<number, DisplayMove>>({});
-
+  // Engine-check verdicts of played moves, saved with the game (Last move card, move list, "Tactic in progress").
+  const [playedVerdicts, setPlayedVerdicts] = useState<PlayedVerdicts>(() => {
+    try { return loadVerdicts(localStorage.getItem(VERDICTS_KEY), game.moves.map(m => m.uci)); } catch { return {}; }
+  });
   useEffect(() => {
-    return () => { checkRef.current?.dispose(); checkRef.current = null; };
+    try { localStorage.setItem(VERDICTS_KEY, serializeVerdicts(game.moves.map(m => m.uci), playedVerdicts)); } catch { /* storage unavailable */ }
+  }, [playedVerdicts, game.moves]);
+
+  // Moves played before their turn's check finished get their verdict from this on-demand check.
+  const lateCheckRef = useRef<EngineCheckClient | null>(null);
+  useEffect(() => {
+    return () => {
+      checkRef.current?.dispose(); checkRef.current = null;
+      lateCheckRef.current?.dispose(); lateCheckRef.current = null;
+    };
   }, []);
 
   const botRef = useRef<BotClient | null>(null);
@@ -185,12 +194,14 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const checkReady = !!check && check.fen === game.currentFen;
   const checkFailed = checkFailedFen === game.currentFen;
   const checkPending = hintsTurn && !checkReady && !checkFailed;
-  const suppressTactic = !!tacticGuard && tacticGuard.color === pos.turn;
+  // Derived from history, so Undo and refresh keep it right: while my Tactic is in progress, no Tactic labels for me.
+  const suppressTactic = tacticInProgress(game.moves.map(m => m.color), pruneVerdicts(playedVerdicts, game.moves.length), pos.turn);
 
   useEffect(() => {
     if (!hintsTurn) return;
     const fen = game.currentFen;
     if (check?.fen === fen) return;
+    if (checkFailedFen === fen) setCheckFailedFen(null); // retry: wait again instead of showing square-only labels
     if (!checkRef.current) checkRef.current = new EngineCheck();
     const checker = checkRef.current;
     let active = true;
@@ -332,13 +343,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       const moveIndex = newGameSt.moves.length - 1;
       const fenBefore = game.currentFen;
       
-      // Remember the label the player saw for this move, and track a Tactic they started.
-      const mover = pos.turn;
-      const playedBase = hintsTurn && checkReady ? movesInfo.find(m => m.move.from === fromStr && m.move.to === toStr) : undefined;
-      const shown = playedBase ? toDisp(playedBase) : undefined;
-      if (shown) setPlayedDisplay(prev => ({ ...prev, [moveIndex]: shown }));
-      if (shown?.label === 'tactic') setTacticGuard({ color: mover, turnsLeft: 2 });
-      else setTacticGuard(g => (g && g.color === mover ? (g.turnsLeft > 1 ? { ...g, turnsLeft: g.turnsLeft - 1 } : null) : g));
+      // The engine check of THIS position decides the played move's verdict (independent of what the hints showed).
+      const checkAtPlay = hintsTurn && checkReady && check ? check : null;
+      const needsLateCheck = hintsTurn && !checkAtPlay;
+      const legalCountBefore = needsLateCheck ? legalUciMoves(game).length : 0;
+      const playedUci = fromStr + toStr + (promotes ? 'q' : '');
+      setPlayedVerdicts(prev => { const next = { ...prev }; delete next[moveIndex]; return next; });
 
       const rook = castlingRookMove(fromIdx, toIdx);
       setAnim(dragged ? null : { moves: rook ? [{ from: fromIdx, to: toIdx }, rook] : [{ from: fromIdx, to: toIdx }], key: newGameSt.moves.length });
@@ -356,6 +366,16 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       engineClient.classifyMove(fenBefore, { from: fromStr, to: toStr, promotion: promotes ? 'queen' : undefined }).then(res => {
         if (moveTokens.current[moveIndex] === token && res && res.ok) {
            setMoveListInfo(prev => ({ ...prev, [moveIndex]: res.value }));
+           const played = checkAtPlay ? toPlayed(engineVerdict(res.value, checkAtPlay.scores[playedUci], checkAtPlay.ctx)) : null;
+           if (played) setPlayedVerdicts(prev => ({ ...prev, [moveIndex]: played }));
+           if (needsLateCheck) {
+             if (!lateCheckRef.current) lateCheckRef.current = new EngineCheck();
+             lateCheckRef.current.check(fenBefore, legalCountBefore).then(scores => {
+               if (moveTokens.current[moveIndex] !== token) return; // move was undone
+               const late = toPlayed(engineVerdict(res.value, scores[playedUci], turnContext(fenBefore, scores)));
+               if (late) setPlayedVerdicts(prev => ({ ...prev, [moveIndex]: late }));
+             }).catch(() => {});
+           }
         }
       }).catch(() => {});
     }
@@ -378,12 +398,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     });
     setPromotionMove(null);
     setAnim(null);
-    setTacticGuard(null);
-    setPlayedDisplay(prev => {
-      const next: Record<number, DisplayMove> = {};
-      for (const [k, v] of Object.entries(prev)) if (Number(k) < keep) next[Number(k)] = v;
-      return next;
-    });
+    setPlayedVerdicts(prev => pruneVerdicts(prev, keep));
     onChange(nextGame, settings);
     resetSelection();
   };
@@ -399,8 +414,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     setAnim(null);
     setMoveListInfo({});
     moveTokens.current = {};
-    setPlayedDisplay({});
-    setTacticGuard(null);
+    setPlayedVerdicts({});
     setPromotionMove(null);
     resetSelection();
     setFlipped(nextSettings.mode === 'computer' && nextSettings.humanColor === 'black');
@@ -516,7 +530,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     const i = game.moves.length - 1;
     if (i < 0) return null;
     const base = moveListInfo[i];
-    const info: DisplayMove | undefined = playedDisplay[i] ?? (base ? toDisplay(base, { kind: 'none' }, false) : undefined);
+    const info: DisplayMove | undefined = base ? toDisplay(base, fromPlayed(playedVerdicts[i]), false) : undefined;
     return (
       <div key={`last-${i}`} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--panel)', borderRadius: '8px', border: '2px solid var(--accent)', padding: '16px' }}>
         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Last move</div>
@@ -791,13 +805,18 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem' }}>Moves</h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 {game.moves.map((move, i) => {
-                  const mInfo = playedDisplay[i] ?? moveListInfo[i];
+                  const listBase = moveListInfo[i];
+                  const mInfo = listBase ? toDisplay(listBase, fromPlayed(playedVerdicts[i]), false) : undefined;
+                  const badge = mInfo ? BADGE_INFO[mInfo.label] : null;
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-sunken)', padding: '4px 8px', borderRadius: '4px' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{i % 2 === 0 ? `${i / 2 + 1}.` : ''}</span>
                       <span className="mono" style={{ fontWeight: 'bold' }}>{move.san}</span>
-                      {mInfo && (
-                        <div title={BADGE_INFO[mInfo.label as keyof typeof BADGE_INFO].text} aria-label={BADGE_INFO[mInfo.label as keyof typeof BADGE_INFO].text} style={{ width: '8px', height: '8px', borderRadius: '50%', background: BADGE_INFO[mInfo.label as keyof typeof BADGE_INFO].color }} />
+                      {mInfo && badge && (
+                        // Icon + colour + accessible name: never colour alone (HCI §29).
+                        <span role="img" aria-label={badge.text} title={badge.text} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', borderRadius: '50%', background: badge.color, color: badge.textColor }}>
+                          <LabelIcon kind={mInfo.label} size={11} />
+                        </span>
                       )}
                     </div>
                   );
