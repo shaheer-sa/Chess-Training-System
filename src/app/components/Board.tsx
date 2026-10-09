@@ -127,7 +127,7 @@ export const Board: React.FC<BoardProps> = ({
     suppressClickRef.current = false;
     if (onSquarePointerDown) onSquarePointerDown(index, e.pointerType);
     if (e.button !== 0 || readOnly || !onPieceDrop || !draggableSquares?.includes(index)) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
     const width = boardRef.current?.getBoundingClientRect().width ?? 0;
     setDragState({ isActive: false, startIndex: index, startX: e.clientX, startY: e.clientY, currentX: e.clientX, currentY: e.clientY, hoverIndex: null, ghostSize: (width / 8) * 1.1 });
   };
@@ -148,7 +148,7 @@ export const Board: React.FC<BoardProps> = ({
 
   const endDrag = (e: React.PointerEvent, drop: boolean) => {
     if (!dragState) return;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     if (dragState.isActive) {
       if (onDragOverSquare) onDragOverSquare(null);
       suppressClickRef.current = true; // the click that follows a drag must not select/deselect

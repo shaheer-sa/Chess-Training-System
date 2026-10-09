@@ -12,6 +12,7 @@ import { PlaySettings, isBotTurn, undoPlies } from '../play/playSettings.js';
 import { BotClient, StockfishBot } from '../bot/StockfishBot.js';
 import type { BotLevel } from '../bot/levels.js';
 import { LEVEL_ELO } from '../bot/levels.js';
+import { pgnFromGame } from '../analysis/line.js';
 import { EngineCheck, EngineCheckClient } from '../bot/EngineCheck.js';
 import { EngineScores, TurnContext, turnContext, engineVerdict } from '../play/engineVerdict.js';
 import { DisplayMove, toDisplay, displayText, hintSan } from '../play/display.js';
@@ -22,7 +23,7 @@ import { legalUciMoves } from '../play/game.js';
 interface PlayScreenProps {
   engineClient: EngineClient;
   initialFen?: string;
-  onNavigate?: (screen: 'home' | 'help' | 'analysis', initialFen?: string) => void;
+  onNavigate?: (screen: 'home' | 'help' | 'analysis', initialFen?: string, initialPgn?: string) => void;
   game: GameState;
   settings: PlaySettings;
   onChange: (g: GameState, settings: PlaySettings) => void;
@@ -490,6 +491,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   };
 
   const handleNewGame = () => { startNewGame(settings); };
+  const analyzeGame = () => {
+    const players = settings.mode === 'computer'
+      ? (settings.humanColor === 'white' ? { white: 'You', black: `Computer (level ${settings.level})` } : { white: `Computer (level ${settings.level})`, black: 'You' })
+      : { white: 'White', black: 'Black' };
+    onNavigate?.('analysis', undefined, pgnFromGame(game, players));
+  };
 
 
   const caps = capturedPieces(game);
@@ -798,7 +805,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
             <button className="rv-btn" onClick={handleUndo} disabled={undoPlies(game, settings) === 0}>Undo</button>
             <button className="rv-btn" onClick={() => setFlipped(!flipped)}>Flip board</button>
             <button className="rv-btn" onClick={handleNewGame}>New game</button>
-            <button className="rv-btn" onClick={() => onNavigate?.('analysis', game.currentFen)}>Open in Analysis</button>
+            <button className="rv-btn" onClick={() => onNavigate?.('analysis', game.currentFen)}>Analyze this position</button>
           </div>
         </div>
 
@@ -888,7 +895,10 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               <div className="rv-rise" style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--accent)', textAlign: 'center' }}>
                 <h2>Game Over</h2>
                 <p style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{statusText}</p>
-                <button className="rv-btn rv-btn--primary" onClick={handleNewGame}>New game</button>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <button className="rv-btn rv-btn--primary" onClick={analyzeGame}>Analyze this game</button>
+                  <button className="rv-btn" onClick={handleNewGame}>New game</button>
+                </div>
               </div>
             )}
             

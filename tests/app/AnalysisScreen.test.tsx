@@ -812,6 +812,7 @@ describe('Analysis Screen', () => {
       const select = screen.getByLabelText('Analyze from') as HTMLSelectElement;
       expect(select.value).toBe('pgn');
       expect(screen.getByText('Analyze a whole game')).toBeTruthy();
+      expect(screen.getByLabelText('PGN')).toBeTruthy();
       expect(screen.queryByText('Select a position')).toBeNull();
       fireEvent.change(select, { target: { value: 'games' } });
       expect(screen.getByText('My games', { selector: 'h2' })).toBeTruthy();
@@ -889,4 +890,55 @@ describe('Analysis Screen', () => {
     });
   });
 
+});
+
+describe('Analysis — playing moves and games (5B.3)', () => {
+  it('FEN: play a move for each side, step back and forward', async () => {
+    const { container } = render(<AnalysisScreen engineClient={new DirectEngineClient()} initialFen={startpos} onNavigate={() => {}} />);
+    fireEvent.click(container.querySelector('#sq-12')!); // e2
+    await waitFor(() => expect(container.querySelector('#sq-28')?.getAttribute('aria-label')).toMatch(/legal destination/));
+    fireEvent.click(container.querySelector('#sq-28')!); // e4: inspect first
+    fireEvent.click(await screen.findByRole('button', { name: 'Play this move' }));
+    await waitFor(() => expect(screen.getByText('After 1. e4')).toBeTruthy());
+    expect(container.querySelector('[aria-label="e4, white pawn"]')).toBeTruthy();
+    // Black's turn: Black can move too
+    fireEvent.click(container.querySelector('#sq-52')!); // e7
+    await waitFor(() => expect(container.querySelector('#sq-36')?.getAttribute('aria-label')).toMatch(/legal destination/));
+    fireEvent.click(container.querySelector('#sq-36')!);
+    fireEvent.click(await screen.findByRole('button', { name: 'Play this move' }));
+    await waitFor(() => expect(screen.getByText('After 1... e5')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Previous move' }));
+    expect(screen.getByText('After 1. e4')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Go to start' }));
+    expect(screen.getByText('Start position')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Go to end' }));
+    expect(screen.getByText('After 1... e5')).toBeTruthy();
+  });
+
+  it('PGN: a game opened from Play starts at its last move; a different move starts your line', async () => {
+    const pgn = '[White "You"]\n[Black "Computer (level 2)"]\n[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1';
+    const { container } = render(<AnalysisScreen engineClient={new DirectEngineClient()} initialPgn={pgn} onNavigate={() => {}} />);
+    expect(await screen.findByText('Game · 4 moves · 0-1')).toBeTruthy();
+    expect(screen.getByText('After 2... Qh4#')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /g4/ }));
+    expect(screen.getByText('After 2. g4')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^1\. f3$/ }));
+    // Black tries d5 instead of e5
+    fireEvent.click(container.querySelector('#sq-51')!); // d7
+    await waitFor(() => expect(container.querySelector('#sq-35')?.getAttribute('aria-label')).toMatch(/legal destination/));
+    fireEvent.click(container.querySelector('#sq-35')!);
+    fireEvent.click(await screen.findByRole('button', { name: 'Play this move' }));
+    expect(await screen.findByRole('button', { name: 'Back to game line' })).toBeTruthy();
+    expect(screen.getByText(/The game continued with e5/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to game line' }));
+    expect(screen.getByText('After 1. f3')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Back to game line' })).toBeNull();
+  });
+
+  it('PGN: pasting a bad game says which move is wrong', () => {
+    render(<AnalysisScreen engineClient={new DirectEngineClient()} onNavigate={() => {}} />);
+    fireEvent.change(screen.getByLabelText('PGN'), { target: { value: '1. e4 e5 2. Ke3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load game' }));
+    expect(screen.getByRole('alert').textContent).toBe("Move 2. Ke3 isn't legal in this game.");
+  });
 });

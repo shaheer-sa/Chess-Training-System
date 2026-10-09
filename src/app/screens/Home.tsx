@@ -205,7 +205,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
         <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '1150ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('analysis'); }}>
           <span className="rv-card-icon"><CardIcon kind="analyze" /></span>
           <h2>Analyze your game</h2>
-          <p>Bring a whole game (PGN, coming soon) or one position (FEN) and see what each move costs.</p>
+          <p>Paste a whole game (PGN) or one position (FEN), step through it, and try your own moves.</p>
         </a>
         <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '1250ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('help'); }}>
           <span className="rv-card-icon"><CardIcon kind="labels" /></span>

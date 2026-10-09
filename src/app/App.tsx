@@ -33,10 +33,12 @@ export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) 
   }, [currentScreen]);
 
   const [initialFen, setInitialFen] = useState<string>('');
+  const [initialPgn, setInitialPgn] = useState<string>('');
 
-  const navigate = (screen: ScreenName, fen?: string) => {
+  const navigate = (screen: ScreenName, fen?: string, pgn?: string) => {
     if (screen === 'analysis' && currentScreen !== 'analysis') {
       setInitialFen(fen || '');
+      setInitialPgn(pgn || '');
     }
     
     let newHash = '#/';
@@ -74,7 +76,7 @@ export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) 
     <AppShell onNavigate={navigate} currentScreen={currentScreen}>
       {currentScreen === 'home' && <Home onNavigate={navigate} engineClient={engineClient} />}
       {currentScreen === 'help' && <Help onNavigate={navigate} />}
-      {currentScreen === 'analysis' && <AnalysisScreen engineClient={engineClient} initialFen={initialFen} onNavigate={navigate} />}
+      {currentScreen === 'analysis' && <AnalysisScreen engineClient={engineClient} initialFen={initialFen} initialPgn={initialPgn || undefined} onNavigate={navigate} />}
       {currentScreen === 'play' && <PlayScreen engineClient={engineClient} onNavigate={navigate} game={playGameState} settings={playSettings} onChange={(g, s) => savePlayState(g, s)} initialFen={initialFen} />}
     </AppShell>
   );

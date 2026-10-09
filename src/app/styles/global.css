@@ -281,3 +281,19 @@ input:focus-visible,
 .rv-btn:active:not(:disabled){transform:translateY(0) scale(.97)}
 /* Desktop: the board and both player strips fit on one screen. */
 @media (min-width:1024px){.play-board-col{max-width:max(380px,calc(100vh - 345px))}}
+/* ---- Analysis: backdrop, navigation, move list ---- */
+.rv-analysis{position:relative;isolation:isolate;min-height:calc(100vh - 61px)}
+.rv-page-bg{opacity:.7}
+.rv-page-bg .rv-hero-floor{animation:rv-fade-in 600ms ease-out both}
+.rv-page-glow{position:absolute;inset:0;background:radial-gradient(50% 40% at 80% 10%,rgba(212,92,28,.12),transparent 70%),radial-gradient(40% 35% at 10% 90%,rgba(212,92,28,.08),transparent 70%)}
+.rv-an-nav{display:flex;align-items:center;gap:8px;padding:12px 0}
+.rv-an-nav .rv-btn{padding:0 12px}
+.rv-an-where{flex:1;text-align:center;font-weight:600;color:var(--text-2);font-size:.95rem}
+.rv-an-side{flex:1 1 300px;display:flex;flex-direction:column;min-width:0}
+.rv-an-moves{padding:20px 24px;background:var(--panel);border-top:1px solid var(--border)}
+.rv-mchip{display:inline-flex;align-items:center;gap:4px;min-height:34px;padding:0 8px;border-radius:4px;border:1px solid transparent;background:var(--bg-sunken);color:var(--text);font:inherit;font-weight:600;cursor:pointer;transition:background-color 120ms ease,border-color 120ms ease}
+.rv-mchip:hover{background:var(--panel-hover)}
+.rv-mchip[aria-current="step"]{border-color:var(--accent);background:var(--panel-hover)}
+.rv-mchip--own{border-left:3px solid var(--accent-text);font-style:italic}
+.rv-mchip-no{color:var(--text-muted);font-weight:400;font-size:.9rem}
+@media (max-width:767px){.rv-an-nav{padding:12px 16px}}
