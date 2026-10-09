@@ -5,7 +5,8 @@ import { AnalysisScreen } from './screens/AnalysisScreen.js';
 import { EngineClient } from './engine/EngineClient.js';
 import { AppShell } from './components/AppShell.js';
 import { PlayScreen } from './screens/PlayScreen.js';
-import { GameState, newGame, deserializeGame } from './play/game.js';
+import { GameState } from './play/game.js';
+import { PlaySettings, loadSavedPlay, serializeSavedPlay } from './play/playSettings.js';
 
 export type ScreenName = 'home' | 'help' | 'analysis' | 'play';
 
@@ -49,42 +50,21 @@ export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) 
     setCurrentScreen(screen);
   };
 
-  const [playGameState, setPlayGameState] = useState<GameState>(() => {
+  const [savedPlay] = useState(() => {
     try {
-      const stored = localStorage.getItem('rookvex.play.v1');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const g = deserializeGame(JSON.stringify({ startFen: parsed.startFen, moves: parsed.moves }));
-        if (g) return g;
-      }
+      return loadSavedPlay(localStorage.getItem('rookvex.play.v1'));
     } catch {
-      // ignore
+      return loadSavedPlay(null);
     }
-    return newGame();
   });
-  
-  const [playHintsOn, setPlayHintsOn] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem('rookvex.play.v1');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (typeof parsed.hintsOn === 'boolean') return parsed.hintsOn;
-      }
-    } catch {
-      // ignore
-    }
-    return true;
-  });
+  const [playGameState, setPlayGameState] = useState<GameState>(savedPlay.game);
+  const [playSettings, setPlaySettings] = useState<PlaySettings>(savedPlay.settings);
 
-  const savePlayState = (g: GameState, h: boolean) => {
+  const savePlayState = (g: GameState, s: PlaySettings) => {
     setPlayGameState(g);
-    setPlayHintsOn(h);
+    setPlaySettings(s);
     try {
-      localStorage.setItem('rookvex.play.v1', JSON.stringify({
-        startFen: g.startFen,
-        moves: g.moves.map(m => m.uci),
-        hintsOn: h
-      }));
+      localStorage.setItem('rookvex.play.v1', serializeSavedPlay(g, s));
     } catch {
       // ignore
     }
@@ -95,7 +75,7 @@ export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) 
       {currentScreen === 'home' && <Home onNavigate={navigate} engineClient={engineClient} />}
       {currentScreen === 'help' && <Help onNavigate={navigate} />}
       {currentScreen === 'analysis' && <AnalysisScreen engineClient={engineClient} initialFen={initialFen} onNavigate={navigate} />}
-      {currentScreen === 'play' && <PlayScreen engineClient={engineClient} onNavigate={navigate} game={playGameState} hintsOn={playHintsOn} onGameStateChange={(g, h) => savePlayState(g, h)} initialFen={initialFen} />}
+      {currentScreen === 'play' && <PlayScreen engineClient={engineClient} onNavigate={navigate} game={playGameState} settings={playSettings} onChange={(g, s) => savePlayState(g, s)} initialFen={initialFen} />}
     </AppShell>
   );
 };

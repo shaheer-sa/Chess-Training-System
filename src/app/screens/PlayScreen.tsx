@@ -9,6 +9,9 @@ import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { LabelIcon } from '../components/LabelIcon.js';
 import { Spinner } from '../components/Spinner.js';
 import { GameState, newGame, legalDestinations, playMove, undo, outcome, previewSan, isPromotionMove, capturedPieces, materialBalance, castlingRookMove } from '../play/game.js';
+import { PlaySettings, isBotTurn, undoPlies } from '../play/playSettings.js';
+import { BotClient, StockfishBot } from '../bot/StockfishBot.js';
+import type { BotLevel } from '../bot/levels.js';
 
 
 interface PlayScreenProps {
@@ -16,8 +19,8 @@ interface PlayScreenProps {
   initialFen?: string;
   onNavigate?: (screen: 'home' | 'help' | 'analysis', initialFen?: string) => void;
   game: GameState;
-  hintsOn: boolean;
-  onGameStateChange: (g: GameState, hintsOn: boolean) => void;
+  settings: PlaySettings;
+  onChange: (g: GameState, settings: PlaySettings) => void;
 }
 
 import { parseSquare } from 'chessops';
@@ -41,8 +44,61 @@ const formatSquare = (index: number) => {
   return `${file}${rank}` as Square;
 };
 
-export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate, game, hintsOn, onGameStateChange }) => {
-  const [flipped, setFlipped] = useState(false);
+export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate, game, settings, onChange }) => {
+  const hintsOn = settings.hintsOn;
+  const [flipped, setFlipped] = useState(settings.mode === 'computer' && settings.humanColor === 'black');
+
+  useEffect(() => {
+    if (settings.mode === 'computer') {
+      setFlipped(settings.humanColor === 'black');
+    }
+  }, [settings.mode, settings.humanColor]);
+
+  const botRef = useRef<BotClient | null>(null);
+  const [computerThinking, setComputerThinking] = useState(false);
+  const [computerError, setComputerError] = useState(false);
+
+  useEffect(() => {
+    return () => { botRef.current?.dispose(); };
+  }, []);
+
+  useEffect(() => {
+    if (!isBotTurn(game, settings)) return;
+    let active = true;
+    const requestFen = game.currentFen;
+    
+    const runBot = async () => {
+      setComputerThinking(true);
+      setComputerError(false);
+      if (!botRef.current) botRef.current = new StockfishBot();
+      try {
+        const [move] = await Promise.all([
+          botRef.current.bestMove(game, settings.level),
+          new Promise(r => setTimeout(r, 350))
+        ]);
+        if (active && game.currentFen === requestFen) {
+          const fromIdx = parseSquare(move.slice(0, 2) as unknown as Square);
+          const toIdx = parseSquare(move.slice(2, 4) as unknown as Square);
+          if (fromIdx !== undefined && toIdx !== undefined) {
+             executeMove(fromIdx, toIdx, move.endsWith('q') ? 'queen' : undefined, false);
+          }
+        }
+      } catch (err: unknown) {
+        if ((err as Error)?.name === 'AbortError') return;
+        if (active && game.currentFen === requestFen) {
+          setComputerThinking(false);
+          setComputerError(true);
+        }
+      } finally {
+        if (active && game.currentFen === requestFen) setComputerThinking(false);
+      }
+    };
+    runBot();
+    return () => {
+      active = false;
+      botRef.current?.cancel();
+    };
+  }, [game, settings]);
   
   const [selectedSquare, setSelectedSquare] = useState<number | null>(null);
   const [previewSquare, setPreviewSquare] = useState<number | null>(null);
@@ -212,6 +268,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   };
 
   const executeMove = (fromIdx: number, toIdx: number, promoRole?: Role, dragged = false) => {
+    botRef.current?.cancel();
     const fromStr = formatSquare(fromIdx);
     const toStr = formatSquare(toIdx);
     
@@ -229,7 +286,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       
       const rook = castlingRookMove(fromIdx, toIdx);
       setAnim(dragged ? null : { moves: rook ? [{ from: fromIdx, to: toIdx }, rook] : [{ from: fromIdx, to: toIdx }], key: newGameSt.moves.length });
-      onGameStateChange(newGameSt, hintsOn);
+      onChange(newGameSt, settings);
       resetSelection();
       setPromotionMove(null);
       
@@ -260,7 +317,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     });
     setPromotionMove(null);
     setAnim(null);
-    onGameStateChange(nextGame, hintsOn);
+    onChange(nextGame, settings);
     resetSelection();
   };
 
@@ -268,7 +325,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     if (game.moves.length > 0 && !gameOutcome) {
       if (!window.confirm("Start a new game? The current game will be lost.")) return;
     }
-    onGameStateChange(newGame(), hintsOn);
+    onChange(newGame(), settings);
     setAnim(null);
     setMoveListInfo({});
     moveTokens.current = {};
@@ -370,7 +427,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Last move</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span className="mono" style={{ fontWeight: 'bold' }}>{Math.floor(i / 2) + 1}{i % 2 === 0 ? '.' : '...'} {game.moves[i].san}</span>
-          {hintsOn && info && labelChip(info)}
+          {hintsOn && info && (!game.moves[i] || settings.mode !== 'computer' || game.moves[i].color === settings.humanColor) && labelChip(info)}
         </div>
         {hintsOn && info && moveDetails(info)}
       </div>
@@ -471,23 +528,45 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       
       <div className="mode-bar" style={{ background: 'var(--panel)', color: 'var(--text-muted)', padding: '10px 24px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', fontSize: '0.85rem', borderBottom: '1px solid var(--border)' }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-        PLAY · Two players · Hints {hintsOn ? 'on' : 'off'}
+        {settings.mode === 'two-player' ? `PLAY · Two players · Hints ${hintsOn ? 'on' : 'off'}` : `PLAY · vs Computer · Level ${settings.level} · You are ${settings.humanColor === 'white' ? 'White' : 'Black'} · Hints ${hintsOn ? 'on' : 'off'}`}
       </div>
 
       <div className="play-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px' }}>
         
         {/* Top Controls */}
         <div style={{ width: '100%', maxWidth: '800px', display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '16px', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px' }}>
-            <button className="rv-hover" aria-pressed="true" style={{ minHeight: '44px', padding: '8px 16px', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text)', fontWeight: 'bold', cursor: 'default' }}>Two players</button>
-            <button className="rv-hover" aria-disabled="true" style={{ minHeight: '44px', padding: '8px 16px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'not-allowed' }}>vs Computer (Coming soon)</button>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', width: '100%' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px', alignSelf: 'flex-start' }}>
+              <button className="rv-hover" aria-pressed={settings.mode === 'two-player'} onClick={() => { if (settings.mode !== 'two-player') { if (game.moves.length > 0 && !gameOutcome && !window.confirm("Start a new game? The current game will be lost.")) return; botRef.current?.cancel(); setComputerThinking(false); setComputerError(false); onChange(newGame(), { ...settings, mode: 'two-player' }); } }} style={{ minHeight: '44px', padding: '8px 16px', background: settings.mode === 'two-player' ? 'var(--panel)' : 'transparent', border: settings.mode === 'two-player' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.mode === 'two-player' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.mode === 'two-player' ? 'bold' : 'normal', cursor: 'pointer' }}>Two players</button>
+              <button className="rv-hover" aria-pressed={settings.mode === 'computer'} onClick={() => { if (settings.mode !== 'computer') { if (game.moves.length > 0 && !gameOutcome && !window.confirm("Start a new game? The current game will be lost.")) return; botRef.current?.cancel(); setComputerThinking(false); setComputerError(false); onChange(newGame(), { ...settings, mode: 'computer' }); } }} style={{ minHeight: '44px', padding: '8px 16px', background: settings.mode === 'computer' ? 'var(--panel)' : 'transparent', border: settings.mode === 'computer' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.mode === 'computer' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.mode === 'computer' ? 'bold' : 'normal', cursor: 'pointer' }}>vs Computer</button>
+            </div>
+            
+            {settings.mode === 'computer' && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>You play:</span>
+                  <div style={{ display: 'flex', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px' }}>
+                    <button className="rv-hover" aria-pressed={settings.humanColor === 'white'} onClick={() => { if (settings.humanColor !== 'white') { if (game.moves.length > 0 && !gameOutcome && !window.confirm("Start a new game? The current game will be lost.")) return; botRef.current?.cancel(); setComputerThinking(false); setComputerError(false); onChange(newGame(), { ...settings, humanColor: 'white' }); } }} style={{ minHeight: '44px', padding: '0 16px', background: settings.humanColor === 'white' ? 'var(--panel)' : 'transparent', border: settings.humanColor === 'white' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.humanColor === 'white' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.humanColor === 'white' ? 'bold' : 'normal', cursor: 'pointer' }}>White</button>
+                    <button className="rv-hover" aria-pressed={settings.humanColor === 'black'} onClick={() => { if (settings.humanColor !== 'black') { if (game.moves.length > 0 && !gameOutcome && !window.confirm("Start a new game? The current game will be lost.")) return; botRef.current?.cancel(); setComputerThinking(false); setComputerError(false); onChange(newGame(), { ...settings, humanColor: 'black' }); } }} style={{ minHeight: '44px', padding: '0 16px', background: settings.humanColor === 'black' ? 'var(--panel)' : 'transparent', border: settings.humanColor === 'black' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.humanColor === 'black' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.humanColor === 'black' ? 'bold' : 'normal', cursor: 'pointer' }}>Black</button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Level:</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {([1, 2, 3, 4, 5, 6] as BotLevel[]).map(lvl => (
+                      <button key={lvl} className="rv-hover" aria-label={`Level ${lvl}`} aria-pressed={settings.level === lvl} onClick={() => onChange(game, { ...settings, level: lvl })} style={{ minWidth: '44px', minHeight: '44px', padding: '0 8px', background: settings.level === lvl ? 'var(--panel)' : 'var(--bg-sunken)', border: settings.level === lvl ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: '6px', color: settings.level === lvl ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.level === lvl ? 'bold' : 'normal', cursor: 'pointer' }}>{lvl}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', minHeight: '44px' }}>
-              <input type="checkbox" checked={hintsOn} onChange={(e) => { onGameStateChange(game, e.target.checked); resetSelection(); }} />
+              <input type="checkbox" checked={hintsOn} onChange={(e) => { onChange(game, { ...settings, hintsOn: e.target.checked }); resetSelection(); }} />
               Show hints
             </label>
-            <button className="rv-hover" onClick={handleUndo} disabled={game.moves.length === 0} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: game.moves.length === 0 ? 'var(--text-muted)' : 'var(--text)', cursor: game.moves.length === 0 ? 'not-allowed' : 'pointer' }}>Undo</button>
+            <button className="rv-hover" onClick={handleUndo} disabled={undoPlies(game, settings) === 0} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: undoPlies(game, settings) === 0 ? 'var(--text-muted)' : 'var(--text)', cursor: undoPlies(game, settings) === 0 ? 'not-allowed' : 'pointer' }}>Undo</button>
             <button className="rv-hover" onClick={() => setFlipped(!flipped)} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Flip board</button>
             <button className="rv-hover" onClick={handleNewGame} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>New game</button>
             <button className="rv-hover" onClick={() => onNavigate?.('analysis', game.currentFen)} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Open in Analysis</button>
@@ -499,7 +578,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           <div className="play-board-col" style={{ flex: '1 1 400px', display: 'flex', flexDirection: 'column' }}>
             {/* Player strip (opponent) */}
             <div style={{ background: 'var(--panel)', padding: '12px 16px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', border: '1px solid var(--border)', borderBottom: 'none', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 'bold' }}>{flipped ? 'White' : 'Black'}</span>
+              <span style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>{settings.mode === 'two-player' ? (flipped ? 'White' : 'Black') : (settings.humanColor === 'white' ? `Computer · Level ${settings.level}` : `Computer · Level ${settings.level}`)} {computerThinking && <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}><Spinner /> Thinking...</span>}</span>
               {renderCaptured(flipped ? 'white' : 'black')}
               {pos.turn === (flipped ? 'white' : 'black') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
             </div>
@@ -524,7 +603,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 onSquarePointerCancel={clearLongPress}
                 onSquareMouseEnter={handleMouseEnter}
                 onSquareMouseLeave={handleMouseLeave}
-                draggableSquares={sideToMoveSquares}
+                draggableSquares={computerThinking || isBotTurn(game, settings) ? [] : sideToMoveSquares}
                 onPieceDrop={handlePieceDrop}
                 onPieceDragStart={handlePieceDragStart}
                 animateMoves={anim?.moves}
@@ -550,7 +629,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
             
             {/* Player strip (self) */}
             <div style={{ background: 'var(--panel)', padding: '12px 16px', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', border: '1px solid var(--border)', borderTop: 'none', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 'bold' }}>{flipped ? 'Black' : 'White'}</span>
+              <span style={{ fontWeight: 'bold' }}>{settings.mode === 'two-player' ? (flipped ? 'Black' : 'White') : 'You'}</span>
               {renderCaptured(flipped ? 'black' : 'white')}
               {pos.turn === (flipped ? 'black' : 'white') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
             </div>
@@ -572,6 +651,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               </div>
             )}
             
+            {computerError && (
+              <div style={{ background: 'var(--panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--danger)', textAlign: 'center' }}>
+                <p style={{ margin: '0 0 16px 0', color: 'var(--danger-text)', fontWeight: 'bold' }}>The computer couldn't move.</p>
+                <button className="rv-hover" onClick={() => { setComputerError(false); setComputerThinking(true); botRef.current?.cancel(); /* runBot will be triggered by effect if we just toggle state? No, runBot only triggers on game/settings change. We need a way to retry. We can force a re-render by doing onChange(game, {...settings}) but game is identical. So let's just make the button do a dummy onChange to trigger effect, or we can pull runBot out. Since runBot is inside useEffect, we can add a retry counter to the dependency array. Let's just do that in patch3.cjs if needed */ onChange({...game}, settings); }} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Try again</button>
+              </div>
+            )}
             {renderHintPanel()}
             
             <div style={{ background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px', flex: 1, minHeight: '200px' }}>
