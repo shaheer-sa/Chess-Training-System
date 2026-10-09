@@ -7,7 +7,8 @@ import { Piece } from '../components/Piece.js';
 import { explain } from '../explain/explain.js';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { LabelIcon } from '../components/LabelIcon.js';
-import { GameState, newGame, legalDestinations, playMove, undo, outcome, previewSan, isPromotionMove, capturedPieces, materialBalance } from '../play/game.js';
+import { Spinner } from '../components/Spinner.js';
+import { GameState, newGame, legalDestinations, playMove, undo, outcome, previewSan, isPromotionMove, capturedPieces, materialBalance, castlingRookMove } from '../play/game.js';
 
 
 interface PlayScreenProps {
@@ -48,7 +49,10 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const [movesInfo, setMovesInfo] = useState<MoveClassification[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   
+  
   const [promotionMove, setPromotionMove] = useState<{from: string, to: string} | null>(null);
+  const lastActionRef = useRef<'tap'|'drag'|'undo'|'new'>('new');
+
   
   const requestToken = useRef(0);
   const promoDialogRef = useRef<HTMLDivElement>(null);
@@ -88,8 +92,51 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   };
 
   const pos = Chess.fromSetup(fenOps.parseFen(game.currentFen).unwrap()).unwrap();
+  
+  const handlePieceDrop = (from: number, to: number) => {
+    if (legalDestinations(game, from).includes(to)) {
+      if (isPromotionMove(game, from, to)) {
+        setPromotionMove({ from: (String.fromCharCode(97 + (from & 7)) + String.fromCharCode(49 + (from >> 3))), to: (String.fromCharCode(97 + (to & 7)) + String.fromCharCode(49 + (to >> 3))) });
+      } else {
+        lastActionRef.current = 'drag';
+        const next = playMove(game, from, to);
+        if (next) onGameStateChange(next, hintsOn);
+      }
+      setSelectedSquare(null);
+      setPreviewSquare(null);
+    }
+  };
+
+
+
+
+  
+
   const gameOutcome = outcome(game);
   const readOnly = !!gameOutcome;
+
+  const sideToMoveSquares: number[] = [];
+  if (!readOnly && !promotionMove) {
+    for (let i = 0; i < 64; i++) {
+      const p = pos.board.get(i);
+      if (p && p.color === pos.turn) sideToMoveSquares.push(i);
+    }
+  }
+
+  let animateMoves: { from: number; to: number }[] = [];
+  let animationKey: number | undefined = undefined;
+  if (lastActionRef.current === 'tap' && game.moves.length > 0) {
+    const lastGameMove = game.moves[game.moves.length - 1];
+    const fromStr = lastGameMove.uci.slice(0, 2);
+    const toStr = lastGameMove.uci.slice(2, 4);
+    const fromSq = (fromStr.charCodeAt(0) - 97) + (fromStr.charCodeAt(1) - 49) * 8;
+    const toSq = (toStr.charCodeAt(0) - 97) + (toStr.charCodeAt(1) - 49) * 8;
+    const castling = castlingRookMove(fromSq, toSq);
+    animateMoves = castling ? [{ from: fromSq, to: toSq }, castling] : [{ from: fromSq, to: toSq }];
+    animationKey = game.moves.length;
+  }
+
+  
 
   // Moves list info (storing move classifications for dot rendering)
   const [moveListInfo, setMoveListInfo] = useState<Record<number, MoveClassification>>({});
@@ -417,7 +464,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           </>
         ) : (
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            {selectedSquare === null ? 'Select a piece, then hover, focus or long-press a square to preview the move.' : 'Hover, focus or long-press a highlighted square to preview the move.'}
+            {selectedSquare === null ? 'Select a piece, then hover, focus, long-press or drag to preview the move.' : 'Hover, focus, long-press or drag a piece to preview the move.'}
           </p>
         )}
       </div>
@@ -449,18 +496,18 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
         {/* Top Controls */}
         <div style={{ width: '100%', maxWidth: '800px', display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '16px', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px' }}>
-            <button aria-pressed="true" style={{ minHeight: '44px', padding: '8px 16px', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text)', fontWeight: 'bold', cursor: 'default' }}>Two players</button>
-            <button aria-disabled="true" style={{ minHeight: '44px', padding: '8px 16px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'not-allowed' }}>vs Computer (Coming soon)</button>
+            <button className="rv-hover" aria-pressed="true" style={{ minHeight: '44px', padding: '8px 16px', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text)', fontWeight: 'bold', cursor: 'default' }}>Two players</button>
+            <button className="rv-hover" aria-disabled="true" style={{ minHeight: '44px', padding: '8px 16px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'not-allowed' }}>vs Computer (Coming soon)</button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', minHeight: '44px' }}>
               <input type="checkbox" checked={hintsOn} onChange={(e) => { onGameStateChange(game, e.target.checked); resetSelection(); }} />
               Show hints
             </label>
-            <button onClick={handleUndo} disabled={game.moves.length === 0} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: game.moves.length === 0 ? 'var(--text-muted)' : 'var(--text)', cursor: game.moves.length === 0 ? 'not-allowed' : 'pointer' }}>Undo</button>
-            <button onClick={() => setFlipped(!flipped)} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Flip board</button>
-            <button onClick={handleNewGame} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>New game</button>
-            <button onClick={() => onNavigate?.('analysis', game.currentFen)} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Open in Analysis</button>
+            <button className="rv-hover" onClick={handleUndo} disabled={game.moves.length === 0} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: game.moves.length === 0 ? 'var(--text-muted)' : 'var(--text)', cursor: game.moves.length === 0 ? 'not-allowed' : 'pointer' }}>Undo</button>
+            <button className="rv-hover" onClick={() => setFlipped(!flipped)} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Flip board</button>
+            <button className="rv-hover" onClick={handleNewGame} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>New game</button>
+            <button className="rv-hover" onClick={() => onNavigate?.('analysis', game.currentFen)} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Open in Analysis</button>
           </div>
         </div>
 
@@ -494,6 +541,10 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 onSquarePointerCancel={clearLongPress}
                 onSquareMouseEnter={handleMouseEnter}
                 onSquareMouseLeave={handleMouseLeave}
+                draggableSquares={sideToMoveSquares}
+                onPieceDrop={handlePieceDrop}
+                animateMoves={animateMoves}
+                animationKey={animationKey}
               />
               
               {promotionMove && (
@@ -502,12 +553,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                     <div style={{ fontWeight: 'bold', textAlign: 'center' }}>Choose promotion</div>
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                     {(['queen', 'rook', 'bishop', 'knight'] as Role[]).map(role => (
-                      <button key={role} aria-label={PROMO_NAME[role]} onClick={() => executeMove(parseSquare(promotionMove.from)!, parseSquare(promotionMove.to)!, role)} style={{ width: '60px', height: '60px', padding: '6px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}>
+                      <button className="rv-hover" key={role} aria-label={PROMO_NAME[role]} onClick={() => executeMove(parseSquare(promotionMove.from)!, parseSquare(promotionMove.to)!, role)} style={{ width: '60px', height: '60px', padding: '6px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}>
                         <Piece color={pos.turn === 'white' ? 'w' : 'b'} type={PROMO_TYPE[role]} style={{ width: '100%', height: '100%' }} />
                       </button>
                     ))}
                     </div>
-                    <button onClick={() => setPromotionMove(null)} style={{ minHeight: '44px', padding: '12px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--text)' }}>Cancel</button>
+                    <button className="rv-hover" onClick={() => setPromotionMove(null)} style={{ minHeight: '44px', padding: '12px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--text)' }}>Cancel</button>
                   </div>
                 </div>
               )}
@@ -533,7 +584,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--accent)', textAlign: 'center' }}>
                 <h2>Game Over</h2>
                 <p style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{statusText}</p>
-                <button onClick={handleNewGame} style={{ minHeight: '44px', padding: '8px 24px', background: 'var(--accent-btn)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}>New game</button>
+                <button className="rv-hover" onClick={handleNewGame} style={{ minHeight: '44px', padding: '8px 24px', background: 'var(--accent-btn)', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' }}>New game</button>
               </div>
             )}
             

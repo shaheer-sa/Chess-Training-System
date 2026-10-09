@@ -7,6 +7,7 @@ import { Chess, fen as fenOps } from 'chessops';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { explain } from '../explain/explain.js';
 import { LabelIcon } from '../components/LabelIcon.js';
+import { Spinner } from '../components/Spinner.js';
 
 interface HomeProps {
   onNavigate: (screen: ScreenName, fen?: string) => void;
@@ -49,13 +50,13 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
             Pick a piece and every square it can reach is checked: who attacks it, who can really take back, and what the exchange costs you.
           </p>
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-            <button 
+            <button className="rv-hover" 
               onClick={() => onNavigate('analysis')}
               style={{ background: 'var(--accent-btn)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '6px', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
             >
               Analyze a position
             </button>
-            <button 
+            <button className="rv-hover" 
               onClick={() => onNavigate('play')}
               style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '12px 24px', borderRadius: '6px', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
             >

@@ -259,7 +259,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {SAMPLES.map((s, i) => (
                 <li key={i}>
-                  <button 
+                  <button className="rv-hover" 
                     onClick={() => { resetSelection(); setFen(s.fen); }}
                     style={{ background: 'transparent', border: 'none', color: 'var(--accent-text)', padding: 0, cursor: 'pointer', fontSize: '1rem', textDecoration: 'underline' }}
                   >
@@ -279,7 +279,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       ) : (
         <div className="analysis-layout">
           {/* Top toolbar */}
-          <div className="analysis-toolbar" style={{ background: 'var(--panel)', padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
+          <div className="analysis-toolbar rv-fade-in-screen" style={{ background: 'var(--panel)', padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
             <div style={{ flex: 1, minWidth: '280px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="mono" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>FEN</span>
               <input aria-label="FEN" type="text" value={inputFen} onChange={handleFenChange} style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', borderRadius: '6px', fontSize: '0.9rem', fontFamily: 'IBM Plex Mono, monospace', minHeight: '44px' }} 
@@ -317,13 +317,13 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
 
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button 
+              <button className="rv-hover" 
                 onClick={() => setFlipped(!flipped)}
                 style={{ background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
               >
                 Flip Board
               </button>
-              <button 
+              <button className="rv-hover" 
                 onClick={() => { resetSelection(); setFen(''); setInputFen(''); }}
                 style={{ background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
               >

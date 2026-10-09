@@ -41,6 +41,14 @@ const toChessopsMove = (pos: Chess, from: Square, to: Square, promotion?: Role):
   return { from, to, promotion };
 };
 
+export const castlingRookMove = (from: number, to: number): { from: number; to: number } | null => {
+  if (from === 4 && to === 6) return { from: 7, to: 5 }; // white short
+  if (from === 4 && to === 2) return { from: 0, to: 3 }; // white long
+  if (from === 60 && to === 62) return { from: 63, to: 61 }; // black short
+  if (from === 60 && to === 58) return { from: 56, to: 59 }; // black long
+  return null;
+};
+
 export const isPromotionMove = (game: GameState, from: Square, to: Square): boolean => {
   const pos = toPosition(game.currentFen);
   const rank = to >> 3;

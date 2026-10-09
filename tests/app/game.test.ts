@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseSquare, Role } from 'chessops';
-import { newGame, playMove, undo, outcome, legalDestinations, GameState, capturedPieces, materialBalance, serializeGame, deserializeGame } from '../../src/app/play/game.js';
+import { newGame, playMove, undo, outcome, legalDestinations, GameState, capturedPieces, materialBalance, serializeGame, deserializeGame, castlingRookMove } from '../../src/app/play/game.js';
 
 type Step = [from: string, to: string, promotion?: Role];
 
@@ -118,6 +118,16 @@ describe('game.ts', () => {
       expect(deserializeGame(JSON.stringify({ startFen: 123, moves: [] }))).toBeNull();
       expect(deserializeGame(JSON.stringify({ startFen: 'invalid fen', moves: [] }))).toBeNull();
       expect(deserializeGame(JSON.stringify({ startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', moves: ['e2e5'] }))).toBeNull(); // illegal move
+    });
+  });
+
+  describe('castlingRookMove', () => {
+    it('identifies rook move for castlings, returns null otherwise', () => {
+      expect(castlingRookMove(4, 6)).toEqual({ from: 7, to: 5 }); // white short
+      expect(castlingRookMove(4, 2)).toEqual({ from: 0, to: 3 }); // white long
+      expect(castlingRookMove(60, 62)).toEqual({ from: 63, to: 61 }); // black short
+      expect(castlingRookMove(60, 58)).toEqual({ from: 56, to: 59 }); // black long
+      expect(castlingRookMove(12, 28)).toBeNull(); // normal move (e2e4)
     });
   });
 });

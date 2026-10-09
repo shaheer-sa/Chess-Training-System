@@ -4,6 +4,7 @@ import { Piece } from './Piece.js';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { MoveClassification, Square } from '../../engine/types.js';
 import { LabelIcon } from './LabelIcon.js';
+import { squareOffset } from './boardGeometry.js';
 
 interface BoardProps {
   position: Chess;
@@ -28,6 +29,10 @@ interface BoardProps {
   onSquarePointerCancel?: (index: number) => void;
   onSquareMouseEnter?: (index: number) => void;
   onSquareMouseLeave?: (index: number) => void;
+  animateMoves?: { from: number; to: number }[];
+  animationKey?: string | number;
+  draggableSquares?: number[];
+  onPieceDrop?: (from: number, to: number) => void;
 }
 
 const getSquareName = (index: number) => {
@@ -37,14 +42,132 @@ const getSquareName = (index: number) => {
 };
 
 export const Board: React.FC<BoardProps> = ({
-
   position, flipped, onSquareClick, selectedSquare, destinationSquare, moves, expandedLevel, exchangeStep, selectedDestInfo,
   focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow,
   lastMove, checkSquare, legalDestinations,
-  onSquarePointerDown, onSquarePointerUp, onSquarePointerCancel, onSquareMouseEnter, onSquareMouseLeave
+  onSquarePointerDown, onSquarePointerUp, onSquarePointerCancel, onSquareMouseEnter, onSquareMouseLeave,
+  animateMoves, animationKey, draggableSquares, onPieceDrop
 }) => {
+  
   const [hasFocus, setHasFocus] = React.useState(false);
+  
+  // Animation state
+  const [animOffsets, setAnimOffsets] = React.useState<Record<number, { dx: number; dy: number }>>({});
+  const [transitioning, setTransitioning] = React.useState<Record<number, boolean>>({});
+  const [lastAnimKey, setLastAnimKey] = React.useState<string | number | undefined>(undefined);
+
+  React.useLayoutEffect(() => {
+    if (animationKey !== undefined && animationKey !== lastAnimKey && animateMoves && animateMoves.length > 0) {
+      const isReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (isReducedMotion) {
+        setLastAnimKey(animationKey);
+        setAnimOffsets({});
+        setTransitioning({});
+        return;
+      }
+      
+      const newOffsets: Record<number, { dx: number; dy: number }> = {};
+      const newTrans: Record<number, boolean> = {};
+      
+      for (const move of animateMoves) {
+        const offset = squareOffset(move.from, move.to, flipped);
+        newOffsets[move.to] = { dx: -offset.dx * 100, dy: -offset.dy * 100 };
+        newTrans[move.to] = false;
+      }
+      
+      setAnimOffsets(newOffsets);
+      setTransitioning(newTrans);
+      setLastAnimKey(animationKey);
+      
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setAnimOffsets({});
+          const activeTrans: Record<number, boolean> = {};
+          for (const move of animateMoves) activeTrans[move.to] = true;
+          setTransitioning(activeTrans);
+          
+          setTimeout(() => {
+            setTransitioning({});
+          }, 180);
+        });
+      });
+    }
+  }, [animateMoves, animationKey, lastAnimKey, flipped]);
+
+  // Drag state
+  const [dragState, setDragState] = React.useState<{
+    isActive: boolean;
+    startIndex: number;
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    hoverIndex: number | null;
+  } | null>(null);
+
+  const handlePointerDownInternal = (e: React.PointerEvent, index: number) => {
+    if (onSquarePointerDown) onSquarePointerDown(index, e.pointerType);
+    
+    // Start drag if draggable
+    if (draggableSquares?.includes(index)) {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDragState({
+        isActive: false,
+        startIndex: index,
+        startX: e.clientX,
+        startY: e.clientY,
+        currentX: e.clientX,
+        currentY: e.clientY,
+        hoverIndex: null
+      });
+    }
+  };
+
+  const handlePointerMoveInternal = (e: React.PointerEvent, index: number) => {
+    if (!dragState) return;
+    
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (!dragState.isActive && distance > 6) {
+      setDragState(prev => prev ? { ...prev, isActive: true, currentX: e.clientX, currentY: e.clientY } : null);
+    } else if (dragState.isActive) {
+      // Find element under pointer
+      const elements = document.elementsFromPoint(e.clientX, e.clientY);
+      const gridcell = elements.find(el => el.getAttribute('role') === 'gridcell');
+      let hoverIndex: number | null = null;
+      if (gridcell && gridcell.id && gridcell.id.startsWith('sq-')) {
+        hoverIndex = parseInt(gridcell.id.replace('sq-', ''), 10);
+      }
+      setDragState(prev => prev ? { ...prev, currentX: e.clientX, currentY: e.clientY, hoverIndex } : null);
+    }
+  };
+
+  const handlePointerUpInternal = (e: React.PointerEvent, index: number) => {
+    if (onSquarePointerUp) onSquarePointerUp(index);
+    if (!dragState) return;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    
+    if (dragState.isActive && onPieceDrop) {
+      const dropIndex = dragState.hoverIndex;
+      if (dropIndex !== null && dropIndex !== dragState.startIndex) {
+        onPieceDrop(dragState.startIndex, dropIndex);
+      }
+    }
+    
+    setDragState(null);
+  };
+  
+  const handlePointerCancelInternal = (e: React.PointerEvent, index: number) => {
+    if (onSquarePointerCancel) onSquarePointerCancel(index);
+    if (!dragState) return;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setDragState(null);
+  };
+
   const displayBoard: Map<number, { role: string, color: string }> = new Map();
+
   for (let i = 0; i < 64; i++) {
     const p = position.board.get(i);
     if (p) displayBoard.set(i, { role: p.role, color: p.color });
@@ -152,7 +275,8 @@ export const Board: React.FC<BoardProps> = ({
         role="gridcell"
         aria-label={ariaLabel}
         onKeyDown={(e) => handleKeyDown(e, index)}
-        onClick={() => {
+        onClick={(e) => {
+          if (dragState && dragState.isActive) { e.stopPropagation(); return; }
           if (setFocusedSquare) setFocusedSquare(index);
           if (onSquareClick && !readOnly) onSquareClick(index);
         }}
@@ -163,9 +287,10 @@ export const Board: React.FC<BoardProps> = ({
         onBlur={() => {
           if (onSquareMouseLeave) onSquareMouseLeave(index);
         }}
-        onPointerDown={(e) => onSquarePointerDown && onSquarePointerDown(index, e.pointerType)}
-        onPointerUp={() => onSquarePointerUp && onSquarePointerUp(index)}
-        onPointerCancel={() => onSquarePointerCancel && onSquarePointerCancel(index)}
+        onPointerDown={(e) => handlePointerDownInternal(e, index)}
+        onPointerUp={(e) => handlePointerUpInternal(e, index)}
+        onPointerMove={(e) => handlePointerMoveInternal(e, index)}
+        onPointerCancel={(e) => handlePointerCancelInternal(e, index)}
         onPointerLeave={() => onSquarePointerCancel && onSquarePointerCancel(index)}
         onMouseEnter={() => onSquareMouseEnter && onSquareMouseEnter(index)}
         onMouseLeave={() => onSquareMouseLeave && onSquareMouseLeave(index)}
@@ -178,11 +303,12 @@ export const Board: React.FC<BoardProps> = ({
           top: `${(flipped ? rank : 7 - rank) * 12.5}%`,
           boxSizing: 'border-box',
           boxShadow: (hasFocus && index === focusedSquare) ? 'inset 0 0 0 3px #ffffff, inset 0 0 0 6px var(--board-ink)' : (isSelected ? 'inset 0 0 0 4px var(--board-ink)' : 'none'),
-          border: (!isReplaying && isSelectedDest) ? '3px dashed var(--board-ink)' : isReplayLandingSquare ? '3px dashed var(--board-ink)' : 'none',
+          border: (dragState?.isActive && dragState.hoverIndex === index) ? '3px solid var(--accent)' : (!isReplaying && isSelectedDest) ? '3px dashed var(--board-ink)' : isReplayLandingSquare ? '3px dashed var(--board-ink)' : 'none',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          cursor: readOnly ? 'default' : 'pointer'
+          cursor: readOnly ? 'default' : 'pointer',
+          touchAction: draggableSquares?.includes(index) ? 'none' : 'manipulation'
         }}
       >
         {isReplayLandingSquare && (
@@ -196,11 +322,18 @@ export const Board: React.FC<BoardProps> = ({
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(circle, rgba(212,92,28,0.65) 0%, rgba(212,92,28,0) 70%)', pointerEvents: 'none' }} />
         )}
         {piece && (
-          <Piece 
-            color={piece.color === 'white' ? 'w' : 'b'} 
-            type={piece.role === 'pawn' ? 'P' : piece.role === 'knight' ? 'N' : piece.role === 'bishop' ? 'B' : piece.role === 'rook' ? 'R' : piece.role === 'queen' ? 'Q' : 'K'} 
-            style={{ width: '80%', height: '80%', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1 }}
-          />
+          <div style={{
+            width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1,
+            transform: animOffsets[index] ? `translate(${animOffsets[index].dx}%, ${animOffsets[index].dy}%)` : 'none',
+            transition: transitioning[index] ? 'transform 180ms ease-out' : 'none',
+            opacity: dragState?.isActive && dragState.startIndex === index ? 0.3 : 1
+          }}>
+            <Piece 
+              color={piece.color === 'white' ? 'w' : 'b'} 
+              type={piece.role === 'pawn' ? 'P' : piece.role === 'knight' ? 'N' : piece.role === 'bishop' ? 'B' : piece.role === 'rook' ? 'R' : piece.role === 'queen' ? 'Q' : 'K'} 
+              style={{ width: '80%', height: '80%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            />
+          </div>
         )}
         {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && !piece && (
           <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(21, 23, 27, 0.42)', pointerEvents: 'none', zIndex: 2 }} />
@@ -267,6 +400,30 @@ export const Board: React.FC<BoardProps> = ({
       onContextMenu={onSquarePointerDown ? (e) => e.preventDefault() : undefined}
       style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid var(--border-strong)', boxSizing: 'border-box', overflow: 'hidden', borderRadius: '4px', ...(onSquarePointerDown ? { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none', touchAction: 'manipulation' } : {}) }}>
       {rows}
+
+      {dragState?.isActive && (() => {
+        const p = displayBoard.get(dragState.startIndex);
+        if (!p) return null;
+        return (
+          <div style={{
+            position: 'fixed',
+            left: dragState.currentX,
+            top: dragState.currentY,
+            transform: 'translate(-50%, -50%)',
+            width: 'calc(min(100vw, 800px) / 8 * 1.1)', // Approx 1.1x square size
+            height: 'calc(min(100vw, 800px) / 8 * 1.1)',
+            pointerEvents: 'none',
+            zIndex: 1000
+          }}>
+            <Piece 
+              color={p.color === 'white' ? 'w' : 'b'} 
+              type={p.role === 'pawn' ? 'P' : p.role === 'knight' ? 'N' : p.role === 'bishop' ? 'B' : p.role === 'rook' ? 'R' : p.role === 'queen' ? 'Q' : 'K'} 
+              style={{ width: '100%', height: '100%' }}
+            />
+          </div>
+        );
+      })()}
+
       {readOnly && arrow && (() => {
         const fromFile = arrow.from.charCodeAt(0) - 97;
         const fromRank = arrow.from.charCodeAt(1) - 49;
