@@ -11,15 +11,17 @@ interface ResultPanelProps {
   exchangeStep: number;
   setExchangeStep: (step: number) => void;
   stepText: string;
+  /** Text for the empty state (default: before any destination is chosen). */
+  emptyText?: string;
 }
 
 export const ResultPanel: React.FC<ResultPanelProps> = ({
-  selectedDestInfo, expandedLevel, setExpandedLevel, exchangeStep, stepText
+  selectedDestInfo, expandedLevel, setExpandedLevel, exchangeStep, stepText, emptyText
 }) => {
   if (!selectedDestInfo) {
     return (
       <div style={{ flex: '1 1 300px', padding: '24px', background: 'var(--panel)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>Results appear here after you choose a destination.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: '1.1rem', maxWidth: '28em', textAlign: 'center' }}>{emptyText ?? 'Results appear here after you choose a destination.'}</div>
       </div>
     );
   }

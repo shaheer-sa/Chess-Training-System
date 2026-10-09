@@ -1,8 +1,8 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react';
 import React from 'react';
 import { App } from '../../src/app/App.js';
 import { EngineClient } from '../../src/app/engine/EngineClient.js';
@@ -38,8 +38,9 @@ describe('Phase 4B — Specific Acceptance Tests', () => {
     
     // Go to Analysis
     fireEvent.click(screen.getAllByText('Analyze your game')[0]);
-    fireEvent.change(await screen.findByLabelText('Analyze from'), { target: { value: 'fen' } });
-    await screen.findByText('Select a position');
+    fireEvent.click(await screen.findByRole('button', { name: /^Analyze from/ }));
+    fireEvent.click(screen.getByRole('option', { name: /FEN/ }));
+    await screen.findByText('Paste a position (FEN)');
     
     // Click logo
     fireEvent.click(screen.getByLabelText('Rookvex — home'));
@@ -58,9 +59,10 @@ describe('Phase 4B — Specific Acceptance Tests', () => {
     
     // Check Analysis selected
     fireEvent.click(screen.getAllByText('Analyze your game')[0]);
-    fireEvent.change(await screen.findByLabelText('Analyze from'), { target: { value: 'fen' } });
-    await screen.findByText('Select a position');
-    fireEvent.click(screen.getAllByText('Starting position')[0]);
+    fireEvent.click(await screen.findByRole('button', { name: /^Analyze from/ }));
+    fireEvent.click(screen.getByRole('option', { name: /FEN/ }));
+    await screen.findByText('Paste a position (FEN)');
+    fireEvent.change(screen.getByPlaceholderText('Paste FEN here'), { target: { value: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' } });
     await screen.findByRole('grid');
     fireEvent.click(container.querySelector('#sq-12')!); // select e2 pawn
     await waitFor(() => expect(container.innerHTML).toMatch(/Tap a square to see why/i));
@@ -115,5 +117,45 @@ describe('Phase 4B — Specific Acceptance Tests', () => {
     // reset
     Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1024 });
     window.dispatchEvent(new Event('resize'));
+  });
+});
+
+describe('Shell: back button and settings (5B.3)', () => {
+  beforeEach(() => cleanup());
+  it('a screen opened from another one offers Back to it; Home never shows it; the footer is gone', async () => {
+    window.location.hash = '#/';
+    const { container } = render(<App engineClient={createMockEngine()} />);
+    expect(container.querySelector('footer')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Back to/ })).toBeNull();
+    fireEvent.click(screen.getAllByText('Play a game')[0]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyze this position' }));
+    const back = await screen.findByRole('button', { name: 'Back to Play' });
+    fireEvent.click(back);
+    expect(await screen.findByRole('button', { name: 'Analyze this position' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back to Home' })).toBeTruthy();
+  });
+
+  it('settings panel: tabs, toggles saved and applied to the page', async () => {
+    localStorage.removeItem('rookvex.settings.v1');
+    render(<App engineClient={createMockEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings and about' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    fireEvent.click(dialog.getByRole('switch', { name: /Board coordinates/ }));
+    expect(document.documentElement.classList.contains('rv-no-coords')).toBe(true);
+    expect(JSON.parse(localStorage.getItem('rookvex.settings.v1')!).coordinates).toBe(false);
+    fireEvent.click(dialog.getByRole('switch', { name: /Reduce animations/ }));
+    expect(document.documentElement.classList.contains('rv-reduce-motion')).toBe(true);
+    fireEvent.click(dialog.getByRole('tab', { name: 'License' }));
+    expect(dialog.getByText(/GPL-3.0-or-later/)).toBeTruthy();
+    fireEvent.click(dialog.getByRole('tab', { name: 'Game history' }));
+    expect(dialog.getByText(/Coming soon\./)).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Settings and about' }).getAttribute('aria-expanded')).toBe('false'));
+    // restore defaults for other tests
+    fireEvent.click(screen.getByRole('button', { name: 'Settings and about' }));
+    const again = within(await screen.findByRole('dialog'));
+    fireEvent.click(again.getByRole('tab', { name: 'Settings' })); // the panel remembers the last tab
+    fireEvent.click(again.getByRole('switch', { name: /Board coordinates/ }));
+    fireEvent.click(again.getByRole('switch', { name: /Reduce animations/ }));
   });
 });

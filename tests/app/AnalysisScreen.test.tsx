@@ -24,6 +24,13 @@ afterEach(() => {
 });
 
 const startpos = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const POS1 = 'k7/8/2b1N2p/8/8/8/6R1/7K w - - 0 1';
+const sourceButton = () => screen.getByRole('button', { name: /^Analyze from/ });
+/** Pick an option in the "Analyze from" dropdown. */
+const chooseSource = (name: RegExp) => {
+  fireEvent.click(sourceButton());
+  fireEvent.click(screen.getByRole('option', { name }));
+};
 
 class MockEngineClient implements EngineClient {
   public delayMs = 0;
@@ -809,31 +816,45 @@ describe('Analysis Screen', () => {
       const client = new MockEngineClient();
       const navs: string[] = [];
       render(<AnalysisScreen engineClient={client} onNavigate={(s) => navs.push(s)} />);
-      const select = screen.getByLabelText('Analyze from') as HTMLSelectElement;
-      expect(select.value).toBe('pgn');
+      expect(sourceButton().textContent).toMatch(/PGN/);
       expect(screen.getByText('Analyze a whole game')).toBeTruthy();
       expect(screen.getByLabelText('PGN')).toBeTruthy();
-      expect(screen.queryByText('Select a position')).toBeNull();
-      fireEvent.change(select, { target: { value: 'games' } });
+      expect(screen.queryByText('Paste a position (FEN)')).toBeNull();
+      chooseSource(/My games/);
       expect(screen.getByText('My games', { selector: 'h2' })).toBeTruthy();
       fireEvent.click(screen.getByText('Play a game'));
       expect(navs).toEqual(['play']);
-      fireEvent.change(select, { target: { value: 'fen' } });
-      expect(screen.getByText('Select a position')).toBeTruthy();
+      chooseSource(/FEN/);
+      expect(screen.getByText('Paste a position (FEN)')).toBeTruthy();
+      expect(screen.queryByText('Position 1')).toBeNull(); // only the FEN box, no sample list
+    });
+
+    it('source dropdown: keyboard opens the list, arrows move, Enter picks, Escape closes', async () => {
+      render(<AnalysisScreen engineClient={new MockEngineClient()} onNavigate={() => {}} />);
+      const btn = sourceButton();
+      fireEvent.keyDown(btn, { key: 'ArrowDown' });
+      const list = screen.getByRole('listbox');
+      expect(btn.getAttribute('aria-expanded')).toBe('true');
+      fireEvent.keyDown(list, { key: 'ArrowDown' });
+      fireEvent.keyDown(list, { key: 'Enter' });
+      expect(sourceButton().textContent).toMatch(/FEN/);
+      fireEvent.keyDown(sourceButton(), { key: 'ArrowDown' });
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+      expect(sourceButton().getAttribute('aria-expanded')).toBe('false');
     });
 
     it('source dropdown: opening a position from Play starts on FEN', () => {
       render(<AnalysisScreen engineClient={new MockEngineClient()} initialFen="4k3/8/8/8/8/8/8/4K3 w - - 0 1" onNavigate={() => {}} />);
-      expect((screen.getByLabelText('Analyze from') as HTMLSelectElement).value).toBe('fen');
+      expect(sourceButton().textContent).toMatch(/FEN/);
       expect(screen.getByRole('grid')).toBeTruthy();
     });
 
     it('resets Analysis side selection when positions change', async () => {
       const client = new MockEngineClient();
       render(<AnalysisScreen engineClient={client} onNavigate={() => {}} />);
-      fireEvent.change(screen.getByLabelText('Analyze from'), { target: { value: 'fen' } });
+      chooseSource(/FEN/);
       // Select first sample
-      fireEvent.click(screen.getByText('Position 1'));
+      fireEvent.change(screen.getByPlaceholderText('Paste FEN here'), { target: { value: POS1 } });
       await waitFor(() => expect(screen.getByLabelText('FEN')).toBeTruthy());
       
       // Should default to White for Fool's Mate starting position
@@ -856,8 +877,8 @@ describe('Analysis Screen', () => {
     it('legal opposite-side selection', async () => {
       const client = new MockEngineClient();
       render(<AnalysisScreen engineClient={client} onNavigate={() => {}} />);
-      fireEvent.change(screen.getByLabelText('Analyze from'), { target: { value: 'fen' } });
-      fireEvent.click(screen.getByText('Position 1'));
+      chooseSource(/FEN/);
+      fireEvent.change(screen.getByPlaceholderText('Paste FEN here'), { target: { value: POS1 } });
       await waitFor(() => expect(screen.getByRole('button', { name: 'White' })).toBeTruthy());
       
       // Start pos is legal for both sides to "show moves for"
@@ -874,8 +895,8 @@ describe('Analysis Screen', () => {
     it('disabled illegal selection', async () => {
       const client = new MockEngineClient();
       render(<AnalysisScreen engineClient={client} onNavigate={() => {}} />);
-      fireEvent.change(screen.getByLabelText('Analyze from'), { target: { value: 'fen' } });
-      fireEvent.click(screen.getByText('Position 1'));
+      chooseSource(/FEN/);
+      fireEvent.change(screen.getByPlaceholderText('Paste FEN here'), { target: { value: POS1 } });
       await waitFor(() => expect(screen.getByLabelText('FEN')).toBeTruthy());
       
       // Set to a position where White is in check (so Black cannot pretend it is their turn)

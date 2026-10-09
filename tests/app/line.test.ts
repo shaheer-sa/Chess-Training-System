@@ -68,3 +68,12 @@ describe('analysis line (pure)', () => {
     expect(back.ok && back.line.result).toBe('0-1');
   });
 });
+
+describe('site settings (pure)', () => {
+  it('reads saved settings and falls back to defaults on bad data', async () => {
+    const { loadSettings, DEFAULT_SETTINGS } = await import('../../src/app/settings.js');
+    expect(loadSettings(null)).toEqual(DEFAULT_SETTINGS);
+    expect(loadSettings('{bad')).toEqual(DEFAULT_SETTINGS);
+    expect(loadSettings(JSON.stringify({ coordinates: false, reduceMotion: 'yes' }))).toEqual({ ...DEFAULT_SETTINGS, coordinates: false });
+  });
+});

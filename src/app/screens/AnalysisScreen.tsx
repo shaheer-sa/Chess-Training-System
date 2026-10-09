@@ -11,14 +11,15 @@ import { explain } from '../explain/explain.js';
 
 import { Spinner } from '../components/Spinner.js';
 import type { ScreenName } from '../App.js';
+import { RvSelect, RvOption } from '../components/RvSelect.js';
 import { LineState, newLine, pathOf, stateAt, playOnLine, goTo, backToGame, isExploring, lineFromPgn } from '../analysis/line.js';
 
 /** Where the analysis comes from. PGN is the default; PGN and My games arrive in later phases. */
 export type AnalyzeSource = 'pgn' | 'fen' | 'games';
-const SOURCES: { value: AnalyzeSource; label: string }[] = [
-  { value: 'pgn', label: 'PGN — a whole game' },
-  { value: 'fen', label: 'FEN — one position' },
-  { value: 'games', label: 'My games (coming soon)' },
+const SOURCES: RvOption<AnalyzeSource>[] = [
+  { value: 'pgn', title: 'PGN — a whole game', hint: 'Paste a game and step through it move by move.' },
+  { value: 'fen', title: 'FEN — one position', hint: 'Paste a position and play it out from there.' },
+  { value: 'games', title: 'My games', hint: 'Games you play here, once accounts are ready.', badge: 'Coming soon' },
 ];
 
 interface AnalysisScreenProps {
@@ -28,15 +29,6 @@ interface AnalysisScreenProps {
   initialPgn?: string;
   onNavigate?: (screen: ScreenName) => void;
 }
-
-const SAMPLES = [
-  { name: 'Starting position', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' },
-  { name: 'Position 1', fen: 'k7/8/2b1N2p/8/8/8/6R1/7K w - - 0 1' },
-  { name: 'Position 2', fen: '7k/8/8/8/R1r5/8/5N2/K7 w - - 0 1' },
-  { name: 'Position 3', fen: '4k3/8/8/2p5/8/8/3P4/3QK3 w - - 0 1' },
-  { name: 'Position 4', fen: '1r4k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1' },
-  { name: 'Position 5', fen: '3r2k1/5ppp/8/8/8/8/4R3/4R1K1 w - - 0 1' }
-];
 
 export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, initialFen, initialPgn, onNavigate }) => {
   const [source, setSource] = useState<AnalyzeSource>(initialPgn ? 'pgn' : initialFen ? 'fen' : 'pgn');
@@ -71,6 +63,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   const [moves, setMoves] = useState<MoveClassification[]>([]);
   const [engineError, setEngineError] = useState(false);
   const [destinationSquare, setDestinationSquare] = useState<number | null>(null);
+  // Hover / keyboard focus previews a destination's result; a click pins it (and offers Play this move).
+  const [hoverDest, setHoverDest] = useState<number | null>(null);
   const [resultMessage, setResultMessage] = useState<string>('');
   const [flipped, setFlipped] = useState(() => (initialPgn ? /\[Black "You"\]/.test(initialPgn) : initPos?.turn === 'black'));
   const [focusedSquare, setFocusedSquare] = useState<number>(0);
@@ -92,6 +86,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     requestToken.current++;
     setSelectedSquare(null);
     setDestinationSquare(null);
+    setHoverDest(null);
     setMoves([]);
     setResultMessage('');
     setEngineError(false);
@@ -291,7 +286,14 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     resetSelection();
   };
 
-  const selectedDestInfo = (destinationSquare !== null ? moves.find(m => m.move.to === getSquareName(destinationSquare)) : null) || null;
+  const shownDest = destinationSquare ?? hoverDest;
+  const selectedDestInfo = (shownDest !== null ? moves.find(m => m.move.to === getSquareName(shownDest)) : null) || null;
+  const onDestHover = (index: number) => {
+    if (destinationSquare !== null || index === hoverDest) return;
+    if (moves.some(m => m.move.to === getSquareName(index))) { setHoverDest(index); setExpandedLevel(1); setExchangeStep(0); }
+  };
+  // Opening the details of a previewed move pins it, so moving the mouse doesn't swap it away.
+  const setLevel = (lvl: number) => { if (destinationSquare === null && hoverDest !== null) setDestinationSquare(hoverDest); setExpandedLevel(lvl); };
   const stepText = getStepText(selectedDestInfo, exchangeStep);
 
   let liveText = '';
@@ -308,7 +310,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   } else if (selectedSquare !== null && moves.length === 0 && !analyzing && !engineError) {
     liveText = "This piece has no legal moves.";
   } else if (selectedSquare !== null && moves.length > 0 && destinationSquare === null) {
-    liveText = "Tap a square to see why.";
+    liveText = "Hover or tap a square to see why.";
   } else if (selectedSquare === null && !resultMessage) {
     liveText = "Tap one of your pieces to check where it can go.";
   }
@@ -350,12 +352,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       </div>
 
       <div className="analysis-source" style={{ padding: '16px 24px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px', borderBottom: '1px solid var(--border)', maxWidth: '1320px', margin: '0 auto', width: '100%' }}>
-        <label htmlFor="analyze-source" style={{ fontWeight: 600 }}>Analyze from</label>
-        <div className="rv-select">
-          <select id="analyze-source" value={source} onChange={(e) => { setSource(e.target.value as AnalyzeSource); resetSelection(); }}>
-            {SOURCES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </div>
+        <RvSelect label="Analyze from" value={source} options={SOURCES} onChange={(v) => { setSource(v); resetSelection(); }} />
       </div>
 
       {source === 'pgn' && !pgnLine && (
@@ -392,22 +389,11 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       {source === 'games' || (source === 'pgn' && (!pgnLine || !position)) ? null : !position ? (
         <div style={{ padding: '40px 24px', maxWidth: '1320px', margin: '0 auto', width: '100%' }}>
           <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '16px' }}>Select a position</h2>
-            <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {SAMPLES.map((s, i) => (
-                <li key={i}>
-                  <button className="rv-hover" 
-                    onClick={() => { resetSelection(); setFen(s.fen); }}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--accent-text)', padding: 0, cursor: 'pointer', fontSize: '1rem', textDecoration: 'underline' }}
-                  >
-                    {s.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <h2 style={{ fontSize: '1.4rem', margin: '0 0 8px' }}>Paste a position (FEN)</h2>
+            <p style={{ color: 'var(--text-2)', marginTop: 0 }}>Copy a FEN from any chess site, or use Analyze this position while you play. You can move pieces for both sides from there.</p>
             <div>
               <input aria-label="FEN" type="text" value={inputFen} onChange={handleFenChange} placeholder="Paste FEN here" 
-                style={{ width: '100%', maxWidth: '400px', padding: '10px 12px', background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', borderRadius: '6px', fontSize: '1rem' }} 
+                style={{ width: '100%', maxWidth: '640px', fontFamily: 'IBM Plex Mono, monospace', minHeight: '44px', padding: '10px 12px', background: 'var(--bg-sunken)', color: 'var(--text)', border: '1px solid var(--border-strong)', borderRadius: '6px', fontSize: '1rem' }} 
               />
               {!validFen && <div style={{ color: 'var(--accent-text)', marginTop: '8px', fontSize: '0.9rem' }}>This position isn't valid. Check the FEN.</div>}
             </div>
@@ -494,8 +480,9 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 flipped={flipped}
                 onSquareClick={onSquareClick}
                 selectedSquare={selectedSquare}
-                destinationSquare={destinationSquare}
+                destinationSquare={shownDest}
                 moves={moves}
+                onSquareMouseEnter={onDestHover}
                 expandedLevel={expandedLevel}
                 exchangeStep={exchangeStep}
                 selectedDestInfo={selectedDestInfo}
@@ -544,10 +531,11 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
             <ResultPanel
               selectedDestInfo={selectedDestInfo}
               expandedLevel={expandedLevel}
-              setExpandedLevel={setExpandedLevel}
+              setExpandedLevel={setLevel}
               exchangeStep={exchangeStep}
               setExchangeStep={setExchangeStep}
               stepText={stepText}
+              emptyText={selectedSquare === null ? undefined : !analyzing && moves.length === 0 ? 'This piece has no legal moves.' : 'Hover over a highlighted square (or tap it) to see what happens there.'}
             />
             <div className="rv-an-moves">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>

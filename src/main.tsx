@@ -4,6 +4,10 @@ import { App } from './app/App.js';
 
 import './app/styles/global.css';
 import { WorkerEngineClient } from './app/engine/WorkerEngineClient.js';
+import { readSettings, applySettings } from './app/settings.js';
+
+const siteSettings = readSettings();
+applySettings(siteSettings);
 
 const container = document.getElementById('root');
 const root = createRoot(container!);
@@ -24,5 +28,5 @@ if (splash) {
   window.setTimeout(() => {
     splash.classList.add('rv-splash--out');
     window.setTimeout(() => splash.remove(), 420);
-  }, seen ? 0 : 1100);
+  }, seen || !siteSettings.loadingScreen ? 0 : 1100);
 }

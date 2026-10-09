@@ -352,12 +352,12 @@ export const Board: React.FC<BoardProps> = ({
           <div className="rv-pop" style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(21, 23, 27, 0.42)', pointerEvents: 'none', zIndex: 2 }} />
         )}
         {(rank === (flipped ? 7 : 0)) && (
-          <div aria-hidden="true" className="mono" style={{ position: 'absolute', bottom: 2, right: 4, fontSize: '12px', fontWeight: 600, color: 'var(--board-coord)', zIndex: 0 }}>
+          <div aria-hidden="true" className="mono rv-coord" style={{ position: 'absolute', bottom: 2, right: 4, fontSize: '12px', fontWeight: 600, color: 'var(--board-coord)', zIndex: 0 }}>
             {sqName[0]}
           </div>
         )}
         {(file === (flipped ? 7 : 0)) && (
-          <div aria-hidden="true" className="mono" style={{ position: 'absolute', top: 2, left: 4, fontSize: '12px', fontWeight: 600, color: 'var(--board-coord)', zIndex: 0 }}>
+          <div aria-hidden="true" className="mono rv-coord" style={{ position: 'absolute', top: 2, left: 4, fontSize: '12px', fontWeight: 600, color: 'var(--board-coord)', zIndex: 0 }}>
             {sqName[1]}
           </div>
         )}

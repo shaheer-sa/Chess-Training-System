@@ -9,6 +9,7 @@ import { GameState } from './play/game.js';
 import { PlaySettings, loadSavedPlay, serializeSavedPlay } from './play/playSettings.js';
 
 export type ScreenName = 'home' | 'help' | 'analysis' | 'play';
+const SCREEN_LABEL: Record<ScreenName, string> = { home: 'Home', play: 'Play', analysis: 'Analyze', help: 'How labels work' };
 
 export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) => {
   const getScreenFromHash = (): ScreenName => {
@@ -20,11 +21,14 @@ export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) 
   };
 
   const [currentScreen, setCurrentScreen] = useState<ScreenName>(getScreenFromHash());
+  // Screens this visit came through, so a screen opened from another one can offer "Back to …".
+  const [trail, setTrail] = useState<ScreenName[]>([]);
   
   useEffect(() => {
     const onHashChange = () => {
       const newScreen = getScreenFromHash();
       if (newScreen !== currentScreen) {
+        setTrail(t => (t.length > 0 && t[t.length - 1] === newScreen ? t.slice(0, -1) : newScreen === 'home' ? [] : [...t, currentScreen].slice(-10)));
         setCurrentScreen(newScreen);
       }
     };
@@ -49,6 +53,7 @@ export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) 
     if (window.location.hash !== newHash) {
       window.history.pushState(null, '', newHash);
     }
+    if (screen !== currentScreen) setTrail(t => (screen === 'home' ? [] : [...t, currentScreen].slice(-10)));
     setCurrentScreen(screen);
   };
 
@@ -72,8 +77,18 @@ export const App: React.FC<{ engineClient: EngineClient }> = ({ engineClient }) 
     }
   };
 
+  const backTo = currentScreen !== 'home' && trail.length > 0 ? trail[trail.length - 1] : null;
+  const goBack = () => {
+    if (!backTo) return;
+    // Goes to the screen this one was opened from (a new history entry, so it also works after a refresh).
+    setTrail(t => t.slice(0, -1));
+    const hash = backTo === 'analysis' ? '#/analyze' : backTo === 'play' ? '#/play' : backTo === 'help' ? '#/labels' : '#/';
+    window.history.pushState(null, '', hash);
+    setCurrentScreen(backTo);
+  };
+
   return (
-    <AppShell onNavigate={navigate} currentScreen={currentScreen}>
+    <AppShell onNavigate={navigate} currentScreen={currentScreen} backLabel={backTo ? SCREEN_LABEL[backTo] : undefined} onBack={goBack}>
       {currentScreen === 'home' && <Home onNavigate={navigate} engineClient={engineClient} />}
       {currentScreen === 'help' && <Help onNavigate={navigate} />}
       {currentScreen === 'analysis' && <AnalysisScreen engineClient={engineClient} initialFen={initialFen} initialPgn={initialPgn || undefined} onNavigate={navigate} />}
