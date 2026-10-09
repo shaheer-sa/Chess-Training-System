@@ -23,6 +23,11 @@ interface BoardProps {
   lastMove?: { from: number; to: number };
   checkSquare?: number;
   legalDestinations?: number[];
+  onSquarePointerDown?: (index: number) => void;
+  onSquarePointerUp?: (index: number) => void;
+  onSquarePointerCancel?: (index: number) => void;
+  onSquareMouseEnter?: (index: number) => void;
+  onSquareMouseLeave?: (index: number) => void;
 }
 
 const getSquareName = (index: number) => {
@@ -35,7 +40,8 @@ export const Board: React.FC<BoardProps> = ({
 
   position, flipped, onSquareClick, selectedSquare, destinationSquare, moves, expandedLevel, exchangeStep, selectedDestInfo,
   focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow,
-  lastMove, checkSquare, legalDestinations
+  lastMove, checkSquare, legalDestinations,
+  onSquarePointerDown, onSquarePointerUp, onSquarePointerCancel, onSquareMouseEnter, onSquareMouseLeave
 }) => {
   const [hasFocus, setHasFocus] = React.useState(false);
   const displayBoard: Map<number, { role: string, color: string }> = new Map();
@@ -150,7 +156,18 @@ export const Board: React.FC<BoardProps> = ({
           if (setFocusedSquare) setFocusedSquare(index);
           if (onSquareClick && !readOnly) onSquareClick(index);
         }}
-        onFocus={() => { if (setFocusedSquare) setFocusedSquare(index); }}
+        onFocus={() => {
+          if (setFocusedSquare) setFocusedSquare(index);
+          if (onSquareMouseEnter) onSquareMouseEnter(index); // Focus triggers preview
+        }}
+        onBlur={() => {
+          if (onSquareMouseLeave) onSquareMouseLeave(index);
+        }}
+        onPointerDown={() => onSquarePointerDown && onSquarePointerDown(index)}
+        onPointerUp={() => onSquarePointerUp && onSquarePointerUp(index)}
+        onPointerCancel={() => onSquarePointerCancel && onSquarePointerCancel(index)}
+        onMouseEnter={() => onSquareMouseEnter && onSquareMouseEnter(index)}
+        onMouseLeave={() => onSquareMouseLeave && onSquareMouseLeave(index)}
         style={{
           width: '12.5%',
           height: '12.5%',
@@ -246,7 +263,8 @@ export const Board: React.FC<BoardProps> = ({
       aria-label="Chess board" 
       onFocus={() => setHasFocus(true)} 
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHasFocus(false); }}
-      style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid var(--border-strong)', boxSizing: 'border-box', overflow: 'hidden', borderRadius: '4px' }}>
+      onContextMenu={(e) => e.preventDefault()}
+      style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid var(--border-strong)', boxSizing: 'border-box', overflow: 'hidden', borderRadius: '4px', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none', touchAction: 'none' }}>
       {rows}
       {readOnly && arrow && (() => {
         const fromFile = arrow.from.charCodeAt(0) - 97;

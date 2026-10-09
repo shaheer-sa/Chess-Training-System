@@ -13,7 +13,7 @@ interface HomeProps {
   engineClient?: EngineClient;
 }
 
-const HERO_FEN = 'k7/8/2b1N2p/8/8/8/6R1/7K w - - 0 1';
+const HERO_FEN = 'k5br/p3Np1p/P4P1P/8/8/8/8/7K w - - 0 1';
 
 export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
   const [moves, setMoves] = useState<MoveClassification[]>([]);
@@ -24,14 +24,12 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
 
   useEffect(() => {
     if (engineClient) {
-      engineClient.classifyMovesFrom(HERO_FEN, 'e6').then(res => {
+      engineClient.classifyMovesFrom(HERO_FEN, 'e7').then(res => {
         if (res.ok) setMoves(res.value);
       }).catch(() => {});
     }
   }, [engineClient]);
 
-  const destInfo = moves.find(m => m.move.to === 'g5') || null;
-  const caption = destInfo ? explain(destInfo).primary : '';
 
   return (
     <div style={{ padding: '40px 24px', maxWidth: '1320px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '80px' }}>
@@ -55,12 +53,6 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
             >
               Analyze a position
             </button>
-            <button 
-              onClick={() => onNavigate('training')}
-              style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '12px 24px', borderRadius: '6px', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
-            >
-              Beginner drills
-            </button>
           </div>
         </div>
 
@@ -71,25 +63,34 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
                 <Board 
                 position={heroPos}
                 flipped={false}
-                selectedSquare={44} // e6 is index 44
-                destinationSquare={38} // g5 is index 38
+                selectedSquare={52}
+                destinationSquare={null}
+                selectedDestInfo={null}
                 moves={moves}
                 expandedLevel={1}
                 exchangeStep={0}
-                selectedDestInfo={destInfo}
                 readOnly={true}
                 showBadgesOnReadOnly={true}
               />
               </div>
-              {destInfo && caption && (
-                <div style={{ marginTop: '16px', padding: '12px', background: 'var(--bg-sunken)', borderRadius: '6px', border: '1px solid var(--border-strong)', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                  <div style={{ background: BADGE_INFO[destInfo.label as keyof typeof BADGE_INFO].color, color: BADGE_INFO[destInfo.label as keyof typeof BADGE_INFO].textColor, padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.85rem' }}>
-                    <LabelIcon kind={destInfo.label as 'safe'|'even_trade'|'loses_material'|'unclear'} />
-                    <span>{BADGE_INFO[destInfo.label as keyof typeof BADGE_INFO].text}</span>
-                  </div>
-                  <div style={{ fontSize: '0.9rem', color: 'var(--text-2)', lineHeight: 1.4 }}>
-                    {caption}
-                  </div>
+              {moves.length > 0 && (
+                <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {['safe', 'even_trade', 'loses_material', 'unclear'].map(label => {
+                    const mInfo = moves.find(m => m.label === label);
+                    if (!mInfo) return null;
+                    const explanation = explain(mInfo);
+                    return (
+                      <div key={label} style={{ padding: '8px 12px', background: 'var(--bg-sunken)', borderRadius: '6px', border: '1px solid var(--border-strong)', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                        <div style={{ flexShrink: 0, background: BADGE_INFO[label as keyof typeof BADGE_INFO].color, color: BADGE_INFO[label as keyof typeof BADGE_INFO].textColor, padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.85rem' }}>
+                          <LabelIcon kind={label as 'safe'|'even_trade'|'loses_material'|'unclear'} size={14} />
+                          <span>{mInfo.move.to}</span> <span>&middot;</span> <span>{BADGE_INFO[label as keyof typeof BADGE_INFO].text}</span>
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--text-2)', lineHeight: 1.4, paddingTop: '2px' }}>
+                          {explanation.primary}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -113,7 +114,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
             <h2 style={{ fontSize: '1.25rem', color: 'var(--text)', margin: 0 }}>Play</h2>
           </div>
-          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>Two players on one board, with hints for whoever is to move. Playing the computer is coming soon.</p>
+          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>Play chess against a friend on one device. See material consequences as you play.</p>
         </a>
         <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
@@ -124,40 +125,8 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
         </div>
       </section>
 
-      {/* Four Labels */}
-      <section>
-        <h2 style={{ fontSize: '2rem', marginBottom: '8px' }}>Four labels, always with a reason.</h2>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Labels describe immediate material and tactics only. "Safe" never means "best move".</p>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
-          {Object.entries(BADGE_INFO).map(([key, info]) => (
-            <div key={key} style={{ background: 'var(--bg-sunken)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: info.color, color: info.textColor, padding: '6px 12px', borderRadius: '4px', fontWeight: 600, marginBottom: '12px' }}>
-                <LabelIcon kind={key as 'safe'|'even_trade'|'loses_material'|'unclear'} />
-                {info.text}
-              </div>
-              <p style={{ color: 'var(--text-2)', margin: 0, fontSize: '0.9rem', lineHeight: 1.5 }}>
-                {info.meaning}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Drills Strip */}
-      <section style={{ padding: '32px', border: '2px dashed var(--border-strong)', borderRadius: '8px', display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-sunken)' }}>
-        <div>
-          <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem' }}>New to chess tactics?</h2>
-          <p style={{ margin: 0, color: 'var(--text-muted)' }}>Ten short beginner drills — optional, skip any time.</p>
-        </div>
-        <button 
-          onClick={() => onNavigate('training')}
-          style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '12px 24px', borderRadius: '6px', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-        >
-          Try beginner drills
-        </button>
-      </section>
       
+
     </div>
   );
 };

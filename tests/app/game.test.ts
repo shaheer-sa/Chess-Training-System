@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseSquare, Role } from 'chessops';
-import { newGame, playMove, undo, outcome, legalDestinations, GameState } from '../../src/app/play/game.js';
+import { newGame, playMove, undo, outcome, legalDestinations, GameState, capturedPieces, materialBalance, serializeGame, deserializeGame } from '../../src/app/play/game.js';
 
 type Step = [from: string, to: string, promotion?: Role];
 
@@ -45,7 +45,7 @@ describe('game.ts', () => {
       check: g => expect(outcome(g)).toEqual({ reason: 'insufficient material' }) },
   ];
 
-  it.each(cases)('$name', ({ fen, steps, check }) => check(play(fen, steps)));
+  for (const c of cases) it(c.name, () => c.check(play(c.fen, c.steps)));
 
   it('castling is offered on the king target square, not the rook square', () => {
     const dests = legalDestinations(newGame('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1'), sq('e1'));
@@ -72,5 +72,52 @@ describe('game.ts', () => {
     const g = play(undefined, [['f2', 'f3'], ['e7', 'e5'], ['g2', 'g4'], ['d8', 'h4']]);
     expect(playMove(g, sq('a2'), sq('a3'))).toBeNull();
     expect(legalDestinations(g, sq('a2'))).toEqual([]);
+  });
+
+  describe('capturedPieces', () => {
+    it('tracks normal capture', () => {
+      const g = play('4k3/8/8/8/3n4/4P3/8/4K3 w - - 0 1', [['e3', 'd4']]);
+      expect(capturedPieces(g)).toEqual({ white: ['knight'], black: [] });
+    });
+
+    it('tracks en passant capture', () => {
+      const g = play('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1', [['e5', 'd6']]);
+      expect(capturedPieces(g)).toEqual({ white: ['pawn'], black: [] });
+    });
+
+    it('capturing a promoted piece counts as a pawn', () => {
+      const g = play('4k3/P7/8/8/8/8/r7/4K3 w - - 0 1', [['a7', 'a8', 'queen'], ['a2', 'a8']]);
+      // white plays a8=Q
+      // black plays Rxa8 capturing the promoted queen -> counts as a pawn!
+      expect(capturedPieces(g)).toEqual({ white: [], black: ['pawn'] });
+    });
+  });
+
+  describe('materialBalance', () => {
+    it('returns material balance', () => {
+      expect(materialBalance(newGame())).toBe(0);
+      const g = play('rnbqkbnr/pppp1ppp/8/8/4p3/5N2/PPPPPPPP/RNBQKB1R w KQkq - 0 1', [['f3', 'e5']]); // white knight moves
+      expect(materialBalance(g)).toBe(0);
+      // Let's create an imbalance
+      const g2 = play('rnbqkbnr/pppp1ppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 0 1', []);
+      expect(materialBalance(g2)).toBe(1); // black is missing a pawn (on e5)
+    });
+  });
+
+  describe('serializeGame / deserializeGame', () => {
+    it('round-trips correctly', () => {
+      const g = play(undefined, [['e2', 'e4'], ['e7', 'e5']]);
+      const data = serializeGame(g);
+      const g2 = deserializeGame(data);
+      expect(g2?.currentFen).toBe(g.currentFen);
+      expect(g2?.moves).toEqual(g.moves);
+    });
+
+    it('rejects corrupt data', () => {
+      expect(deserializeGame('not json')).toBeNull();
+      expect(deserializeGame(JSON.stringify({ startFen: 123, moves: [] }))).toBeNull();
+      expect(deserializeGame(JSON.stringify({ startFen: 'invalid fen', moves: [] }))).toBeNull();
+      expect(deserializeGame(JSON.stringify({ startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', moves: ['e2e5'] }))).toBeNull(); // illegal move
+    });
   });
 });

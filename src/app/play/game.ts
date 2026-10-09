@@ -122,3 +122,73 @@ export const outcome = (game: GameState): Outcome | null => {
   if (game.history.filter(k => k === current).length >= 3) return { reason: 'threefold repetition' };
   return null;
 };
+
+export const capturedPieces = (game: GameState): { white: Role[], black: Role[] } => {
+  const caps = { white: [] as Role[], black: [] as Role[] };
+  const pos = toPosition(game.startFen);
+  const promoted = new Set<number>();
+  for (const m of game.moves) {
+    const from = parseSquare(m.uci.slice(0, 2));
+    const to = parseSquare(m.uci.slice(2, 4));
+    if (from === undefined || to === undefined) continue;
+    
+    let capturedRole: Role | undefined = pos.board.get(to)?.role;
+    if (pos.board.get(from)?.role === 'pawn' && pos.board.get(to) === undefined && from % 8 !== to % 8) {
+      capturedRole = 'pawn';
+    }
+    
+    if (capturedRole) {
+      if (promoted.has(to) || pos.board.promoted.has(to)) capturedRole = 'pawn';
+      if (pos.turn === 'white') caps.white.push(capturedRole);
+      else caps.black.push(capturedRole);
+    }
+    
+    promoted.delete(to);
+    if (promoted.has(from)) {
+      promoted.delete(from);
+      promoted.add(to);
+    }
+    if (m.uci.length > 4) promoted.add(to);
+    
+    const move = toChessopsMove(pos, from, to, m.uci.length > 4 ? PROMO_ROLE[m.uci[4]] : undefined);
+    pos.play(move);
+  }
+  return caps;
+};
+
+export const materialBalance = (game: GameState): number => {
+  const pos = toPosition(game.currentFen);
+  const values: Record<Role, number> = { pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 };
+  let bal = 0;
+  for (const sq of pos.board.white) bal += values[pos.board.get(sq)!.role];
+  for (const sq of pos.board.black) bal -= values[pos.board.get(sq)!.role];
+  return bal;
+};
+
+export const serializeGame = (game: GameState): string => {
+  return JSON.stringify({
+    startFen: game.startFen,
+    moves: game.moves.map(m => m.uci)
+  });
+};
+
+export const deserializeGame = (data: string): GameState | null => {
+  try {
+    const parsed = JSON.parse(data);
+    if (typeof parsed.startFen !== 'string' || !Array.isArray(parsed.moves)) return null;
+    let g = newGame(parsed.startFen);
+    for (const uci of parsed.moves) {
+      if (typeof uci !== 'string') return null;
+      const from = parseSquare(uci.slice(0, 2));
+      const to = parseSquare(uci.slice(2, 4));
+      if (from === undefined || to === undefined) return null;
+      const next = playMove(g, from, to, uci.length > 4 ? PROMO_ROLE[uci[4]] : undefined);
+      if (!next) return null;
+      g = next;
+    }
+    return g;
+  } catch {
+    return null;
+  }
+};
+

@@ -3,16 +3,20 @@ import { EngineClient } from '../engine/EngineClient.js';
 import { MoveClassification, Square, Role } from '../../engine/types.js';
 import { Chess, fen as fenOps } from 'chessops';
 import { Board } from '../components/Board.js';
+import { Piece } from '../components/Piece.js';
 import { explain } from '../explain/explain.js';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { LabelIcon } from '../components/LabelIcon.js';
-import { GameState, newGame, legalDestinations, playMove, undo, outcome, previewSan, isPromotionMove } from '../play/game.js';
+import { GameState, newGame, legalDestinations, playMove, undo, outcome, previewSan, isPromotionMove, capturedPieces, materialBalance } from '../play/game.js';
 
 
 interface PlayScreenProps {
   engineClient: EngineClient;
   initialFen?: string;
   onNavigate?: (screen: 'home' | 'help' | 'analysis', initialFen?: string) => void;
+  game: GameState;
+  hintsOn: boolean;
+  onGameStateChange: (g: GameState, hintsOn: boolean) => void;
 }
 
 import { parseSquare } from 'chessops';
@@ -33,9 +37,7 @@ const formatSquare = (index: number) => {
   return `${file}${rank}` as Square;
 };
 
-export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen, onNavigate }) => {
-  const [game, setGame] = useState<GameState>(() => newGame(initialFen));
-  const [hintsOn, setHintsOn] = useState(true);
+export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate, game, hintsOn, onGameStateChange }) => {
   const [flipped, setFlipped] = useState(false);
   
   const [selectedSquare, setSelectedSquare] = useState<number | null>(null);
@@ -47,6 +49,49 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen
   
   const requestToken = useRef(0);
   const promoDialogRef = useRef<HTMLDivElement>(null);
+
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [longPressActive, setLongPressActive] = useState(false);
+  const ignoreClickRef = useRef(false);
+
+  const handlePointerDown = (index: number) => {
+    if (selectedSquare !== null && hintsOn && legalDestinations(game, selectedSquare).includes(index)) {
+      longPressTimer.current = setTimeout(() => {
+        setLongPressActive(true);
+        setPreviewSquare(index);
+        ignoreClickRef.current = true;
+      }, 450);
+    }
+  };
+
+  const handlePointerUp = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    if (longPressActive) {
+      setLongPressActive(false);
+      setPreviewSquare(null);
+      // ignoreClickRef is reset in onClick
+    }
+  };
+
+  const handlePointerCancel = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    if (longPressActive) {
+      setLongPressActive(false);
+      setPreviewSquare(null);
+    }
+  };
+
+  const handleMouseEnter = (index: number) => {
+    if (selectedSquare !== null && hintsOn && legalDestinations(game, selectedSquare).includes(index)) {
+      setPreviewSquare(index);
+    }
+  };
+
+  const handleMouseLeave = (index: number) => {
+    if (previewSquare === index) {
+      setPreviewSquare(null);
+    }
+  };
 
   const pos = Chess.fromSetup(fenOps.parseFen(game.currentFen).unwrap()).unwrap();
   const gameOutcome = outcome(game);
@@ -152,7 +197,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen
       const moveIndex = newGameSt.moves.length - 1;
       const fenBefore = game.currentFen;
       
-      setGame(newGameSt);
+      onGameStateChange(newGameSt, hintsOn);
       resetSelection();
       setPromotionMove(null);
       
@@ -182,7 +227,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen
       return next;
     });
     setPromotionMove(null);
-    setGame(nextGame);
+    onGameStateChange(nextGame, hintsOn);
     resetSelection();
   };
 
@@ -190,11 +235,45 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen
     if (game.moves.length > 0 && !gameOutcome) {
       if (!window.confirm("Start a new game? The current game will be lost.")) return;
     }
-    setGame(newGame());
+    onGameStateChange(newGame(), hintsOn);
     setMoveListInfo({});
     moveTokens.current = {};
     resetSelection();
     setFlipped(false);
+  };
+
+
+  const caps = capturedPieces(game);
+  const matBal = materialBalance(game);
+  
+  const renderCaptured = (color: 'white' | 'black') => {
+    const pieces = caps[color];
+    const order: Record<Role, number> = { queen: 1, rook: 2, bishop: 3, knight: 4, pawn: 5, king: 6 };
+    pieces.sort((a, b) => order[a] - order[b]);
+    
+    // count occurrences for aria-label
+    const counts: Record<string, number> = {};
+    for (const p of pieces) counts[p] = (counts[p] || 0) + 1;
+    const labels = Object.entries(counts).map(([p, c]) => `${c} ${p}s`).join(', ');
+    const ariaLabel = pieces.length > 0 ? `Captured: ${labels}` : '';
+    
+    let isAhead = false;
+    let amtAhead = 0;
+    if (color === 'white' && matBal > 0) { isAhead = true; amtAhead = matBal; }
+    if (color === 'black' && matBal < 0) { isAhead = true; amtAhead = -matBal; }
+
+    if (pieces.length === 0 && !isAhead) return null;
+
+    return (
+      <div aria-label={ariaLabel} style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+        {pieces.map((p, i) => (
+          <div key={i} style={{ width: '16px', height: '16px' }} aria-hidden="true">
+            {(() => { const tc = color === 'white' ? 'b' : 'w'; const tt = p === 'knight' ? 'N' : p[0].toUpperCase(); return <Piece color={tc as 'w'|'b'} type={tt as 'P'|'N'|'B'|'R'|'Q'|'K'} />; })()}
+          </div>
+        ))}
+        {isAhead && <span style={{ marginLeft: '6px', fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>+{amtAhead}</span>}
+      </div>
+    );
   };
 
   // Status line logic
@@ -325,7 +404,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', minHeight: '44px' }}>
-              <input type="checkbox" checked={hintsOn} onChange={(e) => { setHintsOn(e.target.checked); resetSelection(); }} />
+              <input type="checkbox" checked={hintsOn} onChange={(e) => { onGameStateChange(game, e.target.checked); resetSelection(); }} />
               Show hints
             </label>
             <button onClick={handleUndo} disabled={game.moves.length === 0} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: game.moves.length === 0 ? 'var(--text-muted)' : 'var(--text)', cursor: game.moves.length === 0 ? 'not-allowed' : 'pointer' }}>Undo</button>
@@ -341,6 +420,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen
             {/* Player strip (opponent) */}
             <div style={{ background: 'var(--panel)', padding: '12px 16px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', border: '1px solid var(--border)', borderBottom: 'none', display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ fontWeight: 'bold' }}>{flipped ? 'White' : 'Black'}</span>
+              {renderCaptured(flipped ? 'white' : 'black')}
               {pos.turn === (flipped ? 'white' : 'black') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
             </div>
             
@@ -359,6 +439,11 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen
                 lastMove={lastMoveObj}
                 checkSquare={checkSquare}
                 legalDestinations={!hintsOn && selectedSquare !== null ? legalDestinations(game, selectedSquare) : undefined}
+                onSquarePointerDown={handlePointerDown}
+                onSquarePointerUp={handlePointerUp}
+                onSquarePointerCancel={handlePointerCancel}
+                onSquareMouseEnter={handleMouseEnter}
+                onSquareMouseLeave={handleMouseLeave}
               />
               
               {promotionMove && (
@@ -381,6 +466,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, initialFen
             {/* Player strip (self) */}
             <div style={{ background: 'var(--panel)', padding: '12px 16px', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', border: '1px solid var(--border)', borderTop: 'none', display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ fontWeight: 'bold' }}>{flipped ? 'Black' : 'White'}</span>
+              {renderCaptured(flipped ? 'black' : 'white')}
               {pos.turn === (flipped ? 'black' : 'white') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
             </div>
             

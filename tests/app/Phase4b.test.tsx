@@ -21,13 +21,18 @@ function createMockEngine(): EngineClient {
     };
   });
   return {
-    classifyMovesFrom: vi.fn().mockResolvedValue({ ok: true, value: [{ move: { from: 'e2', to: 'e4' }, label: 'safe', netMaterial: 0, reasons: ['NOT_ATTACKED'], score: 0, exchange: { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', fenAfter: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1', mover: { color: 'white', role: 'pawn', from: 'e2', to: 'e4' }, bestLine: [], captureOptions: [], materialFromMove: 0, see: 0 } }] }),
+    classifyMovesFrom: vi.fn().mockResolvedValue({ ok: true, value: [
+      { move: { from: 'e2', to: 'e4' }, label: 'safe', netMaterial: 0, reasons: [{ code: 'NOT_ATTACKED', squares: [] }], score: 0, exchange: { fenBefore: '', fenAfter: '', mover: { color: 'white', role: 'pawn', from: 'e2', to: 'e4' }, bestLine: [], captureOptions: [], materialFromMove: 0, see: 0 } },
+      { move: { from: 'e2', to: 'e5' }, label: 'even_trade', netMaterial: 0, reasons: [{ code: 'EVEN_EXCHANGE', squares: [] }], score: 0, exchange: { fenBefore: '', fenAfter: '', mover: { color: 'white', role: 'pawn', from: 'e2', to: 'e5' }, bestLine: [], captureOptions: [], materialFromMove: 0, see: 0 } },
+      { move: { from: 'e2', to: 'e6' }, label: 'loses_material', netMaterial: -1, reasons: [{ code: 'UNDEFENDED_PIECE_LOST', squares: [] }], score: 0, exchange: { fenBefore: '', fenAfter: '', mover: { color: 'white', role: 'pawn', from: 'e2', to: 'e6' }, bestLine: [], captureOptions: [], materialFromMove: 0, see: 0 } },
+      { move: { from: 'e2', to: 'e7' }, label: 'unclear', netMaterial: 0, reasons: [{ code: 'CAUSES_STALEMATE', squares: [] }], score: 0, exchange: { fenBefore: '', fenAfter: '', mover: { color: 'white', role: 'pawn', from: 'e2', to: 'e7' }, bestLine: [], captureOptions: [], materialFromMove: 0, see: 0 } }
+    ] }),
     classifyMove
   } as unknown as EngineClient;
 }
 
 describe('Phase 4B — Specific Acceptance Tests', () => {
-  it('Logo navigation to Home from Analysis and Beginner drills', async () => {
+  it('Logo navigation to Home from Analysis', async () => {
     const engine = createMockEngine();
     render(<App engineClient={engine} />);
     
@@ -38,17 +43,9 @@ describe('Phase 4B — Specific Acceptance Tests', () => {
     // Click logo
     fireEvent.click(screen.getByLabelText('Rookvex — home'));
     await screen.findByText('PLAY. ANALYZE. IMPROVE.');
-    
-    // Go to Training
-    fireEvent.click(screen.getAllByText('Beginner drills')[0]);
-    await screen.findByText(/BEGINNER DRILLS/);
-    
-    // Click logo
-    fireEvent.click(screen.getByLabelText('Rookvex — home'));
-    await screen.findByText('PLAY. ANALYZE. IMPROVE.');
   });
 
-  it('Home, selected Analysis, and drill reveal contain no old text badge characters', async () => {
+  it('Home, selected Analysis, contain no old text badge characters', async () => {
     const engine = createMockEngine();
     const { container } = render(<App engineClient={engine} />);
     
@@ -71,23 +68,6 @@ describe('Phase 4B — Specific Acceptance Tests', () => {
     await waitFor(() => {
       expect(container.innerHTML).toContain('Safe'); // from our live announcement
     });
-    
-    html = container.innerHTML;
-    expect(html).not.toContain('✓');
-    expect(html).not.toContain('⇄');
-    expect(html).not.toContain('⚠');
-    
-    // Check Drill Reveal
-    fireEvent.click(screen.getByLabelText('Rookvex — home'));
-    await screen.findByText('PLAY. ANALYZE. IMPROVE.');
-    
-    fireEvent.click(screen.getAllByText('Beginner drills')[0]);
-    await screen.findByRole('grid');
-    
-    fireEvent.click(screen.getByText('Safe'));
-    fireEvent.click(screen.getByText('Submit'));
-    
-    await screen.findByText('Correct');
     
     html = container.innerHTML;
     expect(html).not.toContain('✓');

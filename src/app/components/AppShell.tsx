@@ -38,7 +38,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
   const navLinks: { label: string; screen: ScreenName }[] = [
     { label: 'Analyze', screen: 'analysis' },
     { label: 'Play', screen: 'play' },
-    { label: 'Beginner drills', screen: 'training' },
     { label: 'How labels work', screen: 'help' },
   ];
 
