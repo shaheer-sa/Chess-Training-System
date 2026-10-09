@@ -3,7 +3,7 @@
 # Both lists are always read from origin/main, so a branch cannot weaken them.
 set -euo pipefail
 # Supervisor branches (supervisor/*) may change protected paths; tests, lint, build and smoke still run on them.
-# Implementation agents must never use this prefix.
+# Only maintainer branches may use this prefix.
 branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}"
 case "$branch" in
   supervisor/*) echo "Supervisor branch ($branch): protected-path check skipped."; exit 0 ;;

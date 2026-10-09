@@ -1,4 +1,4 @@
-// Supervisor-owned smoke check (not an Antigravity test).
+// CI smoke check.
 // Serves dist/, visits Home and every main-nav page at 360px and 1280px,
 // fails on console errors, page errors or horizontal scroll, and saves full-page screenshots.
 import { chromium } from 'playwright';
