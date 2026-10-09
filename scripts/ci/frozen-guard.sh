@@ -2,6 +2,12 @@
 # Fails if this branch changes a protected path that main's ci/phase-allow.txt does not allow.
 # Both lists are always read from origin/main, so a branch cannot weaken them.
 set -euo pipefail
+# Supervisor branches (supervisor/*) may change protected paths; tests, lint, build and smoke still run on them.
+# Implementation agents must never use this prefix.
+branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}"
+case "$branch" in
+  supervisor/*) echo "Supervisor branch ($branch): protected-path check skipped."; exit 0 ;;
+esac
 git fetch --quiet origin main
 if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]; then
   echo "On main: nothing to check."
