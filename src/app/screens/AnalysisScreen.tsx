@@ -9,6 +9,8 @@ import { ExchangeControls } from '../shared/ExchangeControls.js';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { explain } from '../explain/explain.js';
 
+import { Spinner } from '../components/Spinner.js';
+
 interface AnalysisScreenProps {
   engineClient: EngineClient;
   initialFen?: string;

@@ -8,7 +8,6 @@ import { explain } from '../explain/explain.js';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { LabelIcon } from '../components/LabelIcon.js';
 import { Spinner } from '../components/Spinner.js';
-import { Spinner } from '../components/Spinner.js';
 import { GameState, newGame, legalDestinations, playMove, undo, outcome, previewSan, isPromotionMove, capturedPieces, materialBalance, castlingRookMove } from '../play/game.js';
 
 
