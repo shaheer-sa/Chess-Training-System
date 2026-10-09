@@ -79,12 +79,7 @@ input:focus-visible,
   border: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    transition: none !important;
-    animation: none !important;
-  }
-}
+
 
 @media (max-width: 767px) {
   .analysis-toolbar,
@@ -146,7 +141,7 @@ input:focus-visible,
 /* ---- Interaction states (5B.3) ---- */
 .rv-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 16px;border-radius:6px;border:1px solid var(--border);background:var(--bg-sunken);color:var(--text);font:inherit;font-weight:500;cursor:pointer;transition:background-color 120ms ease,border-color 120ms ease,color 120ms ease,transform 80ms ease}
 .rv-btn:hover:not(:disabled){background:var(--panel-hover);border-color:var(--border-strong)}
-.rv-btn:active:not(:disabled){transform:translateY(1px)}
+.rv-btn:active:not(:disabled){transform:scale(.97)}
 .rv-btn:disabled,.rv-btn[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
 .rv-btn--primary{background:var(--accent-btn);border-color:var(--accent-btn);color:#fff;font-weight:600}
 .rv-btn--primary:hover:not(:disabled){background:#A8441A;border-color:#A8441A}
@@ -165,3 +160,42 @@ input:focus-visible,
 .rv-tray img{width:20px;height:20px}
 .rv-seg--levels{display:grid;grid-template-columns:repeat(6,auto)}
 @media (max-width:480px){.rv-seg--levels{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* ---- Motion and feedback (5B.3 design pass). Every motion reports a state change (HCI §53). ---- */
+@keyframes rv-pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes rv-rise{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+@keyframes rv-pulse{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes rv-flash{from{background-color:rgba(212,92,28,.55)}to{background-color:var(--bg-sunken)}}
+@keyframes rv-progress{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+@keyframes rv-dot{0%,80%,100%{opacity:.2}40%{opacity:1}}
+@keyframes rv-glow{0%,100%{box-shadow:inset 0 0 0 1px rgba(212,92,28,0)}50%{box-shadow:inset 0 0 0 2px rgba(212,92,28,.9)}}
+.rv-pop{animation:rv-pop 170ms cubic-bezier(.2,.9,.3,1.25) both}
+.rv-rise{animation:rv-rise 200ms ease-out both}
+/* Board: your movable pieces lift on hover, target squares darken on hover, the selected square is filled. */
+.rv-sq--movable{cursor:grab}
+.rv-sq--movable:active{cursor:grabbing}
+.rv-piece{transition:transform 120ms ease,filter 120ms ease}
+.rv-sq--movable:hover .rv-piece{transform:translateY(-3%) scale(1.07);filter:drop-shadow(0 5px 4px rgba(0,0,0,.35))}
+.rv-sq--target::after{content:'';position:absolute;inset:0;background-color:rgba(21,23,27,0);transition:background-color 100ms ease;pointer-events:none;z-index:3}
+.rv-sq--target:hover::after{background-color:rgba(21,23,27,.2)}
+.rv-sq-selected{position:absolute;inset:0;background:rgba(212,92,28,.42);pointer-events:none;animation:rv-fade-in 120ms ease-out}
+.rv-check-glow{animation:rv-pulse 700ms ease-in-out 3}
+/* Engine check / computer thinking: a progress bar along the top of the board. */
+.rv-progress{position:absolute;left:0;right:0;top:0;height:4px;overflow:hidden;z-index:20;pointer-events:none;background:rgba(212,92,28,.2);border-radius:4px 4px 0 0}
+.rv-progress::before{content:'';position:absolute;top:0;bottom:0;left:0;width:40%;background:var(--accent);animation:rv-progress 1s ease-in-out infinite}
+.rv-dots>span{animation:rv-dot 1.2s infinite both}
+.rv-dots>span:nth-child(2){animation-delay:.2s}
+.rv-dots>span:nth-child(3){animation-delay:.4s}
+.rv-thinking{animation:rv-glow 1.6s ease-in-out infinite}
+.rv-chip-new{animation:rv-flash 1s ease-out}
+.rv-hint{cursor:pointer;transition:background-color 120ms ease,border-color 120ms ease}
+.rv-hint:hover{background:var(--panel-hover)}
+/* Reduced motion: no movement, but loading indicators and colour/opacity feedback stay (they carry state). */
+@media (prefers-reduced-motion: reduce){
+  .rv-pop,.rv-rise,.rv-fade-in-screen,.rv-fade-in-panel{animation:rv-fade-in 120ms ease-out both!important}
+  .rv-piece-wrap{transition:none!important}
+  .rv-sq--movable:hover .rv-piece,.rv-card:hover,.rv-btn:active:not(:disabled){transform:none!important}
+  .rv-card,.rv-btn,.rv-piece{transition-property:background-color,border-color,color,box-shadow,filter!important}
+  .rv-progress::before{animation:rv-pulse 1.2s ease-in-out infinite;width:100%}
+  .rv-spinner{animation-duration:1.6s}
+}

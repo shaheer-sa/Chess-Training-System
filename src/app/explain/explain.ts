@@ -47,6 +47,12 @@ const getRole = (fen: string, sq: string): string => {
   return piece ? piece.role : 'piece';
 };
 
+/** The piece captured on `sq` (an empty square means en passant: a pawn). */
+const capturedRole = (fenBefore: string, sq: string): string => {
+  const r = getRole(fenBefore, sq);
+  return r === 'piece' ? 'pawn' : r;
+};
+
 const formatTemplate = (code: ReasonCode, c: MoveClassification): string => {
   const reason = c.reasons.find(r => r.code === code);
   if (!reason) return '';
@@ -71,13 +77,8 @@ const formatTemplate = (code: ReasonCode, c: MoveClassification): string => {
 
   switch(code) {
     case 'DELIVERS_MATE': return "This is checkmate.";
-    case 'ALLOWS_MATE_IN_ONE': {
-      const move = reason.moves?.[0];
-      const from = move?.from || '';
-      const to = move?.to || '';
-      const oppRole = getRole(fenAfter, from);
-      return `After this move your opponent can checkmate you: ${oppRole} ${from}→${to}.`;
-    }
+    // Never name the mating move, for either side: the player should see the threat themselves (HCI §51).
+    case 'ALLOWS_MATE_IN_ONE': return "After this move your opponent can checkmate you in one move. Can you see how?";
     case 'EXCHANGE_LINE_MATE': return "The capture sequence on this square ends with you getting checkmated.";
     case 'CAUSES_STALEMATE': return "This move leaves your opponent no legal moves — the game ends in a draw.";
     case 'EXCHANGE_LINE_MATES_OPPONENT': return "The capture sequence on this square ends with your opponent checkmated — calculate it yourself.";
@@ -92,7 +93,12 @@ const formatTemplate = (code: ReasonCode, c: MoveClassification): string => {
     case 'DEFENDER_MOVED': return `This piece was protecting your ${role} on ${sq} — now it can be taken.`;
     case 'LINE_OPENED': return `Moving this piece opens a line: your ${role} on ${sq} can now be taken.`;
     case 'WINS_MATERIAL': return `You win material here (+${nStr}).`;
-    case 'EVEN_EXCHANGE': return "Your opponent can take, and you take back the same value.";
+    case 'EVEN_EXCHANGE': {
+      // A capture: you take first and your opponent takes back. Never suggest that you recapture (that may lose more).
+      const ex = c.exchange;
+      if (ex && ex.materialFromMove > 0) return `You take a ${capturedRole(ex.fenBefore, dest)}, and your opponent can take back the same value.`;
+      return "Your opponent can take, and you take back the same value.";
+    }
     case 'OPPONENT_CAPTURE_LOSES': return "Your opponent can take, but they would lose material doing it.";
     case 'ATTACKER_CANNOT_CAPTURE': return `The ${role} on ${sq} attacks this square but can't legally take right now.`;
     case 'NOT_ATTACKED': return "Nothing attacks this square.";

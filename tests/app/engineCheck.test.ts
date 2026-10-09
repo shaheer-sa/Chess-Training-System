@@ -35,6 +35,11 @@ describe('engineVerdict (pure)', () => {
     ['gain is real but not near the best move → no tactic', 'loses_material', -300, 'x', { a2a3: { cp: 10 }, b2b3: { cp: 20 }, y: { cp: 900 }, x: { cp: 400 } }, 'none'],
     ['allowing mate is always danger for safe/even trade', 'safe', 0, 'x', { a2a3: { cp: 10 }, b2b3: { cp: 20 }, x: { mate: -2 } }, 'danger'],
     ['mate for the mover ≤5 available → nothing is added anywhere', 'safe', 0, 'g2g4', { a2a3: { cp: 10 }, g2g4: { cp: -400 }, m: { mate: 3 } }, 'none'],
+    // Opponent has a strong threat: most moves lose (low median). A move ≥2 pawns below the material and the best move
+    // still loses material, e.g. a recapture that forks king and queen.
+    ['under a threat, an even trade that loses 4.5 pawns while the best move loses 1 → danger', 'even_trade', 0, 'x', { a: { cp: -700 }, b: { cp: -750 }, c: { cp: -650 }, d: { cp: -800 }, best: { cp: -100 }, x: { cp: -450 } }, 'danger'],
+    ['under a threat, the best defence itself is never flagged', 'safe', 0, 'best', { a: { cp: -700 }, b: { cp: -750 }, c: { cp: -650 }, d: { cp: -800 }, best: { cp: -100 }, x: { cp: -450 } }, 'none'],
+    ['missing a winning tactic is not a loss', 'safe', 0, 'x', { a: { cp: 0 }, b: { cp: 10 }, c: { cp: -10 }, t: { cp: 400 }, x: { cp: -20 } }, 'none'],
   ];
   it.each(rows)('%s', (_name, label, net, uci, scores, expected) => {
     const s = scores ?? quiet;
@@ -84,7 +89,7 @@ describe('EngineCheck (fake worker)', () => {
     const ec = new EngineCheck(factory);
     const p = ec.check(START, 20);
     workers[0].ready(); await flush();
-    expect(workers[0].posted.slice(-3)).toEqual(['setoption name MultiPV value 20', `position fen ${START}`, 'go depth 10']);
+    expect(workers[0].posted.slice(-3)).toEqual(['setoption name MultiPV value 20', `position fen ${START}`, 'go depth 11']);
     workers[0].emit('info depth 9 multipv 1 score cp 10 pv e2e4');
     workers[0].emit('info depth 10 multipv 1 score cp 40 pv e2e4');
     workers[0].emit('info depth 10 multipv 1 score cp 90 upperbound pv e2e4');

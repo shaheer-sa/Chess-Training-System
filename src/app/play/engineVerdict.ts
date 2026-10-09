@@ -5,7 +5,8 @@
  * Square safety only looks at the landing square. The engine check looks at the whole position, once per turn,
  * and can add exactly two things on top of the square-safety label (it never removes information):
  *  - "danger": the square check says Safe / Even trade, but the engine sees the mover losing ≥ 2 pawns more than
- *    the square check predicts (discovered attacks, king exposure, mate threats…).
+ *    the square check predicts (discovered attacks, king exposure, mate threats, a recapture that forks, a threat
+ *    left unanswered…), and ≥ 2 pawns more than the best move.
  *  - "tactic": the square check says Even trade / Loses material / Unclear, but the move is one of the strongest
  *    and really gains ≥ 2 pawns that the square check cannot see.
  * While the mover has a forced checkmate in ≤ 5, nothing is added at all (the mate banner says it instead), so the
@@ -83,9 +84,13 @@ export const engineVerdict = (
   const v = scoreValue(score);
   const predicted = ctx.baseline + base.netMaterial;
   const mateAgainst = 'mate' in score && score.mate < 0;
+  // What the mover keeps with good play: the material on the board (capped by the best move, so a winning tactic
+  // they miss is not a "loss"), or the median if the position is better than that. When the opponent has a strong
+  // threat, most moves lose and the median is low; the material reference still catches moves that lose to it.
+  const keeps = Math.max(ctx.baseline, Math.min(ctx.best, ctx.material)) + base.netMaterial;
 
   if (base.label === 'safe' || base.label === 'even_trade') {
-    if (mateAgainst || (v <= predicted - THRESHOLD_CP && v <= ctx.best - THRESHOLD_CP)) {
+    if (mateAgainst || (v <= keeps - THRESHOLD_CP && v <= ctx.best - THRESHOLD_CP)) {
       return { kind: 'danger', mateAgainst };
     }
   }

@@ -14,7 +14,7 @@ export interface EngineCheckClient {
   dispose(): void;
 }
 
-export const CHECK_DEPTH = 10;
+export const CHECK_DEPTH = 11;
 const CHECK_TIMEOUT_MS = 15000;
 const STARTUP_TIMEOUT_MS = 15000;
 

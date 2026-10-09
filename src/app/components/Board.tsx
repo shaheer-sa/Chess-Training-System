@@ -55,6 +55,11 @@ export const Board: React.FC<BoardProps> = ({
 }) => {
   
   const [hasFocus, setHasFocus] = React.useState(false);
+  // Uncontrolled screens (Play) still get working arrow-key focus; the focus ring shows for keyboard use only.
+  const [innerFocus, setInnerFocus] = React.useState(focusedSquare);
+  const focused = setFocusedSquare ? focusedSquare : innerFocus;
+  const setFocused = setFocusedSquare ?? setInnerFocus;
+  const [keyboardNav, setKeyboardNav] = React.useState(false);
   
   // Animation state
   const [animOffsets, setAnimOffsets] = React.useState<Record<number, { dx: number; dy: number }>>({});
@@ -221,7 +226,7 @@ export const Board: React.FC<BoardProps> = ({
       if (e.key === 'ArrowLeft') nextFile = flipped ? Math.min(7, currentFile + 1) : Math.max(0, currentFile - 1);
       if (e.key === 'ArrowRight') nextFile = flipped ? Math.max(0, currentFile - 1) : Math.min(7, currentFile + 1);
       const nextIndex = (nextRank << 3) | nextFile;
-      if (setFocusedSquare) setFocusedSquare(nextIndex);
+      setFocused(nextIndex);
       setTimeout(() => {
         const el = document.getElementById(`sq-${nextIndex}`);
         if (el) el.focus();
@@ -264,21 +269,27 @@ export const Board: React.FC<BoardProps> = ({
       if (dIndex !== -1) marker = `D${dIndex + 1}`;
     }
 
+    const isMovable = !readOnly && !!draggableSquares?.includes(index);
+    const isTarget = !readOnly && !isReplaying && (isDestination || !!legalDestinations?.includes(index));
+    const sqClass = ['rv-sq', isMovable ? 'rv-sq--movable' : '', isTarget ? 'rv-sq--target' : ''].filter(Boolean).join(' ');
+    const badgeDelay = moveInfo ? Math.min(moves.indexOf(moveInfo) * 25, 250) : 0;
+
     return (
       <div
         id={`sq-${index}`}
         key={index}
-        tabIndex={readOnly ? -1 : (index === focusedSquare ? 0 : -1)}
+        className={sqClass}
+        tabIndex={readOnly ? -1 : (index === focused ? 0 : -1)}
         role="gridcell"
         aria-label={ariaLabel}
         onKeyDown={(e) => handleKeyDown(e, index)}
         onClick={(e) => {
           if (suppressClickRef.current) { suppressClickRef.current = false; e.stopPropagation(); return; }
-          if (setFocusedSquare) setFocusedSquare(index);
+          setFocused(index);
           if (onSquareClick && !readOnly) onSquareClick(index);
         }}
         onFocus={() => {
-          if (setFocusedSquare) setFocusedSquare(index);
+          setFocused(index);
           if (onSquareMouseEnter) onSquareMouseEnter(index); // Focus triggers preview
         }}
         onBlur={() => {
@@ -299,7 +310,7 @@ export const Board: React.FC<BoardProps> = ({
           left: `${(flipped ? 7 - file : file) * 12.5}%`,
           top: `${(flipped ? rank : 7 - rank) * 12.5}%`,
           boxSizing: 'border-box',
-          boxShadow: (hasFocus && index === focusedSquare) ? 'inset 0 0 0 3px #ffffff, inset 0 0 0 6px var(--board-ink)' : (isSelected ? 'inset 0 0 0 4px var(--board-ink)' : 'none'),
+          boxShadow: (hasFocus && keyboardNav && index === focused) ? 'inset 0 0 0 3px #ffffff, inset 0 0 0 6px var(--board-ink)' : (isSelected ? 'inset 0 0 0 4px var(--board-ink)' : 'none'),
           border: (dragState?.isActive && dragState.hoverIndex === index) ? '3px solid var(--accent)' : (!isReplaying && isSelectedDest) ? '3px dashed var(--board-ink)' : isReplayLandingSquare ? '3px dashed var(--board-ink)' : 'none',
           display: 'flex',
           justifyContent: 'center',
@@ -311,32 +322,35 @@ export const Board: React.FC<BoardProps> = ({
         {isReplayLandingSquare && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'var(--board-last)', pointerEvents: 'none' }} />
         )}
+        {isSelected && <div className="rv-sq-selected" aria-hidden="true" />}
         {lastMove && (lastMove.from === index || lastMove.to === index) && (
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'var(--board-last)', pointerEvents: 'none' }} />
+          <div className="rv-fade-in-panel" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'var(--board-last)', pointerEvents: 'none' }} />
         )}
         
         {checkSquare === index && (
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(circle, rgba(212,92,28,0.65) 0%, rgba(212,92,28,0) 70%)', pointerEvents: 'none' }} />
+          <div className="rv-check-glow" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(circle, rgba(212,92,28,0.65) 0%, rgba(212,92,28,0) 70%)', pointerEvents: 'none' }} />
         )}
         {piece && (
-          <div style={{
+          <div className="rv-piece-wrap" style={{
             width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1,
             transform: animOffsets[index] ? `translate(${animOffsets[index].dx}%, ${animOffsets[index].dy}%)` : 'none',
             transition: transitioning[index] ? 'transform 180ms ease-out' : 'none',
             opacity: dragState?.isActive && dragState.startIndex === index ? 0.3 : 1
           }}>
-            <Piece 
-              color={piece.color === 'white' ? 'w' : 'b'} 
-              type={piece.role === 'pawn' ? 'P' : piece.role === 'knight' ? 'N' : piece.role === 'bishop' ? 'B' : piece.role === 'rook' ? 'R' : piece.role === 'queen' ? 'Q' : 'K'} 
-              style={{ width: '80%', height: '80%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-            />
+            <div className="rv-piece" style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <Piece 
+                color={piece.color === 'white' ? 'w' : 'b'} 
+                type={piece.role === 'pawn' ? 'P' : piece.role === 'knight' ? 'N' : piece.role === 'bishop' ? 'B' : piece.role === 'rook' ? 'R' : piece.role === 'queen' ? 'Q' : 'K'} 
+                style={{ width: '80%', height: '80%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+              />
+            </div>
           </div>
         )}
         {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && !piece && (
-          <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(21, 23, 27, 0.42)', pointerEvents: 'none', zIndex: 2 }} />
+          <div className="rv-pop" style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(21, 23, 27, 0.42)', pointerEvents: 'none', zIndex: 2 }} />
         )}
         {legalDestinations?.includes(index) && !isDestination && !piece && (
-          <div style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(21, 23, 27, 0.42)', pointerEvents: 'none', zIndex: 2 }} />
+          <div className="rv-pop" style={{ width: '20%', height: '20%', borderRadius: '50%', backgroundColor: 'rgba(21, 23, 27, 0.42)', pointerEvents: 'none', zIndex: 2 }} />
         )}
         {(rank === (flipped ? 7 : 0)) && (
           <div aria-hidden="true" className="mono" style={{ position: 'absolute', bottom: 2, right: 4, fontSize: '12px', fontWeight: 600, color: 'var(--board-coord)', zIndex: 0 }}>
@@ -349,13 +363,14 @@ export const Board: React.FC<BoardProps> = ({
           </div>
         )}
         {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && piece && (
-          <div style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid rgba(21, 23, 27, 0.42)', borderRadius: '50%', boxSizing: 'border-box', pointerEvents: 'none', zIndex: 2 }} />
+          <div className="rv-pop" style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid rgba(21, 23, 27, 0.42)', borderRadius: '50%', boxSizing: 'border-box', pointerEvents: 'none', zIndex: 2 }} />
         )}
         {legalDestinations?.includes(index) && !isDestination && piece && (
-          <div style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid rgba(21, 23, 27, 0.42)', borderRadius: '50%', boxSizing: 'border-box', pointerEvents: 'none', zIndex: 2 }} />
+          <div className="rv-pop" style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid rgba(21, 23, 27, 0.42)', borderRadius: '50%', boxSizing: 'border-box', pointerEvents: 'none', zIndex: 2 }} />
         )}
         {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && moveInfo && (
-          <div style={{
+          <div className="rv-pop" style={{
+            animationDelay: `${badgeDelay}ms`,
             position: 'absolute', top: '-4px', right: '-4px', backgroundColor: BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].color,
             color: BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].textColor, padding: '2px', borderRadius: '6px',
             border: '1.5px solid var(--board-ink)', zIndex: 10, display: 'flex', boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
@@ -393,7 +408,13 @@ export const Board: React.FC<BoardProps> = ({
       ref={boardRef}
       role="grid" 
       aria-label="Chess board" 
-      onFocus={() => setHasFocus(true)} 
+      onFocus={(e) => {
+        setHasFocus(true);
+        // Tabbing into the board shows the ring; a mouse click does not.
+        try { if (e.target.matches(':focus-visible')) setKeyboardNav(true); } catch { /* selector unsupported */ }
+      }}
+      onKeyDown={() => setKeyboardNav(true)}
+      onPointerDownCapture={() => setKeyboardNav(false)}
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHasFocus(false); }}
       onContextMenu={onSquarePointerDown ? (e) => e.preventDefault() : undefined}
       style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid var(--border-strong)', boxSizing: 'border-box', overflow: 'hidden', borderRadius: '4px', ...(onSquarePointerDown ? { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none', touchAction: 'manipulation' } : {}) }}>

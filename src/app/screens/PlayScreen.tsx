@@ -489,6 +489,10 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const caps = capturedPieces(game);
   const matBal = materialBalance(game);
   
+  /** The computer's strip glows while it thinks, so the waiting state is visible where the player looks. */
+  const thinkingStrip = (color: 'white' | 'black') =>
+    settings.mode === 'computer' && color !== settings.humanColor && computerThinking ? 'rv-thinking' : undefined;
+
   const renderStripLabel = (color: 'white' | 'black') => {
     const isComputer = settings.mode === 'computer' && color !== settings.humanColor;
     const name = settings.mode === 'two-player' ? (color === 'white' ? 'White' : 'Black') : isComputer ? `Computer · Level ${settings.level}` : 'You';
@@ -496,7 +500,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       <span style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
         {name}
         {isComputer && computerThinking && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}><Spinner /> Thinking…</span>
+          <span role="status" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', color: 'var(--text-2)', fontWeight: 'normal' }}><Spinner /> Thinking<span className="rv-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></span>
         )}
       </span>
     );
@@ -598,7 +602,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     const pending = pendingVerdicts[i] !== undefined;
     const info: DisplayMove | undefined = base && !pending ? toDisplay(base, fromPlayed(playedVerdicts[i]), false) : undefined;
     return (
-      <div key={`last-${i}`} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--panel)', borderRadius: '8px', border: '2px solid var(--accent)', padding: '16px' }}>
+      <div key={`last-${i}`} className="rv-rise" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--panel)', borderRadius: '8px', border: '2px solid var(--accent)', padding: '16px' }}>
         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Last move</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span className="mono" style={{ fontWeight: 'bold' }}>{Math.floor(i / 2) + 1}{i % 2 === 0 ? '.' : '...'} {game.moves[i].san}</span>
@@ -670,14 +674,19 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
         <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{pieceName} on {sqName} — where it can go</h3>
         {renderCheckNotices()}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
-          {dests.map(destIdx => {
+          {dests.map((destIdx, n) => {
             const mInfo = infoFor(destIdx);
             const isPreview = previewSquare === destIdx;
             const san = hintSan(previewSan(game, selectedSquare, destIdx) ?? formatSquare(destIdx), mateIn !== null);
             return (
               <div 
                 key={destIdx}
+                className="rv-hint rv-rise"
+                onMouseEnter={() => setPreviewSquare(destIdx)}
+                onMouseLeave={() => setPreviewSquare(p => (p === destIdx ? null : p))}
+                onClick={() => setPreviewSquare(destIdx)}
                 style={{
+                  animationDelay: `${Math.min(n * 30, 240)}ms`,
                   display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px',
                   border: isPreview ? '2px solid var(--accent)' : '1px solid var(--border-strong)',
                   borderRadius: '6px', color: 'var(--text)'
@@ -793,7 +802,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           
           <div className="play-board-col" style={{ flex: '1 1 400px', display: 'flex', flexDirection: 'column' }}>
             {mateIn !== null && (
-              <div role="status" className="rv-fade-in-panel" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', padding: '10px 14px', background: 'var(--panel)', border: '2px solid var(--accent)', borderRadius: '8px', color: 'var(--text)', fontWeight: 600 }}>
+              <div role="status" className="rv-rise" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', padding: '10px 14px', background: 'var(--panel)', border: '2px solid var(--accent)', borderRadius: '8px', color: 'var(--text)', fontWeight: 600 }}>
                 <LabelIcon kind="tactic" size={18} />
                 <span>
                   Engine check: {settings.mode === 'computer' ? 'you have' : `${pos.turn === 'white' ? 'White' : 'Black'} has`} a checkmate in {mateIn}. Can you find it?
@@ -801,7 +810,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               </div>
             )}
             {/* Player strip (opponent) */}
-            <div style={{ background: 'var(--panel)', padding: '12px 16px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', border: '1px solid var(--border)', borderBottom: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className={thinkingStrip(flipped ? 'white' : 'black')} style={{ background: 'var(--panel)', padding: '12px 16px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', border: '1px solid var(--border)', borderBottom: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 {renderStripLabel(flipped ? 'white' : 'black')}
                 {pos.turn === (flipped ? 'white' : 'black') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
@@ -810,6 +819,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
             </div>
             
             <div style={{ width: '100%', position: 'relative' }}>
+              {(checkPending || analyzing || computerThinking) && <div className="rv-progress" aria-hidden="true" />}
               <Board 
                 position={pos}
                 flipped={flipped}
@@ -855,7 +865,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
             </div>
             
             {/* Player strip (self) */}
-            <div style={{ background: 'var(--panel)', padding: '12px 16px', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', border: '1px solid var(--border)', borderTop: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className={thinkingStrip(flipped ? 'black' : 'white')} style={{ background: 'var(--panel)', padding: '12px 16px', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', border: '1px solid var(--border)', borderTop: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 {renderStripLabel(flipped ? 'black' : 'white')}
                 {pos.turn === (flipped ? 'black' : 'white') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
@@ -873,7 +883,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           
           <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {gameOutcome && (
-              <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--accent)', textAlign: 'center' }}>
+              <div className="rv-rise" style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--accent)', textAlign: 'center' }}>
                 <h2>Game Over</h2>
                 <p style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{statusText}</p>
                 <button className="rv-btn rv-btn--primary" onClick={handleNewGame}>New game</button>
@@ -896,7 +906,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                   const mInfo = listBase ? toDisplay(listBase, fromPlayed(playedVerdicts[i]), false) : undefined;
                   const badge = mInfo ? BADGE_INFO[mInfo.label] : null;
                   return (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-sunken)', padding: '4px 8px', borderRadius: '4px' }}>
+                    <div key={i} className={i === game.moves.length - 1 ? 'rv-chip-new' : undefined} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-sunken)', padding: '4px 8px', borderRadius: '4px' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{i % 2 === 0 ? `${i / 2 + 1}.` : ''}</span>
                       <span className="mono" style={{ fontWeight: 'bold' }}>{move.san}</span>
                       {mInfo && badge && (

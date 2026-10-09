@@ -35,10 +35,17 @@ describe('explain module', () => {
     expect(result.primary).toBe("Your opponent can take, and you take back the same value.");
   });
 
+  it('P3b: an even capture says you take first, never that you take back', async () => {
+    const c = await getClassification('6k1/pppqb2p/4p3/1N1pP3/1P4p1/P4r1r/2PBQ1K1/R4R2 w - - 0 21', 'f1', 'f3');
+    expect(c.label).toBe('even_trade');
+    expect(explain(c as unknown as MoveClassification).primary).toBe("You take a rook, and your opponent can take back the same value.");
+  });
+
   it('P4', async () => {
     const c = await getClassification('1r4k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1', 'a1', 'a7');
     const result = explain(c as unknown as MoveClassification);
-    expect(result.primary).toBe("After this move your opponent can checkmate you: rook b8→b1.");
+    expect(result.primary).toBe("After this move your opponent can checkmate you in one move. Can you see how?");
+    expect(result.primary).not.toMatch(/[a-h][1-8]/); // never names the mating move
   });
 
   it('P5', async () => {
@@ -145,7 +152,7 @@ describe('explain module', () => {
   it('X13 (EXCHANGE_LINE_MATE)', async () => {
     const c = await getClassification('4r2k/8/8/8/8/8/5PPP/R5K1 w - - 0 1', 'a1', 'e1');
     const result = explain(c as unknown as MoveClassification);
-    expect(result.primary).toBe("After this move your opponent can checkmate you: rook e8→e1.");
+    expect(result.primary).toBe("After this move your opponent can checkmate you in one move. Can you see how?");
     expect(result.details).toContain("The capture sequence on this square ends with you getting checkmated.");
     expect(result.details).toContain("Nothing protects your rook on e1 — it can be taken for free.");
   });
