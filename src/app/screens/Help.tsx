@@ -52,7 +52,23 @@ export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavi
               <div style={{ color: 'var(--text-muted)' }}>The position is too complex for simple material counting.</div>
             </div>
           </li>
+          <li style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span style={{ display: 'flex', backgroundColor: BADGE_INFO['tactic'].color, color: BADGE_INFO['tactic'].textColor, padding: '8px', borderRadius: '6px', border: '1px solid var(--border-strong)' }}>
+              <LabelIcon kind="tactic" size={24} />
+            </span>
+            <div>
+              <strong style={{ fontSize: '1.1rem', color: 'var(--text)' }}>Tactic</strong>
+              <div style={{ color: 'var(--text-muted)' }}>Strong only if you find the right follow-up — otherwise it can cost you. It never shows the follow-up, and while you are in the middle of a tactic it stays hidden so the board doesn't give the answer away.</div>
+            </div>
+          </li>
         </ul>
+      </div>
+
+      <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '8px', padding: '20px 24px', marginTop: '24px' }}>
+        <h2 style={{ fontSize: '1.25rem', margin: '0 0 8px 0', color: 'var(--text)' }}>Where the labels come from</h2>
+        <p style={{ margin: '0 0 8px 0', color: 'var(--text-2)' }}><strong>Square check</strong> — ROOKVEX counts who attacks and who defends the square you move to, and what the exchange costs. This is the explanation you see first.</p>
+        <p style={{ margin: '0 0 8px 0', color: 'var(--text-2)' }}><strong>Engine check</strong> — while you play, a chess engine looks at the whole position once per turn. If a move looks safe on its square but loses at least 2 pawns elsewhere (a discovered attack, an open king, a mate threat), the label becomes Loses material and the text says the engine found it. It never tells you the reply.</p>
+        <p style={{ margin: 0, color: 'var(--text-2)' }}><strong>Checkmate</strong> — when you can force checkmate in 5 moves or fewer, a banner above the board tells you how many moves. Finding them is up to you.</p>
       </div>
 
       <div style={{ textAlign: 'center', marginTop: '16px' }}>

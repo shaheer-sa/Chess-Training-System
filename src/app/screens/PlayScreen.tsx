@@ -4,7 +4,6 @@ import { MoveClassification, Square, Role } from '../../engine/types.js';
 import { Chess, fen as fenOps } from 'chessops';
 import { Board } from '../components/Board.js';
 import { Piece } from '../components/Piece.js';
-import { explain } from '../explain/explain.js';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { LabelIcon } from '../components/LabelIcon.js';
 import { Spinner } from '../components/Spinner.js';
@@ -12,6 +11,10 @@ import { GameState, newGame, legalDestinations, playMove, undo, outcome, preview
 import { PlaySettings, isBotTurn, undoPlies } from '../play/playSettings.js';
 import { BotClient, StockfishBot } from '../bot/StockfishBot.js';
 import type { BotLevel } from '../bot/levels.js';
+import { EngineCheck, EngineCheckClient } from '../bot/EngineCheck.js';
+import { EngineScores, TurnContext, turnContext, engineVerdict } from '../play/engineVerdict.js';
+import { DisplayMove, toDisplay, displayText, hintSan } from '../play/display.js';
+import { legalUciMoves } from '../play/game.js';
 
 
 interface PlayScreenProps {
@@ -53,6 +56,19 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       setFlipped(settings.humanColor === 'black');
     }
   }, [settings.mode, settings.humanColor]);
+
+  // ---- Engine check (phase 5C): one Stockfish pass per hint turn verifies the square-safety labels ----
+  const checkRef = useRef<EngineCheckClient | null>(null);
+  const [check, setCheck] = useState<{ fen: string; scores: EngineScores; ctx: TurnContext | null } | null>(null);
+  const [checkFailedFen, setCheckFailedFen] = useState<string | null>(null);
+  // While a Tactic the player started is in progress, Tactic labels are hidden for that player (no step-by-step leak).
+  const [tacticGuard, setTacticGuard] = useState<{ color: 'white' | 'black'; turnsLeft: number } | null>(null);
+  // The label/explanation the player saw for a move they played (Last move card + move list).
+  const [playedDisplay, setPlayedDisplay] = useState<Record<number, DisplayMove>>({});
+
+  useEffect(() => {
+    return () => { checkRef.current?.dispose(); checkRef.current = null; };
+  }, []);
 
   const botRef = useRef<BotClient | null>(null);
   const [computerThinking, setComputerThinking] = useState(false);
@@ -163,6 +179,34 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
 
   const gameOutcome = outcome(game);
   const readOnly = !!gameOutcome;
+
+  // A "hint turn": hints are on and the side to move gets hints (both sides in two-player, only the human vs computer).
+  const hintsTurn = hintsOn && !gameOutcome && (settings.mode === 'two-player' || pos.turn === settings.humanColor);
+  const checkReady = !!check && check.fen === game.currentFen;
+  const checkFailed = checkFailedFen === game.currentFen;
+  const checkPending = hintsTurn && !checkReady && !checkFailed;
+  const suppressTactic = !!tacticGuard && tacticGuard.color === pos.turn;
+
+  useEffect(() => {
+    if (!hintsTurn) return;
+    const fen = game.currentFen;
+    if (check?.fen === fen) return;
+    if (!checkRef.current) checkRef.current = new EngineCheck();
+    const checker = checkRef.current;
+    let active = true;
+    checker.check(fen, legalUciMoves(game).length)
+      .then(scores => { if (active) setCheck({ fen, scores, ctx: turnContext(fen, scores) }); })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        if (active) setCheckFailedFen(fen);
+      });
+    return () => { active = false; checker.cancel(); };
+  }, [game.currentFen, hintsTurn]);
+
+  const uciOf = (c: MoveClassification): string => c.move.from + c.move.to + (c.move.promotion ? 'q' : '');
+  const toDisp = (c: MoveClassification): DisplayMove =>
+    toDisplay(c, checkReady && check ? engineVerdict(c, check.scores[uciOf(c)], check.ctx) : { kind: 'none' }, suppressTactic);
+  const mateIn = hintsTurn && checkReady && check?.ctx ? check.ctx.mateIn : null;
 
   const sideToMoveSquares: number[] = [];
   if (!readOnly && !promotionMove) {
@@ -288,6 +332,14 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       const moveIndex = newGameSt.moves.length - 1;
       const fenBefore = game.currentFen;
       
+      // Remember the label the player saw for this move, and track a Tactic they started.
+      const mover = pos.turn;
+      const playedBase = hintsTurn && checkReady ? movesInfo.find(m => m.move.from === fromStr && m.move.to === toStr) : undefined;
+      const shown = playedBase ? toDisp(playedBase) : undefined;
+      if (shown) setPlayedDisplay(prev => ({ ...prev, [moveIndex]: shown }));
+      if (shown?.label === 'tactic') setTacticGuard({ color: mover, turnsLeft: 2 });
+      else setTacticGuard(g => (g && g.color === mover ? (g.turnsLeft > 1 ? { ...g, turnsLeft: g.turnsLeft - 1 } : null) : g));
+
       const rook = castlingRookMove(fromIdx, toIdx);
       setAnim(dragged ? null : { moves: rook ? [{ from: fromIdx, to: toIdx }, rook] : [{ from: fromIdx, to: toIdx }], key: newGameSt.moves.length });
       onChange(newGameSt, settings);
@@ -326,6 +378,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     });
     setPromotionMove(null);
     setAnim(null);
+    setTacticGuard(null);
+    setPlayedDisplay(prev => {
+      const next: Record<number, DisplayMove> = {};
+      for (const [k, v] of Object.entries(prev)) if (Number(k) < keep) next[Number(k)] = v;
+      return next;
+    });
     onChange(nextGame, settings);
     resetSelection();
   };
@@ -341,6 +399,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     setAnim(null);
     setMoveListInfo({});
     moveTokens.current = {};
+    setPlayedDisplay({});
+    setTacticGuard(null);
     setPromotionMove(null);
     resetSelection();
     setFlipped(nextSettings.mode === 'computer' && nextSettings.humanColor === 'black');
@@ -426,7 +486,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   
   const currentStatusText = formatStatusMove();
 
-  const labelChip = (c: MoveClassification) => {
+  const labelChip = (c: { label: DisplayMove['label'] }) => {
     const b = BADGE_INFO[c.label as keyof typeof BADGE_INFO];
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '2px 8px', borderRadius: '4px', background: b.color, color: b.textColor, fontSize: '0.8rem', fontWeight: 600 }}>
@@ -436,22 +496,27 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     );
   };
 
-  const moveDetails = (c: MoveClassification) => {
-    const e = explain(c);
+  const moveDetails = (d: DisplayMove, inHints = true) => {
+    const t = displayText(d, { hideMate: inHints && mateIn !== null });
     return (
       <>
-        <div style={{ fontSize: '0.95rem', color: 'var(--text-2)' }}>{e.primary}</div>
-        {e.notes.map((n, i) => <div key={i} style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{n}</div>)}
+        <div style={{ fontSize: '0.95rem', color: 'var(--text-2)' }}>{t.primary}</div>
+        {t.squareCheck && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t.squareCheck}</div>}
+        {t.notes.map((n, i) => <div key={i} style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{n}</div>)}
       </>
     );
   };
 
-  const infoFor = (destIdx: number) => movesInfo.find(m => m.move.to === formatSquare(destIdx));
+  const infoFor = (destIdx: number): DisplayMove | undefined => {
+    const c = movesInfo.find(m => m.move.to === formatSquare(destIdx));
+    return c ? toDisp(c) : undefined;
+  };
 
   const renderLastMoveCard = () => {
     const i = game.moves.length - 1;
     if (i < 0) return null;
-    const info = moveListInfo[i];
+    const base = moveListInfo[i];
+    const info: DisplayMove | undefined = playedDisplay[i] ?? (base ? toDisplay(base, { kind: 'none' }, false) : undefined);
     return (
       <div key={`last-${i}`} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--panel)', borderRadius: '8px', border: '2px solid var(--accent)', padding: '16px' }}>
         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Last move</div>
@@ -459,18 +524,41 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           <span className="mono" style={{ fontWeight: 'bold' }}>{Math.floor(i / 2) + 1}{i % 2 === 0 ? '.' : '...'} {game.moves[i].san}</span>
           {hintsOn && info && (!game.moves[i] || settings.mode !== 'computer' || game.moves[i].color === settings.humanColor) && labelChip(info)}
         </div>
-        {hintsOn && info && moveDetails(info)}
+        {hintsOn && info && moveDetails(info, false)}
       </div>
+    );
+  };
+
+  // Engine-check status lines (shown with the hints, so the player knows where labels come from).
+  const renderCheckNotices = () => {
+    if (!hintsTurn) return null;
+    return (
+      <>
+        {checkFailed && (
+          <p role="status" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Engine check unavailable — showing square-safety labels only.</p>
+        )}
+        {suppressTactic && (
+          <p role="status" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-2)' }}>Tactic in progress — find the follow-up yourself. Tactic labels return after it.</p>
+        )}
+      </>
     );
   };
 
   const renderHintPanel = () => {
     if (selectedSquare === null) {
-      if (game.moves.length > 0) return renderLastMoveCard();
+      if (game.moves.length > 0) {
+        return (
+          <>
+            {renderLastMoveCard()}
+            {renderCheckNotices()}
+          </>
+        );
+      }
       if (!hintsOn) return null;
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px' }}>
           <p style={{ margin: 0, color: 'var(--text-muted)' }}>Tap one of your pieces to see where it can go.</p>
+          {renderCheckNotices()}
         </div>
       );
     }
@@ -483,18 +571,19 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     const dests = legalDestinations(game, selectedSquare);
     dests.sort((a, b) => a - b);
     
-    if (analyzing) {
-       return <div style={{ padding: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)' }}><span style={{display:"flex",alignItems:"center",gap:"8px"}}><Spinner /> Checking squares…</span></div>;
+    if (analyzing || checkPending) {
+       return <div role="status" style={{ padding: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)' }}><span style={{display:"flex",alignItems:"center",gap:"8px"}}><Spinner /> Checking moves…</span></div>;
     }
     
     return (
       <div key={`sel-${selectedSquare}`} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px' }}>
         <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{pieceName} on {sqName} — where it can go</h3>
+        {renderCheckNotices()}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
           {dests.map(destIdx => {
             const mInfo = infoFor(destIdx);
             const isPreview = previewSquare === destIdx;
-            const san = previewSan(game, selectedSquare, destIdx) ?? formatSquare(destIdx);
+            const san = hintSan(previewSan(game, selectedSquare, destIdx) ?? formatSquare(destIdx), mateIn !== null);
             return (
               <div 
                 key={destIdx}
@@ -520,8 +609,9 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const renderPreviewSlot = () => {
     if (!hintsOn) return null;
     const active = selectedSquare !== null && previewSquare !== null;
-    const info = active ? infoFor(previewSquare) : undefined;
-    const san = active ? previewSan(game, selectedSquare, previewSquare) : null;
+    const info = active && !checkPending ? infoFor(previewSquare) : undefined;
+    const rawSan = active ? previewSan(game, selectedSquare, previewSquare) : null;
+    const san = rawSan ? hintSan(rawSan, mateIn !== null) : null;
     return (
       <div style={{ marginTop: '12px', height: '128px', overflowY: 'auto', boxSizing: 'border-box', padding: '12px', background: 'var(--panel)', borderRadius: '6px', border: active ? '2px solid var(--accent)' : '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {active ? (
@@ -606,6 +696,14 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', width: '100%', maxWidth: '1000px' }}>
           
           <div className="play-board-col" style={{ flex: '1 1 400px', display: 'flex', flexDirection: 'column' }}>
+            {mateIn !== null && (
+              <div role="status" className="rv-fade-in-panel" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', padding: '10px 14px', background: 'var(--panel)', border: '2px solid var(--accent)', borderRadius: '8px', color: 'var(--text)', fontWeight: 600 }}>
+                <LabelIcon kind="tactic" size={18} />
+                <span>
+                  Engine check: {settings.mode === 'computer' ? 'you have' : `${pos.turn === 'white' ? 'White' : 'Black'} has`} a checkmate in {mateIn}. Can you find it?
+                </span>
+              </div>
+            )}
             {/* Player strip (opponent) */}
             <div style={{ background: 'var(--panel)', padding: '12px 16px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', border: '1px solid var(--border)', borderBottom: 'none', display: 'flex', justifyContent: 'space-between' }}>
               {renderStripLabel(flipped ? 'white' : 'black')}
@@ -619,7 +717,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 flipped={flipped}
                 selectedSquare={selectedSquare}
                 destinationSquare={previewSquare}
-                moves={hintsOn && movesInfo.length > 0 ? movesInfo : []}
+                moves={hintsOn && movesInfo.length > 0 && !checkPending ? movesInfo.map(toDisp) : []}
                 expandedLevel={1}
                 exchangeStep={0}
                 selectedDestInfo={null}
@@ -693,7 +791,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem' }}>Moves</h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 {game.moves.map((move, i) => {
-                  const mInfo = moveListInfo[i];
+                  const mInfo = playedDisplay[i] ?? moveListInfo[i];
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-sunken)', padding: '4px 8px', borderRadius: '4px' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{i % 2 === 0 ? `${i / 2 + 1}.` : ''}</span>

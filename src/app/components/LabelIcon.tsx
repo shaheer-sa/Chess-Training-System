@@ -1,6 +1,6 @@
 import React from 'react';
 
-type IconKind = 'safe' | 'even_trade' | 'loses_material' | 'unclear';
+type IconKind = 'safe' | 'even_trade' | 'loses_material' | 'unclear' | 'tactic';
 
 interface LabelIconProps {
   kind: IconKind;
@@ -16,6 +16,13 @@ export const LabelIcon: React.FC<LabelIconProps> = ({ kind, size = 16 }) => {
     flexShrink: 0,
   } as const;
 
+  if (kind === 'tactic') {
+    return (
+      <svg aria-hidden="true" data-icon="tactic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" style={shared} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 1.5L3.5 9H8L7 14.5L12.5 7H8L9 1.5Z" />
+      </svg>
+    );
+  }
   if (kind === 'safe') {
     return (
       <svg aria-hidden="true" data-icon="safe" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" style={shared} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

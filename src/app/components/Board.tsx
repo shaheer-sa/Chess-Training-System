@@ -1,7 +1,10 @@
 import React from 'react';
 import { Chess, fen as fenOps } from 'chessops';
 import { Piece } from './Piece.js';
-import { BADGE_INFO } from '../shared/badgeInfo.js';
+import { BADGE_INFO, Label } from '../shared/badgeInfo.js';
+
+/** What the board needs to draw a badge: the destination and the label (incl. the engine-check 'tactic'). */
+export type BoardMove = Pick<MoveClassification, 'move'> & { label: Label };
 import { MoveClassification, Square } from '../../engine/types.js';
 import { LabelIcon } from './LabelIcon.js';
 import { squareOffset } from './boardGeometry.js';
@@ -12,7 +15,7 @@ interface BoardProps {
   onSquareClick?: (index: number) => void;
   selectedSquare: number | null;
   destinationSquare: number | null;
-  moves: MoveClassification[];
+  moves: BoardMove[];
   expandedLevel: number;
   exchangeStep: number;
   selectedDestInfo: MoveClassification | null;

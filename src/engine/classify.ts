@@ -10,6 +10,18 @@ import { makeFen } from 'chessops/fen';
 import { getActualCapturedSquare } from './capture-utils.js';
 
 export function classifyMove(fen: string, moveInput: MoveInput): Result<MoveClassification> {
+  // Castling (king moves two files) has its own classification.
+  const castleSetup = fenOps.parseFen(fen);
+  if (castleSetup.isOk) {
+    const castlePos = Chess.fromSetup(castleSetup.unwrap());
+    if (castlePos.isOk && castlePos.unwrap().board.get(fromAlgebraic(moveInput.from))?.role === 'king'
+      && Math.abs(moveInput.from.charCodeAt(0) - moveInput.to.charCodeAt(0)) === 2) {
+      const legal = getLegalMoves(fen);
+      if (legal.ok && legal.value.some(m => m.isCastling && m.from === moveInput.from && m.to === moveInput.to)) {
+        return classifyCastling(fen, moveInput.from, moveInput.to);
+      }
+    }
+  }
   const destRes = analyzeDestination(fen, moveInput);
   if (!destRes.ok) return { ok: false, error: destRes.error };
   const dest = destRes.value;
@@ -275,7 +287,8 @@ export function classifyMove(fen: string, moveInput: MoveInput): Result<MoveClas
     'DELIVERS_MATE': 20,
     'GIVES_CHECK': 21,
     'MOVER_PINNED': 22,
-    'CASTLING_NOT_ANALYZED': 23
+    'CASTLING_NOT_ANALYZED': 23,
+    'CASTLING_SAFE': 24
   };
 
   reasons.sort((a, b) => orderMap[a.code] - orderMap[b.code]);
@@ -306,15 +319,9 @@ export function classifyMovesFrom(fen: string, from: Square): Result<MoveClassif
   for (const m of moves) {
     if (m.promotion && m.promotion !== 'queen') continue;
     if (m.isCastling) {
-      results.push({
-        move: { from: m.from, to: m.to, promotion: m.promotion },
-        label: 'unclear',
-        netMaterial: 0,
-        reasons: [{ code: 'CASTLING_NOT_ANALYZED', squares: [] }],
-        destination: null,
-        exchange: null,
-        tactics: null
-      });
+      const res = classifyCastling(fen, m.from, m.to);
+      if (!res.ok) return { ok: false, error: res.error };
+      results.push(res.value);
     } else {
       const res = classifyMove(fen, { from: m.from, to: m.to, promotion: m.promotion });
       if (res.ok) {
@@ -327,4 +334,46 @@ export function classifyMovesFrom(fen: string, from: Square): Result<MoveClassif
 
   results.sort((a, b) => fromAlgebraic(a.move.to) - fromAlgebraic(b.move.to));
   return { ok: true, value: results };
+}
+
+/**
+ * Castling: the king may not castle out of, through or into check. The rook lands on the square the king
+ * passes over, so neither the king nor the rook can be captured right after castling: castling is "safe"
+ * for square-safety purposes. Wider consequences (what the king stopped defending, attacks elsewhere) are
+ * left to the engine check in the app.
+ */
+export function classifyCastling(fen: string, kingFrom: Square, kingTo: Square): Result<MoveClassification> {
+  const setup = fenOps.parseFen(fen);
+  if (!setup.isOk) return { ok: false, error: { code: 'INVALID_FEN', message: 'Invalid FEN' } };
+  const posRes = Chess.fromSetup(setup.unwrap());
+  if (!posRes.isOk) return { ok: false, error: { code: 'ILLEGAL_POSITION', message: 'Illegal position' } };
+  const after = posRes.unwrap().clone();
+  const kingside = kingTo.charCodeAt(0) > kingFrom.charCodeAt(0);
+  const rank = kingFrom[1];
+  const rookFrom = ((kingside ? 'h' : 'a') + rank) as Square;
+  const rookTo = ((kingside ? 'f' : 'd') + rank) as Square;
+  // chessops encodes castling as king-takes-own-rook.
+  after.play({ from: fromAlgebraic(kingFrom), to: fromAlgebraic(rookFrom) });
+
+  const reasons: Reason[] = [];
+  const lm = getLegalMoves(makeFen(after.toSetup()));
+  if (after.isCheck() && lm.ok && lm.value.length === 0) {
+    reasons.push({ code: 'DELIVERS_MATE', squares: [] });
+  } else {
+    reasons.push({ code: 'CASTLING_SAFE', squares: [rookTo] });
+    if (after.isCheck()) reasons.push({ code: 'GIVES_CHECK', squares: [] });
+  }
+  return {
+    ok: true,
+    value: {
+      move: { from: kingFrom, to: kingTo },
+      label: 'safe',
+      netMaterial: 0,
+      reasons,
+      destination: null,
+      exchange: null,
+      tactics: null,
+      castling: { rookFrom, rookTo }
+    }
+  };
 }

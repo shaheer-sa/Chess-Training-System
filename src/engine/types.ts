@@ -145,7 +145,8 @@ export type ReasonCode =
   | 'DELIVERS_MATE'
   | 'GIVES_CHECK'
   | 'MOVER_PINNED'
-  | 'CASTLING_NOT_ANALYZED';
+  | 'CASTLING_NOT_ANALYZED'
+  | 'CASTLING_SAFE';
 
 export interface Reason {
   code: ReasonCode;
@@ -162,4 +163,6 @@ export interface MoveClassification {
   destination: DestinationReport | null;
   exchange: ExchangeReport | null;
   tactics: TacticalReport | null;
+  /** Set for castling: the rook's move (destination/exchange/tactics reports are null for castling). */
+  castling?: { rookFrom: Square; rookTo: Square };
 }

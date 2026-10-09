@@ -157,6 +157,17 @@ describe('Move Classification (Phase 1E)', () => {
       }
     });
 
+    it('Fixture C2b: castling that gives check; queenside castling with a rook already on the 7th', () => {
+      const chk = classifyMovesFrom('5k2/8/8/8/8/8/8/4K2R w K - 0 1', 'e1');
+      expect(chk.ok).toBe(true);
+      if (!chk.ok) return;
+      expect(chk.value.find(c => c.move.to === 'g1')?.reasons.map(r => r.code)).toEqual(['CASTLING_SAFE', 'GIVES_CHECK']);
+      const mate = classifyMovesFrom('5k2/7R/8/8/8/8/8/R3K3 w Q - 0 1', 'e1');
+      expect(mate.ok).toBe(true);
+      if (!mate.ok) return;
+      expect(mate.value.find(c => c.move.to === 'c1')?.reasons.map(r => r.code)).toEqual(['CASTLING_SAFE']);
+    });
+
     it('Fixture C2: classifyMovesFrom castling', () => {
       const res = classifyMovesFrom('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1', 'e1');
       expect(res.ok).toBe(true);
@@ -167,13 +178,16 @@ describe('Move Classification (Phase 1E)', () => {
       
       const c1 = res.value.find(c => c.move.to === 'c1');
       const g1 = res.value.find(c => c.move.to === 'g1');
-      expect(c1?.label).toBe('unclear');
-      expect(c1?.reasons.map(r => r.code)).toEqual(['CASTLING_NOT_ANALYZED']);
+      // Phase 5C: castling is classified (king and rook cannot be captured right after castling).
+      expect(c1?.label).toBe('safe');
+      expect(c1?.reasons.map(r => r.code)).toEqual(['CASTLING_SAFE']);
+      expect(c1?.castling).toEqual({ rookFrom: 'a1', rookTo: 'd1' });
       expect(c1?.netMaterial).toBe(0);
       expect(c1?.destination).toBeNull();
-      
-      expect(g1?.label).toBe('unclear');
-      expect(g1?.reasons.map(r => r.code)).toEqual(['CASTLING_NOT_ANALYZED']);
+
+      expect(g1?.label).toBe('safe');
+      expect(g1?.reasons.map(r => r.code)).toEqual(['CASTLING_SAFE']);
+      expect(g1?.castling).toEqual({ rookFrom: 'h1', rookTo: 'f1' });
       expect(g1?.netMaterial).toBe(0);
       expect(g1?.destination).toBeNull();
     });

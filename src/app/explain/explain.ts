@@ -21,8 +21,12 @@ const PRIORITY_ORDER: ReasonCode[] = [
   'OPPONENT_CAPTURE_LOSES',
   'ATTACKER_CANNOT_CAPTURE',
   'NOT_ATTACKED',
+  'CASTLING_SAFE',
   'CASTLING_NOT_ANALYZED'
 ];
+
+/** Codes that speak in the mover's favour: never the headline of a "Loses material" move. */
+const NOT_A_LOSS_HEADLINE = new Set<ReasonCode>(['CAPTURE_ALLOWS_MATE', 'EXCHANGE_LINE_MATES_OPPONENT', 'WINS_MATERIAL', 'OPPONENT_CAPTURE_LOSES']);
 
 const INFORMATIONAL = new Set<ReasonCode>([
   'PIECE_ALREADY_HANGING',
@@ -52,7 +56,8 @@ const formatTemplate = (code: ReasonCode, c: MoveClassification): string => {
   const fenAfter = c.exchange?.fenAfter || c.tactics?.fenAfter || c.destination?.fenAfter || '';
   const role = getRole(fenAfter, sq);
   
-  const dest = c.move.to;
+  // Castling: the reports describe the rook, so sentences name the rook's square.
+  const dest = c.castling ? c.castling.rookTo : c.move.to;
   const moverRole = getRole(fenAfter, dest);
   
   let n = 0;
@@ -76,13 +81,8 @@ const formatTemplate = (code: ReasonCode, c: MoveClassification): string => {
     case 'EXCHANGE_LINE_MATE': return "The capture sequence on this square ends with you getting checkmated.";
     case 'CAUSES_STALEMATE': return "This move leaves your opponent no legal moves — the game ends in a draw.";
     case 'EXCHANGE_LINE_MATES_OPPONENT': return "The capture sequence on this square ends with your opponent checkmated — calculate it yourself.";
-    case 'CAPTURE_ALLOWS_MATE': {
-      const move = reason.moves?.[0];
-      const from = move?.from || '';
-      const to = move?.to || '';
-      const mateRole = getRole(fenAfter, from);
-      return `If your opponent takes, you can checkmate them: ${mateRole} ${from}→${to}.`;
-    }
+    // Never name the mating move: the player should find it.
+    case 'CAPTURE_ALLOWS_MATE': return "If your opponent takes, you have a checkmate. Can you find it?";
     case 'FORCED_CAPTURE_IGNORED': return "Your opponent is forced to capture here — this trainer can't judge the result simply.";
     case 'PINNED_DEFENDER': return `Your ${role} on ${sq} seems to defend this square, but it's pinned to your king, so it can't take back.`;
     case 'KING_CANNOT_RECAPTURE': return "Your king defends this square, but it can't take back because the square is still attacked.";
@@ -97,6 +97,7 @@ const formatTemplate = (code: ReasonCode, c: MoveClassification): string => {
     case 'ATTACKER_CANNOT_CAPTURE': return `The ${role} on ${sq} attacks this square but can't legally take right now.`;
     case 'NOT_ATTACKED': return "Nothing attacks this square.";
     case 'CASTLING_NOT_ANALYZED': return "Castling isn't analyzed by this trainer yet.";
+    case 'CASTLING_SAFE': return `After castling, your king and your rook on ${sq} can't be taken right away.`;
     case 'PIECE_ALREADY_HANGING': return `Note: your ${role} on ${sq} was already in danger before this move.`;
     case 'GIVES_CHECK': return "This move gives check.";
     case 'MOVER_PINNED': return `Careful: on this square your piece is pinned by the ${role} on ${sq}.`;
@@ -110,6 +111,7 @@ export function explain(c: MoveClassification): { primary: string; details: stri
   const reasons = c.reasons || [];
   
   for (const code of PRIORITY_ORDER) {
+    if (c.label === 'loses_material' && NOT_A_LOSS_HEADLINE.has(code)) continue;
     if (reasons.some(r => r.code === code)) {
       primaryCode = code;
       break;

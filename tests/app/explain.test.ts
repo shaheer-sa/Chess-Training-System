@@ -90,7 +90,9 @@ describe('explain module', () => {
   it('B1', async () => {
     const c = await getClassification('3r2k1/5ppp/8/8/8/8/4R3/4R1K1 w - - 0 1', 'e2', 'd2');
     const result = explain(c as unknown as MoveClassification);
-    expect(result.primary).toBe("If your opponent takes, you can checkmate them: rook e1→e8.");
+    // Phase 5C: the mating move is never named.
+    expect(result.primary).toBe("If your opponent takes, you have a checkmate. Can you find it?");
+    expect(result.primary).not.toMatch(/e8|→/);
   });
 
   it('X7', async () => {
@@ -119,10 +121,19 @@ describe('explain module', () => {
     expect(result.primary).toBe("Your opponent is forced to capture here — this trainer can't judge the result simply.");
   });
 
-  it('X11 (CASTLING_NOT_ANALYZED)', async () => {
-    const c = await getClassification('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1', 'e1', 'g1');
+  it('X11 (CASTLING_SAFE, phase 5C)', async () => {
+    const g1 = await getClassification('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1', 'e1', 'g1');
+    expect(explain(g1 as unknown as MoveClassification).primary).toBe("After castling, your king and your rook on f1 can't be taken right away.");
+    const c1 = await getClassification('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1', 'e1', 'c1');
+    expect(explain(c1 as unknown as MoveClassification).primary).toBe("After castling, your king and your rook on d1 can't be taken right away.");
+  });
+
+  it('5C: a "Loses material" move never headlines a mate line (Bd7)', async () => {
+    const c = await getClassification('1n1r2k1/5ppp/8/1B1P4/2P5/8/5PPP/4R1K1 w - - 0 1', 'b5', 'd7');
     const result = explain(c as unknown as MoveClassification);
-    expect(result.primary).toBe("Castling isn't analyzed by this trainer yet.");
+    expect(c.label).toBe('loses_material');
+    expect(result.primary).toBe('Nothing protects your bishop on d7 — it can be taken for free.');
+    expect(result.details).toContain("If your opponent takes, you have a checkmate. Can you find it?");
   });
 
   it('X12 (DEFENDER_UNAVAILABLE)', async () => {
