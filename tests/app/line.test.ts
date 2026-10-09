@@ -77,3 +77,11 @@ describe('site settings (pure)', () => {
     expect(loadSettings(JSON.stringify({ coordinates: false, reduceMotion: 'yes' }))).toEqual({ ...DEFAULT_SETTINGS, coordinates: false });
   });
 });
+
+describe('PGN errors use the real move numbers', () => {
+  it('numbers the failing move from the FEN counters (Black to move at move 23)', () => {
+    const r = lineFromPgn('[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/8/R3K3 b - - 0 23"]\n\n23... Kd7 24. Ra8 Kxa8 *');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe("Move 24... Kxa8 isn't legal in this game.");
+  });
+});

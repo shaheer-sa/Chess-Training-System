@@ -88,7 +88,7 @@ export const lineFromPgn = (text: string): PgnLoad => {
   let ply = 0;
   for (const node of g.moves.mainline()) {
     const move = parseSan(chess, node.san);
-    const moveNo = `${Math.floor(ply / 2) + 1}${ply % 2 === 0 ? '.' : '...'} ${node.san}`;
+    const moveNo = `${chess.fullmoves}${chess.turn === 'white' ? '.' : '...'} ${node.san}`;
     if (!move || !('from' in move)) return { ok: false, error: `Move ${moveNo} isn't legal in this game.` };
     const piece = chess.board.get(move.from);
     let to: number = move.to;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ScreenName } from '../App.js';
 import { EngineClient } from '../engine/EngineClient.js';
 import { Board } from '../components/Board.js';
@@ -8,6 +8,7 @@ import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { Spinner } from '../components/Spinner.js';
 import { explain } from '../explain/explain.js';
 import { LabelIcon } from '../components/LabelIcon.js';
+import { prefersReducedMotion, SETTINGS_EVENT } from '../settings.js';
 
 interface HomeProps {
   onNavigate: (screen: ScreenName, fen?: string) => void;
@@ -22,8 +23,17 @@ const squareIndex = (sq: string): number => (sq.charCodeAt(1) - 49) * 8 + (sq.ch
 const HERO_FEN = 'k5br/p3Np1p/P4P1P/8/8/8/8/7K w - - 0 1';
 const HEADLINE = ['See what happens', 'before you move.'];
 
-const reducedMotion = (): boolean => {
-  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+/** Follows both the site setting and the system setting, and updates when either changes. */
+const useReducedMotion = (): boolean => {
+  const [reduced, setReduced] = useState(prefersReducedMotion);
+  useEffect(() => {
+    const update = () => setReduced(prefersReducedMotion());
+    window.addEventListener(SETTINGS_EVENT, update);
+    let mq: MediaQueryList | null = null;
+    try { mq = window.matchMedia('(prefers-reduced-motion: reduce)'); mq.addEventListener('change', update); } catch { mq = null; }
+    return () => { window.removeEventListener(SETTINGS_EVENT, update); mq?.removeEventListener('change', update); };
+  }, []);
+  return reduced;
 };
 
 /** Cursor-following light for the hero and the cards (CSS reads --mx / --my). */
@@ -63,7 +73,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
   const [active, setActive] = useState<DemoLabel>('safe');
   const [userPicked, setUserPicked] = useState(false);
   const [typed, setTyped] = useState(0);
-  const motionOk = useRef(!reducedMotion());
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     if (engineClient) {
@@ -83,7 +93,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
   // The readout types each explanation, then moves on to the next label until the visitor picks one.
   useEffect(() => {
     if (!text) return;
-    if (!motionOk.current) { setTyped(text.length); return; }
+    if (reduced) { setTyped(text.length); return; }
     setTyped(0);
     let n = 0;
     const id = window.setInterval(() => {
@@ -92,16 +102,16 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
       if (n >= text.length) window.clearInterval(id);
     }, 22);
     return () => window.clearInterval(id);
-  }, [text]);
+  }, [text, reduced]);
 
   useEffect(() => {
-    if (userPicked || examples.length === 0 || !motionOk.current) return;
+    if (userPicked || examples.length === 0 || reduced) return;
     const id = window.setTimeout(() => {
       const i = examples.findIndex(e => e.label === current?.label);
       setActive(examples[(i + 1) % examples.length].label);
     }, 4200);
     return () => window.clearTimeout(id);
-  }, [current?.label, userPicked, examples.length]);
+  }, [current?.label, userPicked, examples.length, reduced]);
 
   let w = 0; // word counter for the headline reveal
 

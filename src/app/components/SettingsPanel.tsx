@@ -58,13 +58,16 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose, set
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  // While it slides out, the panel is inert: no dialog semantics, no focusable controls.
+  useEffect(() => { panelRef.current?.toggleAttribute('inert', !open); }, [open, mounted]);
+
   if (!mounted) return null;
   const set = (patch: Partial<SiteSettings>) => onChange({ ...settings, ...patch });
 
   return (
-    <div className={`rv-sheet ${open ? 'rv-sheet--open' : ''}`}>
-      <div className="rv-sheet-backdrop" onClick={onClose} aria-hidden="true" />
-      <div ref={panelRef} className="rv-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="rv-sheet-title">
+    <div className={`rv-sheet ${open ? 'rv-sheet--open' : ''}`} aria-hidden={open ? undefined : true}>
+      <div className="rv-sheet-backdrop" onClick={open ? onClose : undefined} aria-hidden="true" />
+      <div ref={panelRef} className="rv-sheet-panel" role={open ? 'dialog' : undefined} aria-modal={open ? true : undefined} aria-labelledby={open ? 'rv-sheet-title' : undefined}>
         <div className="rv-sheet-head">
           <h2 id="rv-sheet-title">Rookvex</h2>
           <button ref={closeRef} type="button" className="rv-icon-btn" aria-label="Close" onClick={onClose}>

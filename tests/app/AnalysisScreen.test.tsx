@@ -963,3 +963,22 @@ describe('Analysis — playing moves and games (5B.3)', () => {
     expect(screen.getByRole('alert').textContent).toBe("Move 2. Ke3 isn't legal in this game.");
   });
 });
+
+describe('Analysis — hover previews (review fixes)', () => {
+  it('hover shows the result without Play this move; leaving clears it; a click pins it and offers Play this move', async () => {
+    const { container } = render(<AnalysisScreen engineClient={new DirectEngineClient()} initialFen={startpos} onNavigate={() => {}} />);
+    fireEvent.click(container.querySelector('#sq-6')!); // g1 knight
+    await waitFor(() => expect(container.querySelector('#sq-21')?.getAttribute('aria-label')).toMatch(/legal destination/));
+    fireEvent.mouseEnter(container.querySelector('#sq-21')!); // f3
+    expect(screen.getByText('Nothing attacks this square.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Play this move' })).toBeNull();
+    fireEvent.mouseLeave(container.querySelector('#sq-21')!);
+    await waitFor(() => expect(screen.queryByText('Nothing attacks this square.')).toBeNull());
+    fireEvent.click(container.querySelector('#sq-21')!);
+    fireEvent.mouseLeave(container.querySelector('#sq-21')!);
+    await new Promise(r => setTimeout(r, 300));
+    expect(screen.getByText('Nothing attacks this square.')).toBeTruthy(); // pinned stays
+    fireEvent.click(screen.getByRole('button', { name: 'Play this move' }));
+    await waitFor(() => expect(screen.getByText('After 1. Nf3')).toBeTruthy());
+  });
+});

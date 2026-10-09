@@ -288,10 +288,23 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
 
   const shownDest = destinationSquare ?? hoverDest;
   const selectedDestInfo = (shownDest !== null ? moves.find(m => m.move.to === getSquareName(shownDest)) : null) || null;
-  const onDestHover = (index: number) => {
-    if (destinationSquare !== null || index === hoverDest) return;
-    if (moves.some(m => m.move.to === getSquareName(index))) { setHoverDest(index); setExpandedLevel(1); setExchangeStep(0); }
+  // An unpinned preview clears shortly after the pointer (or keyboard focus) leaves the square,
+  // unless the pointer moves onto the result panel to read it.
+  const leaveTimer = useRef<number | null>(null);
+  const cancelLeave = () => { if (leaveTimer.current) { window.clearTimeout(leaveTimer.current); leaveTimer.current = null; } };
+  const clearPreviewSoon = () => {
+    cancelLeave();
+    leaveTimer.current = window.setTimeout(() => { leaveTimer.current = null; setHoverDest(null); }, 250);
   };
+  useEffect(() => cancelLeave, []);
+  const onDestHover = (index: number) => {
+    if (destinationSquare !== null) return;
+    if (moves.some(m => m.move.to === getSquareName(index))) {
+      cancelLeave();
+      if (index !== hoverDest) { setHoverDest(index); setExpandedLevel(1); setExchangeStep(0); }
+    }
+  };
+  const onDestLeave = (index: number) => { if (destinationSquare === null && index === hoverDest) clearPreviewSoon(); };
   // Opening the details of a previewed move pins it, so moving the mouse doesn't swap it away.
   const setLevel = (lvl: number) => { if (destinationSquare === null && hoverDest !== null) setDestinationSquare(hoverDest); setExpandedLevel(lvl); };
   const stepText = getStepText(selectedDestInfo, exchangeStep);
@@ -483,6 +496,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 destinationSquare={shownDest}
                 moves={moves}
                 onSquareMouseEnter={onDestHover}
+                onSquareMouseLeave={onDestLeave}
                 expandedLevel={expandedLevel}
                 exchangeStep={exchangeStep}
                 selectedDestInfo={selectedDestInfo}
@@ -501,8 +515,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                   )}
                   {showAnalyzingIndicator && <div aria-hidden="true" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}><span style={{display:"flex",alignItems:"center",gap:"8px"}}><Spinner /> Checking moves…</span></div>}
                 </div>
-                {selectedDestInfo && canPlayNow && !(expandedLevel >= 3 && exchangeStep > 0) && (
-                  <button className="rv-btn rv-btn--primary" onClick={() => playHere(selectedSquare as number, destinationSquare as number)}>
+                {selectedDestInfo && destinationSquare !== null && selectedSquare !== null && canPlayNow && !(expandedLevel >= 3 && exchangeStep > 0) && (
+                  <button className="rv-btn rv-btn--primary" onClick={() => playHere(selectedSquare, destinationSquare)}>
                     Play this move
                   </button>
                 )}
@@ -527,7 +541,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               </div>
             </div>
             
-            <div className="rv-an-side">
+            <div className="rv-an-side" onMouseEnter={cancelLeave} onMouseLeave={() => { if (destinationSquare === null && hoverDest !== null) clearPreviewSoon(); }}>
             <ResultPanel
               selectedDestInfo={selectedDestInfo}
               expandedLevel={expandedLevel}

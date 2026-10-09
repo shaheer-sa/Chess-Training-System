@@ -31,7 +31,19 @@ export const saveSettings = (s: SiteSettings): void => {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch { /* storage blocked: settings last for this visit */ }
 };
 
+export const SETTINGS_EVENT = 'rookvex:settings';
+
 export const applySettings = (s: SiteSettings, root: HTMLElement = document.documentElement): void => {
   root.classList.toggle('rv-reduce-motion', s.reduceMotion);
   root.classList.toggle('rv-no-coords', !s.coordinates);
+  try { window.dispatchEvent(new Event(SETTINGS_EVENT)); } catch { /* no window (tests) */ }
+};
+
+/** True when the visitor asked for fewer animations: in Rookvex's settings or in the system settings. */
+export const prefersReducedMotion = (): boolean => {
+  try {
+    return document.documentElement.classList.contains('rv-reduce-motion') || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
 };
