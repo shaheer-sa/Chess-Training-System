@@ -169,7 +169,7 @@ input:focus-visible,
 @keyframes rv-progress{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
 @keyframes rv-dot{0%,80%,100%{opacity:.2}40%{opacity:1}}
 @keyframes rv-glow{0%,100%{box-shadow:inset 0 0 0 1px rgba(212,92,28,0)}50%{box-shadow:inset 0 0 0 2px rgba(212,92,28,.9)}}
-.rv-pop{animation:rv-pop 170ms cubic-bezier(.2,.9,.3,1.25) both}
+.rv-pop{animation:rv-pop 170ms cubic-bezier(.2,.9,.3,1.25) both;animation-delay:min(calc(var(--i, 0) * 25ms), 250ms)}
 .rv-rise{animation:rv-rise 200ms ease-out both}
 /* Board: your movable pieces lift on hover, target squares darken on hover, the selected square is filled. */
 .rv-sq--movable{cursor:grab}
@@ -199,3 +199,85 @@ input:focus-visible,
   .rv-progress::before{animation:rv-pulse 1.2s ease-in-out infinite;width:100%}
   .rv-spinner{animation-duration:1.6s}
 }
+
+/* ---- Play side panel and move list (5B.3) ---- */
+.rv-dest{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 10px;border-radius:6px;border:1px solid var(--border-strong);background:var(--bg-sunken);color:var(--text);font:inherit;font-weight:600;cursor:pointer;transition:background-color 120ms ease,border-color 120ms ease}
+.rv-dest:hover{background:var(--panel-hover)}
+.rv-dest[aria-pressed="true"]{border-color:var(--accent);background:var(--panel-hover);box-shadow:0 0 0 1px var(--accent)}
+.rv-detail{min-height:132px;padding:12px;border-radius:6px;border:1px dashed var(--border-strong);transition:border-color 120ms ease,background-color 120ms ease}
+.rv-detail--on{border:1px solid var(--accent);background:var(--bg-sunken)}
+.rv-movelist{display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px;max-height:220px;overflow-y:auto;overscroll-behavior:contain;padding-right:4px;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+.rv-movelist:focus-visible{outline:3px solid var(--accent-text);outline-offset:2px}
+/* ---- Analyze source picker ---- */
+.rv-select{position:relative;display:inline-flex}
+.rv-select select{appearance:none;-webkit-appearance:none;min-height:44px;padding:0 40px 0 14px;border-radius:6px;border:1px solid var(--border-strong);background:var(--bg-sunken);color:var(--text);font:inherit;font-weight:500;cursor:pointer;max-width:100%;transition:border-color 120ms ease,background-color 120ms ease}
+.rv-select select:hover{border-color:var(--accent);background:var(--panel-hover)}
+.rv-select::after{content:'';position:absolute;right:16px;top:50%;width:8px;height:8px;border-right:2px solid var(--text-2);border-bottom:2px solid var(--text-2);transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.rv-soon{font-size:.8rem;padding:2px 8px;border-radius:999px;border:1px solid var(--border-strong);color:var(--text-muted);background:var(--bg-sunken)}
+
+/* ---- Buttons: lift, glow and a shine sweep on the primary action ---- */
+.rv-btn{position:relative;overflow:hidden}
+.rv-btn:hover:not(:disabled){transform:translateY(-1px)}
+.rv-btn--primary::after{content:'';position:absolute;top:0;bottom:0;left:-60%;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-18deg);transition:left 500ms ease;pointer-events:none}
+.rv-btn--primary:hover:not(:disabled){box-shadow:0 6px 20px rgba(212,92,28,.35)}
+.rv-btn--primary:hover:not(:disabled)::after{left:130%}
+.rv-btn--ghost{background:transparent;border-color:var(--border-strong)}
+.rv-btn--ghost:hover:not(:disabled){border-color:var(--accent-text);color:var(--accent-text);background:rgba(212,92,28,.08)}
+.rv-btn--lg{min-height:52px;padding:0 24px;font-size:1.05rem}
+
+/* ---- Dashboard ---- */
+.rv-home{display:flex;flex-direction:column}
+.rv-hero{position:relative;overflow:hidden;isolation:isolate;--mx:70%;--my:30%}
+.rv-hero-bg{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden;perspective:600px;perspective-origin:50% 45%}
+/* A chessboard floor running to a warm horizon. */
+.rv-hero-floor{position:absolute;left:-60%;right:-60%;bottom:0;height:300%;transform:rotateX(70deg);transform-origin:50% 100%;
+  background-image:linear-gradient(rgba(240,137,74,.22) 1px,transparent 1px),linear-gradient(90deg,rgba(240,137,74,.22) 1px,transparent 1px),conic-gradient(#43332a 25%,#2a201b 0 50%,#43332a 0 75%,#2a201b 0);background-size:96px 96px;
+  -webkit-mask-image:linear-gradient(to top,#000 0%,rgba(0,0,0,.55) 18%,transparent 42%);mask-image:linear-gradient(to top,#000 0%,rgba(0,0,0,.55) 18%,transparent 42%);
+  animation:rv-floor-in 1.2s cubic-bezier(.2,.7,.2,1) both,rv-floor-drift 40s linear 1.2s infinite}
+@keyframes rv-floor-in{from{opacity:0;transform:rotateX(82deg)}to{opacity:1;transform:rotateX(70deg)}}
+@keyframes rv-floor-drift{from{background-position:0 0,0 0,0 0}to{background-position:0 960px,0 960px,0 960px}}
+.rv-hero-glow{position:absolute;inset:0;background:radial-gradient(520px circle at var(--mx) var(--my),rgba(240,137,74,.13),transparent 60%),radial-gradient(60% 55% at 72% 40%,rgba(212,92,28,.16),transparent 70%),linear-gradient(to bottom,rgba(45,35,30,0) 88%,var(--bg) 100%)}
+.rv-hero-grain{position:absolute;inset:0;opacity:.07;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.rv-hero-inner{max-width:1320px;margin:0 auto;padding:56px 24px 72px;display:flex;flex-wrap:wrap;gap:48px;align-items:center}
+.rv-hero-copy{flex:1 1 420px;min-width:0}
+.rv-hero-demo{flex:1 1 380px;max-width:480px;margin:0 auto}
+.rv-hero-tagline{font-family:'Cinzel',serif;font-weight:700;letter-spacing:.18em;font-size:.85rem;color:var(--accent-text);margin-bottom:18px}
+.rv-hero-title{font-family:'Cinzel',serif;font-weight:700;font-size:clamp(2.2rem,5.2vw,3.9rem);line-height:1.08;letter-spacing:.01em;margin:0 0 24px;color:var(--text)}
+.rv-hero-line{display:block}
+.rv-word-mask{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.08em;margin-right:.28em}
+.rv-word{display:inline-block;animation:rv-word 700ms cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(250ms + var(--w, 0) * 80ms)}
+@keyframes rv-word{from{transform:translateY(105%);opacity:0}to{transform:none;opacity:1}}
+.rv-hero-sub{font-size:1.15rem;line-height:1.6;color:var(--text-2);max-width:34em;margin:0 0 32px}
+.rv-hero-actions{display:flex;gap:14px;flex-wrap:wrap}
+.rv-in{animation:rv-rise 600ms cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d, 0ms)}
+.rv-demo-card{background:rgba(56,43,36,.85);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:16px;border-radius:12px;border:1px solid var(--border-strong);box-shadow:0 24px 60px rgba(0,0,0,.45)}
+.rv-hero-board .rv-badge{animation-duration:320ms;animation-delay:calc(900ms + var(--i, 0) * 170ms)}
+.rv-demo-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.rv-demo-chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--border-strong);background:var(--bg-sunken);color:var(--text-2);font:inherit;font-size:.85rem;font-weight:600;cursor:pointer;transition:background-color 150ms ease,color 150ms ease,border-color 150ms ease,transform 150ms ease}
+.rv-demo-chip:hover{border-color:var(--chip);color:var(--text)}
+.rv-demo-chip[aria-pressed="true"]{background:var(--chip);border-color:var(--chip);color:var(--chip-text)}
+.rv-demo-readout{margin-top:12px;min-height:84px;padding:12px 14px;border-radius:8px;background:var(--bg-sunken);border:1px solid var(--border);color:var(--text-2);font-size:.95rem;line-height:1.5}
+.rv-demo-move{display:block;font-weight:600;color:var(--text);margin-bottom:4px;font-size:.9rem}
+.rv-caret{display:inline-block;width:2px;height:1em;margin-left:2px;vertical-align:-2px;background:var(--accent-text);animation:rv-blink 900ms steps(1) infinite}
+@keyframes rv-blink{50%{opacity:0}}
+.rv-home-cards{max-width:1320px;margin:0 auto;width:100%;padding:8px 24px 72px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+.rv-card--spot{position:relative;overflow:hidden;isolation:isolate;--mx:50%;--my:50%;padding:28px}
+.rv-card--spot::before{content:'';position:absolute;inset:0;z-index:-1;opacity:0;background:radial-gradient(300px circle at var(--mx) var(--my),rgba(240,137,74,.16),transparent 65%);transition:opacity 200ms ease}
+.rv-card--spot:hover::before,.rv-card--spot:focus-visible::before{opacity:1}
+.rv-card--spot h2{font-size:1.25rem;color:var(--text);margin:14px 0 8px}
+.rv-card--spot p{color:var(--text-muted);margin:0;font-size:.95rem;line-height:1.5}
+.rv-card-icon{display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:12px;background:var(--bg-sunken);border:1px solid var(--border-strong);color:var(--accent-text);transition:transform 250ms cubic-bezier(.2,.9,.3,1.3),background-color 200ms ease,color 200ms ease}
+.rv-card--spot:hover .rv-card-icon,.rv-card--spot:focus-visible .rv-card-icon{transform:translateY(-3px) rotate(-6deg);background:var(--accent-btn);color:#fff}
+.rv-card--spot:hover{transform:translateY(-4px)}
+@media (max-width:767px){.rv-hero-inner{padding:32px 16px 48px;gap:32px}.rv-home-cards{padding:0 16px 48px}.rv-hero-sub{font-size:1.05rem}}
+@media (prefers-reduced-motion: reduce){
+  .rv-word,.rv-in{animation:rv-fade-in 200ms ease-out both!important}
+  .rv-hero-floor{animation:rv-fade-in 300ms ease-out both!important}
+  .rv-hero-board .rv-badge{animation:rv-fade-in 150ms ease-out both!important}
+  .rv-btn:hover:not(:disabled),.rv-card--spot:hover,.rv-card--spot:hover .rv-card-icon{transform:none!important}
+  .rv-btn--primary::after{display:none}
+  .rv-caret{animation:none}
+}
+.rv-btn:active:not(:disabled){transform:translateY(0) scale(.97)}
+/* Desktop: the board and both player strips fit on one screen. */
+@media (min-width:1024px){.play-board-col{max-width:max(380px,calc(100vh - 345px))}}

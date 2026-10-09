@@ -272,7 +272,6 @@ export const Board: React.FC<BoardProps> = ({
     const isMovable = !readOnly && !!draggableSquares?.includes(index);
     const isTarget = !readOnly && !isReplaying && (isDestination || !!legalDestinations?.includes(index));
     const sqClass = ['rv-sq', isMovable ? 'rv-sq--movable' : '', isTarget ? 'rv-sq--target' : ''].filter(Boolean).join(' ');
-    const badgeDelay = moveInfo ? Math.min(moves.indexOf(moveInfo) * 25, 250) : 0;
 
     return (
       <div
@@ -369,8 +368,8 @@ export const Board: React.FC<BoardProps> = ({
           <div className="rv-pop" style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid rgba(21, 23, 27, 0.42)', borderRadius: '50%', boxSizing: 'border-box', pointerEvents: 'none', zIndex: 2 }} />
         )}
         {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && moveInfo && (
-          <div className="rv-pop" style={{
-            animationDelay: `${badgeDelay}ms`,
+          <div className="rv-pop rv-badge" style={{
+            ['--i' as string]: moves.indexOf(moveInfo),
             position: 'absolute', top: '-4px', right: '-4px', backgroundColor: BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].color,
             color: BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].textColor, padding: '2px', borderRadius: '6px',
             border: '1.5px solid var(--board-ink)', zIndex: 10, display: 'flex', boxShadow: '0 2px 4px rgba(0,0,0,0.3)'

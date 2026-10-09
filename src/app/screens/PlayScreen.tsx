@@ -200,6 +200,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   };
 
   const dragFromRef = useRef<number | null>(null);
+  // The move list scrolls inside its own box and follows the newest move (the page itself never jumps).
+  const moveListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = moveListRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [game.moves.length]);
   const handlePieceDragStart = (from: number) => {
     dragFromRef.current = from;
     if (selectedSquare !== from) selectPiece(from);
@@ -661,75 +667,73 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
          <div role="status" style={{ padding: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)' }}>
            <span style={{display:"flex",alignItems:"center",gap:"8px"}}><Spinner /> Checking moves…</span>
            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-             <div className="rv-skeleton" style={{ height: 56 }} />
-             <div className="rv-skeleton" style={{ height: 56 }} />
-             <div className="rv-skeleton" style={{ height: 56 }} />
+             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+               {[0, 1, 2, 3].map(k => <div key={k} className="rv-skeleton" style={{ height: 36, width: 64 }} />)}
+             </div>
+             <div className="rv-skeleton" style={{ height: 96 }} />
            </div>
          </div>
        );
     }
     
+    const previewIdx = previewSquare !== null && dests.includes(previewSquare) ? previewSquare : null;
+    const previewInfo = previewIdx !== null ? infoFor(previewIdx) : undefined;
+    const sanFor = (d: number) => hintSan(previewSan(game, selectedSquare, d) ?? formatSquare(d), mateIn !== null);
     return (
-      <div key={`sel-${selectedSquare}`} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px' }}>
+      <div key={`sel-${selectedSquare}`} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px' }}>
         <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{pieceName} on {sqName} — where it can go</h3>
         {renderCheckNotices()}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
-          {dests.map((destIdx, n) => {
-            const mInfo = infoFor(destIdx);
-            const isPreview = previewSquare === destIdx;
-            const san = hintSan(previewSan(game, selectedSquare, destIdx) ?? formatSquare(destIdx), mateIn !== null);
-            return (
-              <div 
-                key={destIdx}
-                className="rv-hint rv-rise"
-                onMouseEnter={() => setPreviewSquare(destIdx)}
-                onMouseLeave={() => setPreviewSquare(p => (p === destIdx ? null : p))}
-                onClick={() => setPreviewSquare(destIdx)}
-                style={{
-                  animationDelay: `${Math.min(n * 30, 240)}ms`,
-                  display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px',
-                  border: isPreview ? '2px solid var(--accent)' : '1px solid var(--border-strong)',
-                  borderRadius: '6px', color: 'var(--text)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span className="mono" style={{ fontWeight: 'bold' }}>{san}</span>
-                  {mInfo && labelChip(mInfo)}
-                </div>
-                {mInfo && moveDetails(mInfo)}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  const renderPreviewSlot = () => {
-    if (!hintsOn) return null;
-    const active = selectedSquare !== null && previewSquare !== null;
-    const info = active && !checkPending ? infoFor(previewSquare) : undefined;
-    const rawSan = active ? previewSan(game, selectedSquare, previewSquare) : null;
-    const san = rawSan ? hintSan(rawSan, mateIn !== null) : null;
-    return (
-      <div style={{ marginTop: '12px', height: '128px', overflowY: 'auto', boxSizing: 'border-box', padding: '12px', background: 'var(--panel)', borderRadius: '6px', border: active ? '2px solid var(--accent)' : '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        {active ? (
-          <div key={`pv-${previewSquare}`} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span className="mono" style={{ fontWeight: 'bold' }}>{san}</span>
-              {info && labelChip(info)}
-            </div>
-            {info && moveDetails(info)}
-          </div>
+        {dests.length === 0 ? (
+          <p style={{ margin: 0, color: 'var(--text-muted)' }}>This piece has no legal moves.</p>
         ) : (
-          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            {selectedSquare === null ? 'Select a piece, then hover, focus, long-press or drag to preview the move.' : 'Hover, focus, long-press or drag a piece to preview the move.'}
-          </p>
+          <div role="group" aria-label="Legal moves" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {dests.map((destIdx, n) => {
+              const mInfo = infoFor(destIdx);
+              const b = mInfo ? BADGE_INFO[mInfo.label as keyof typeof BADGE_INFO] : null;
+              return (
+                <button
+                  key={destIdx}
+                  type="button"
+                  className="rv-dest rv-pop"
+                  aria-pressed={previewIdx === destIdx}
+                  aria-label={`${sanFor(destIdx)}${b ? `, ${b.text}` : ''}`}
+                  onMouseEnter={() => setPreviewSquare(destIdx)}
+                  onFocus={() => setPreviewSquare(destIdx)}
+                  onClick={() => setPreviewSquare(destIdx)}
+                  style={{ ['--i' as string]: n }}
+                >
+                  <span className="mono">{sanFor(destIdx)}</span>
+                  {b && mInfo && (
+                    <span aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '50%', background: b.color, color: b.textColor }}>
+                      <LabelIcon kind={mInfo.label} size={12} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {dests.length > 0 && (
+          <div aria-live="polite" className={previewIdx !== null ? 'rv-detail rv-detail--on' : 'rv-detail'}>
+            {previewIdx !== null ? (
+              <div key={previewIdx} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span className="mono" style={{ fontWeight: 'bold' }}>{sanFor(previewIdx)}</span>
+                  {previewInfo && labelChip(previewInfo)}
+                </div>
+                {previewInfo && moveDetails(previewInfo)}
+              </div>
+            ) : (
+              <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                Hover a square on the board, or a move above, to see what happens. On a phone, tap a move above or long-press a square.
+              </p>
+            )}
+          </div>
         )}
       </div>
     );
   };
-  
+
   let checkSquare: number | undefined;
   if (pos.isCheck()) {
     const kingSquares = Array.from(pos.board[pos.turn].intersect(pos.board.king));
@@ -753,8 +757,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       <div className="play-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px' }}>
         
         {/* Top Controls */}
-        <div style={{ width: '100%', maxWidth: '800px', display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '16px', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', width: '100%' }}>
+        <div className="play-controls" style={{ width: '100%', maxWidth: '1000px', display: 'flex', flexWrap: 'wrap', gap: '12px 16px', marginBottom: '16px', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
             <div className="rv-seg" style={{ alignSelf: 'flex-start' }}>
               <button aria-pressed={settings.mode === 'two-player'} onClick={() => { if (settings.mode !== 'two-player') { startNewGame({ ...settings, mode: 'two-player' }); } }}>Two players</button>
               <button aria-pressed={settings.mode === 'computer'} onClick={() => { if (settings.mode !== 'computer') { startNewGame({ ...settings, mode: 'computer' }); } }}>vs Computer</button>
@@ -801,16 +805,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', width: '100%', maxWidth: '1000px' }}>
           
           <div className="play-board-col" style={{ flex: '1 1 400px', display: 'flex', flexDirection: 'column' }}>
-            {mateIn !== null && (
-              <div role="status" className="rv-rise" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', padding: '10px 14px', background: 'var(--panel)', border: '2px solid var(--accent)', borderRadius: '8px', color: 'var(--text)', fontWeight: 600 }}>
-                <LabelIcon kind="tactic" size={18} />
-                <span>
-                  Engine check: {settings.mode === 'computer' ? 'you have' : `${pos.turn === 'white' ? 'White' : 'Black'} has`} a checkmate in {mateIn}. Can you find it?
-                </span>
-              </div>
-            )}
             {/* Player strip (opponent) */}
-            <div className={thinkingStrip(flipped ? 'white' : 'black')} style={{ background: 'var(--panel)', padding: '12px 16px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', border: '1px solid var(--border)', borderBottom: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className={thinkingStrip(flipped ? 'white' : 'black')} style={{ background: 'var(--panel)', padding: '10px 14px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', border: '1px solid var(--border)', borderBottom: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 {renderStripLabel(flipped ? 'white' : 'black')}
                 {pos.turn === (flipped ? 'white' : 'black') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
@@ -865,7 +861,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
             </div>
             
             {/* Player strip (self) */}
-            <div className={thinkingStrip(flipped ? 'black' : 'white')} style={{ background: 'var(--panel)', padding: '12px 16px', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', border: '1px solid var(--border)', borderTop: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className={thinkingStrip(flipped ? 'black' : 'white')} style={{ background: 'var(--panel)', padding: '10px 14px', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', border: '1px solid var(--border)', borderTop: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 {renderStripLabel(flipped ? 'black' : 'white')}
                 {pos.turn === (flipped ? 'black' : 'white') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
@@ -873,15 +869,21 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               {renderCaptured(flipped ? 'black' : 'white')}
             </div>
             
-            {renderPreviewSlot()}
-
             {/* Status Line */}
             <div aria-live="polite" style={{ marginTop: '16px', padding: '12px', background: 'var(--bg-sunken)', borderRadius: '6px', textAlign: 'center', fontWeight: 'bold' }}>
               {currentStatusText}
             </div>
           </div>
           
-          <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
+            {mateIn !== null && (
+              <div role="status" className="rv-rise" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'var(--panel)', border: '2px solid var(--accent)', borderRadius: '8px', color: 'var(--text)', fontWeight: 600 }}>
+                <LabelIcon kind="tactic" size={18} />
+                <span>
+                  Engine check: {settings.mode === 'computer' ? 'you have' : `${pos.turn === 'white' ? 'White' : 'Black'} has`} a checkmate in {mateIn}. Can you find it?
+                </span>
+              </div>
+            )}
             {gameOutcome && (
               <div className="rv-rise" style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--accent)', textAlign: 'center' }}>
                 <h2>Game Over</h2>
@@ -898,9 +900,10 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
             )}
             {renderHintPanel()}
             
-            <div style={{ background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px', flex: 1, minHeight: '200px' }}>
-              <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem' }}>Moves</h3>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px' }}>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1rem' }}>Moves</h3>
+              {game.moves.length === 0 && <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>No moves yet.</p>}
+              <div ref={moveListRef} className="rv-movelist" tabIndex={game.moves.length > 0 ? 0 : -1} aria-label="Moves played">
                 {game.moves.map((move, i) => {
                   const listBase = moveListInfo[i];
                   const mInfo = listBase ? toDisplay(listBase, fromPlayed(playedVerdicts[i]), false) : undefined;

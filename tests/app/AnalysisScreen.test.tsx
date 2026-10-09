@@ -805,9 +805,32 @@ describe('Analysis Screen', () => {
   });
 
   describe('Show moves for (Phase 5A)', () => {
+    it('source dropdown: PGN is the default and coming soon; My games is coming soon; FEN shows the position picker', async () => {
+      const client = new MockEngineClient();
+      const navs: string[] = [];
+      render(<AnalysisScreen engineClient={client} onNavigate={(s) => navs.push(s)} />);
+      const select = screen.getByLabelText('Analyze from') as HTMLSelectElement;
+      expect(select.value).toBe('pgn');
+      expect(screen.getByText('Analyze a whole game')).toBeTruthy();
+      expect(screen.queryByText('Select a position')).toBeNull();
+      fireEvent.change(select, { target: { value: 'games' } });
+      expect(screen.getByText('My games', { selector: 'h2' })).toBeTruthy();
+      fireEvent.click(screen.getByText('Play a game'));
+      expect(navs).toEqual(['play']);
+      fireEvent.change(select, { target: { value: 'fen' } });
+      expect(screen.getByText('Select a position')).toBeTruthy();
+    });
+
+    it('source dropdown: opening a position from Play starts on FEN', () => {
+      render(<AnalysisScreen engineClient={new MockEngineClient()} initialFen="4k3/8/8/8/8/8/8/4K3 w - - 0 1" onNavigate={() => {}} />);
+      expect((screen.getByLabelText('Analyze from') as HTMLSelectElement).value).toBe('fen');
+      expect(screen.getByRole('grid')).toBeTruthy();
+    });
+
     it('resets Analysis side selection when positions change', async () => {
       const client = new MockEngineClient();
       render(<AnalysisScreen engineClient={client} onNavigate={() => {}} />);
+      fireEvent.change(screen.getByLabelText('Analyze from'), { target: { value: 'fen' } });
       // Select first sample
       fireEvent.click(screen.getByText('Position 1'));
       await waitFor(() => expect(screen.getByLabelText('FEN')).toBeTruthy());
@@ -832,6 +855,7 @@ describe('Analysis Screen', () => {
     it('legal opposite-side selection', async () => {
       const client = new MockEngineClient();
       render(<AnalysisScreen engineClient={client} onNavigate={() => {}} />);
+      fireEvent.change(screen.getByLabelText('Analyze from'), { target: { value: 'fen' } });
       fireEvent.click(screen.getByText('Position 1'));
       await waitFor(() => expect(screen.getByRole('button', { name: 'White' })).toBeTruthy());
       
@@ -849,6 +873,7 @@ describe('Analysis Screen', () => {
     it('disabled illegal selection', async () => {
       const client = new MockEngineClient();
       render(<AnalysisScreen engineClient={client} onNavigate={() => {}} />);
+      fireEvent.change(screen.getByLabelText('Analyze from'), { target: { value: 'fen' } });
       fireEvent.click(screen.getByText('Position 1'));
       await waitFor(() => expect(screen.getByLabelText('FEN')).toBeTruthy());
       

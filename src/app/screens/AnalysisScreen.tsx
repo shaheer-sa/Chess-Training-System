@@ -10,11 +10,20 @@ import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { explain } from '../explain/explain.js';
 
 import { Spinner } from '../components/Spinner.js';
+import type { ScreenName } from '../App.js';
+
+/** Where the analysis comes from. PGN is the default; PGN and My games arrive in later phases. */
+export type AnalyzeSource = 'pgn' | 'fen' | 'games';
+const SOURCES: { value: AnalyzeSource; label: string }[] = [
+  { value: 'pgn', label: 'PGN — a whole game (coming soon)' },
+  { value: 'fen', label: 'FEN — one position' },
+  { value: 'games', label: 'My games (coming soon)' },
+];
 
 interface AnalysisScreenProps {
   engineClient: EngineClient;
   initialFen?: string;
-  onNavigate?: (screen: 'home' | 'help' | 'analysis') => void;
+  onNavigate?: (screen: ScreenName) => void;
 }
 
 const SAMPLES = [
@@ -26,7 +35,8 @@ const SAMPLES = [
   { name: 'Position 5', fen: '3r2k1/5ppp/8/8/8/8/4R3/4R1K1 w - - 0 1' }
 ];
 
-export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, initialFen }) => {
+export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, initialFen, onNavigate }) => {
+  const [source, setSource] = useState<AnalyzeSource>(initialFen ? 'fen' : 'pgn');
   const initSetup = initialFen ? fenOps.parseFen(initialFen) : null;
   const initPos = initSetup?.isOk ? Chess.fromSetup(initSetup.unwrap()).unwrap() : null;
 
@@ -253,8 +263,49 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
         </svg>
         ANALYSIS · Results are shown immediately
       </div>
-      
-      {!position ? (
+
+      <div className="analysis-source" style={{ padding: '16px 24px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px', borderBottom: '1px solid var(--border)', maxWidth: '1320px', margin: '0 auto', width: '100%' }}>
+        <label htmlFor="analyze-source" style={{ fontWeight: 600 }}>Analyze from</label>
+        <div className="rv-select">
+          <select id="analyze-source" value={source} onChange={(e) => { setSource(e.target.value as AnalyzeSource); resetSelection(); }}>
+            {SOURCES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {source === 'pgn' && (
+        <div className="rv-rise" style={{ padding: '32px 24px', maxWidth: '1320px', margin: '0 auto', width: '100%' }}>
+          <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)', maxWidth: '720px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
+              <h2 style={{ fontSize: '1.4rem', margin: 0 }}>Analyze a whole game</h2>
+              <span className="rv-soon">Coming soon</span>
+            </div>
+            <p style={{ color: 'var(--text-2)', marginTop: 0 }}>Paste a game in PGN and step through it move by move, with every move checked.</p>
+            <textarea aria-label="PGN (coming soon)" disabled placeholder={'1. e4 e5 2. Nf3 Nc6 3. Bb5 …'} rows={5} style={{ width: '100%', padding: '12px', background: 'var(--bg-sunken)', color: 'var(--text-muted)', border: '1px dashed var(--border-strong)', borderRadius: '6px', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.9rem', resize: 'none', cursor: 'not-allowed' }} />
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '16px' }}>
+              <button className="rv-btn rv-btn--primary" onClick={() => setSource('fen')}>Analyze one position (FEN)</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {source === 'games' && (
+        <div className="rv-rise" style={{ padding: '32px 24px', maxWidth: '1320px', margin: '0 auto', width: '100%' }}>
+          <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)', maxWidth: '720px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
+              <h2 style={{ fontSize: '1.4rem', margin: 0 }}>My games</h2>
+              <span className="rv-soon">Coming soon</span>
+            </div>
+            <p style={{ color: 'var(--text-2)', marginTop: 0 }}>Once accounts are ready, the games you play here are saved, and you can pick one to analyze.</p>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '16px' }}>
+              <button className="rv-btn rv-btn--primary" onClick={() => onNavigate?.('play')}>Play a game</button>
+              <button className="rv-btn" onClick={() => setSource('fen')}>Analyze one position (FEN)</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {source !== 'fen' ? null : !position ? (
         <div style={{ padding: '40px 24px', maxWidth: '1320px', margin: '0 auto', width: '100%' }}>
           <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)' }}>
             <h2 style={{ fontSize: '1.5rem', marginBottom: '16px' }}>Select a position</h2>

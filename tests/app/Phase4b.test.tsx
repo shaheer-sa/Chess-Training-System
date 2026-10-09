@@ -37,7 +37,8 @@ describe('Phase 4B — Specific Acceptance Tests', () => {
     render(<App engineClient={engine} />);
     
     // Go to Analysis
-    fireEvent.click(screen.getAllByText('Analyze a position')[0]);
+    fireEvent.click(screen.getAllByText('Analyze your game')[0]);
+    fireEvent.change(await screen.findByLabelText('Analyze from'), { target: { value: 'fen' } });
     await screen.findByText('Select a position');
     
     // Click logo
@@ -56,7 +57,8 @@ describe('Phase 4B — Specific Acceptance Tests', () => {
     expect(html).not.toContain('⚠');
     
     // Check Analysis selected
-    fireEvent.click(screen.getAllByText('Analyze a position')[0]);
+    fireEvent.click(screen.getAllByText('Analyze your game')[0]);
+    fireEvent.change(await screen.findByLabelText('Analyze from'), { target: { value: 'fen' } });
     await screen.findByText('Select a position');
     fireEvent.click(screen.getAllByText('Starting position')[0]);
     await screen.findByRole('grid');
@@ -84,7 +86,7 @@ describe('Phase 4B — Specific Acceptance Tests', () => {
   it('No board square has the focus ring before any focus', async () => {
     const engine = createMockEngine();
     const { container } = render(<App engineClient={engine} />);
-    const heroBtn = screen.getAllByText('Analyze a position')[0];
+    const heroBtn = screen.getAllByText('Analyze your game')[0];
     fireEvent.click(heroBtn);
     const squares = container.querySelectorAll('[role="gridcell"]');
     // None should have the focus ring (boxShadow containing #ffffff for focus)
