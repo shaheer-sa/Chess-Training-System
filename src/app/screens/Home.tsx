@@ -7,7 +7,7 @@ import { Chess, fen as fenOps } from 'chessops';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { explain } from '../explain/explain.js';
 import { LabelIcon } from '../components/LabelIcon.js';
-import { Spinner } from '../components/Spinner.js';
+
 
 interface HomeProps {
   onNavigate: (screen: ScreenName, fen?: string) => void;

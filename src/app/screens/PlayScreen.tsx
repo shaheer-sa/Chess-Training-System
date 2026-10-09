@@ -8,6 +8,7 @@ import { explain } from '../explain/explain.js';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { LabelIcon } from '../components/LabelIcon.js';
 import { Spinner } from '../components/Spinner.js';
+import { Spinner } from '../components/Spinner.js';
 import { GameState, newGame, legalDestinations, playMove, undo, outcome, previewSan, isPromotionMove, capturedPieces, materialBalance, castlingRookMove } from '../play/game.js';
 
 
@@ -414,7 +415,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     dests.sort((a, b) => a - b);
     
     if (analyzing) {
-       return <div style={{ padding: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)' }}>Checking squares…</div>;
+       return <div style={{ padding: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)' }}><span style={{display:"flex",alignItems:"center",gap:"8px"}}><Spinner /> Checking squares…</span></div>;
     }
     
     return (

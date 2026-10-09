@@ -364,7 +364,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                   {!(selectedDestInfo && !(expandedLevel >= 3 && exchangeStep > 0)) && (
                     <div aria-hidden="true" style={{ fontSize: '0.95rem', color: 'var(--text-2)' }}>{liveText}</div>
                   )}
-                  {showAnalyzingIndicator && <div aria-hidden="true" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>Checking moves…</div>}
+                  {showAnalyzingIndicator && <div aria-hidden="true" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}><span style={{display:"flex",alignItems:"center",gap:"8px"}}><Spinner /> Checking moves…</span></div>}
                 </div>
                 {selectedDestInfo && (
                   <ExchangeControls

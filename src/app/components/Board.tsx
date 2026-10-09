@@ -123,7 +123,7 @@ export const Board: React.FC<BoardProps> = ({
     }
   };
 
-  const handlePointerMoveInternal = (e: React.PointerEvent, index: number) => {
+  const handlePointerMoveInternal = (e: React.PointerEvent) => {
     if (!dragState) return;
     
     const dx = e.clientX - dragState.startX;
