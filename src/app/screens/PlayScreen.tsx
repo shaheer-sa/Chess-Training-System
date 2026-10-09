@@ -330,17 +330,25 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     resetSelection();
   };
 
-  const handleNewGame = () => {
+  // Every way of starting a game (New game, mode, "You play") resets ALL per-game state here.
+  const startNewGame = (nextSettings: PlaySettings): boolean => {
     if (game.moves.length > 0 && !gameOutcome) {
-      if (!window.confirm("Start a new game? The current game will be lost.")) return;
+      if (!window.confirm("Start a new game? The current game will be lost.")) return false;
     }
-    onChange(newGame(), settings);
+    botRef.current?.cancel();
+    setComputerThinking(false);
+    setComputerError(false);
     setAnim(null);
     setMoveListInfo({});
     moveTokens.current = {};
+    setPromotionMove(null);
     resetSelection();
-    setFlipped(false);
+    setFlipped(nextSettings.mode === 'computer' && nextSettings.humanColor === 'black');
+    onChange(newGame(), nextSettings);
+    return true;
   };
+
+  const handleNewGame = () => { startNewGame(settings); };
 
 
   const caps = capturedPieces(game);
@@ -559,8 +567,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
         <div style={{ width: '100%', maxWidth: '800px', display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '16px', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', width: '100%' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px', alignSelf: 'flex-start' }}>
-              <button className="rv-hover" aria-pressed={settings.mode === 'two-player'} onClick={() => { if (settings.mode !== 'two-player') { if (game.moves.length > 0 && !gameOutcome && !window.confirm("Start a new game? The current game will be lost.")) return; botRef.current?.cancel(); setComputerThinking(false); setComputerError(false); onChange(newGame(), { ...settings, mode: 'two-player' }); } }} style={{ minHeight: '44px', padding: '8px 16px', background: settings.mode === 'two-player' ? 'var(--panel)' : 'transparent', border: settings.mode === 'two-player' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.mode === 'two-player' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.mode === 'two-player' ? 'bold' : 'normal', cursor: 'pointer' }}>Two players</button>
-              <button className="rv-hover" aria-pressed={settings.mode === 'computer'} onClick={() => { if (settings.mode !== 'computer') { if (game.moves.length > 0 && !gameOutcome && !window.confirm("Start a new game? The current game will be lost.")) return; botRef.current?.cancel(); setComputerThinking(false); setComputerError(false); onChange(newGame(), { ...settings, mode: 'computer' }); } }} style={{ minHeight: '44px', padding: '8px 16px', background: settings.mode === 'computer' ? 'var(--panel)' : 'transparent', border: settings.mode === 'computer' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.mode === 'computer' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.mode === 'computer' ? 'bold' : 'normal', cursor: 'pointer' }}>vs Computer</button>
+              <button className="rv-hover" aria-pressed={settings.mode === 'two-player'} onClick={() => { if (settings.mode !== 'two-player') { startNewGame({ ...settings, mode: 'two-player' }); } }} style={{ minHeight: '44px', padding: '8px 16px', background: settings.mode === 'two-player' ? 'var(--panel)' : 'transparent', border: settings.mode === 'two-player' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.mode === 'two-player' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.mode === 'two-player' ? 'bold' : 'normal', cursor: 'pointer' }}>Two players</button>
+              <button className="rv-hover" aria-pressed={settings.mode === 'computer'} onClick={() => { if (settings.mode !== 'computer') { startNewGame({ ...settings, mode: 'computer' }); } }} style={{ minHeight: '44px', padding: '8px 16px', background: settings.mode === 'computer' ? 'var(--panel)' : 'transparent', border: settings.mode === 'computer' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.mode === 'computer' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.mode === 'computer' ? 'bold' : 'normal', cursor: 'pointer' }}>vs Computer</button>
             </div>
             
             {settings.mode === 'computer' && (
@@ -568,8 +576,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>You play:</span>
                   <div style={{ display: 'flex', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px' }}>
-                    <button className="rv-hover" aria-pressed={settings.humanColor === 'white'} onClick={() => { if (settings.humanColor !== 'white') { if (game.moves.length > 0 && !gameOutcome && !window.confirm("Start a new game? The current game will be lost.")) return; botRef.current?.cancel(); setComputerThinking(false); setComputerError(false); onChange(newGame(), { ...settings, humanColor: 'white' }); } }} style={{ minHeight: '44px', padding: '0 16px', background: settings.humanColor === 'white' ? 'var(--panel)' : 'transparent', border: settings.humanColor === 'white' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.humanColor === 'white' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.humanColor === 'white' ? 'bold' : 'normal', cursor: 'pointer' }}>White</button>
-                    <button className="rv-hover" aria-pressed={settings.humanColor === 'black'} onClick={() => { if (settings.humanColor !== 'black') { if (game.moves.length > 0 && !gameOutcome && !window.confirm("Start a new game? The current game will be lost.")) return; botRef.current?.cancel(); setComputerThinking(false); setComputerError(false); onChange(newGame(), { ...settings, humanColor: 'black' }); } }} style={{ minHeight: '44px', padding: '0 16px', background: settings.humanColor === 'black' ? 'var(--panel)' : 'transparent', border: settings.humanColor === 'black' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.humanColor === 'black' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.humanColor === 'black' ? 'bold' : 'normal', cursor: 'pointer' }}>Black</button>
+                    <button className="rv-hover" aria-pressed={settings.humanColor === 'white'} onClick={() => { if (settings.humanColor !== 'white') { startNewGame({ ...settings, humanColor: 'white' }); } }} style={{ minHeight: '44px', padding: '0 16px', background: settings.humanColor === 'white' ? 'var(--panel)' : 'transparent', border: settings.humanColor === 'white' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.humanColor === 'white' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.humanColor === 'white' ? 'bold' : 'normal', cursor: 'pointer' }}>White</button>
+                    <button className="rv-hover" aria-pressed={settings.humanColor === 'black'} onClick={() => { if (settings.humanColor !== 'black') { startNewGame({ ...settings, humanColor: 'black' }); } }} style={{ minHeight: '44px', padding: '0 16px', background: settings.humanColor === 'black' ? 'var(--panel)' : 'transparent', border: settings.humanColor === 'black' ? '1px solid var(--border)' : '1px solid transparent', borderRadius: '4px', color: settings.humanColor === 'black' ? 'var(--text)' : 'var(--text-muted)', fontWeight: settings.humanColor === 'black' ? 'bold' : 'normal', cursor: 'pointer' }}>Black</button>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
