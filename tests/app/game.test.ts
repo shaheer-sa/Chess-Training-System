@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseSquare, Role } from 'chessops';
-import { newGame, playMove, undo, outcome, legalDestinations, GameState, capturedPieces, materialBalance, serializeGame, deserializeGame, castlingRookMove } from '../../src/app/play/game.js';
+import { newGame, playMove, undo, outcome, legalDestinations, GameState, capturedPieces, materialBalance, serializeGame, deserializeGame, castlingRookMove, legalUciMoves } from '../../src/app/play/game.js';
 
 type Step = [from: string, to: string, promotion?: Role];
 
@@ -129,5 +129,36 @@ describe('game.ts', () => {
       expect(castlingRookMove(60, 58)).toEqual({ from: 56, to: 59 }); // black long
       expect(castlingRookMove(12, 28)).toBeNull(); // normal move (e2e4)
     });
+  });
+});
+
+describe('legalUciMoves', () => {
+  it('start position', () => {
+    const game = newGame();
+    const moves = legalUciMoves(game);
+    expect(moves.length).toBe(20);
+    expect(moves).toContain('e2e4');
+    expect(moves).toContain('g1f3');
+  });
+
+  it('white can castle both ways', () => {
+    // A position where white can castle short and long
+    const game = newGame('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1');
+    const moves = legalUciMoves(game);
+    expect(moves).toContain('e1g1');
+    expect(moves).toContain('e1c1');
+  });
+
+  it('white pawn on e7 with e8 empty', () => {
+    const game = newGame('k7/4P3/8/8/8/8/8/4K3 w - - 0 1');
+    const moves = legalUciMoves(game);
+    expect(moves).toContain('e7e8q');
+    expect(moves.some(m => m.startsWith('e7e8') && m !== 'e7e8q')).toBe(false); // No other promotions
+  });
+
+  it('checkmated position', () => {
+    const game = newGame('rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3'); // Fool's mate
+    const moves = legalUciMoves(game);
+    expect(moves).toEqual([]);
   });
 });

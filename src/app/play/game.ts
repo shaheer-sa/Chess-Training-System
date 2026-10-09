@@ -78,6 +78,24 @@ export const legalDestinations = (game: GameState, from: Square): Square[] => {
   return Array.from(result).sort((a, b) => a - b);
 };
 
+export const legalUciMoves = (game: GameState): string[] => {
+  if (outcome(game)) return [];
+  const pos = toPosition(game.currentFen);
+  const ucis: string[] = [];
+  for (let from = 0; from < 64; from++) {
+    const square = from as Square;
+    const piece = pos.board.get(square);
+    if (piece && piece.color === pos.turn) {
+      for (const to of legalDestinations(game, square)) {
+        let uci = makeSquare(square) + makeSquare(to);
+        if (isPromotionMove(game, square, to)) uci += 'q';
+        ucis.push(uci);
+      }
+    }
+  }
+  return ucis.sort();
+};
+
 /** SAN for a move from the current position; promotions preview as queen. */
 export const previewSan = (game: GameState, from: Square, to: Square): string | null => {
   const pos = toPosition(game.currentFen);
