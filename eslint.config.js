@@ -5,7 +5,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ['dist/**', 'node_modules/**', '*.log', 'smoke-screenshots/**'],
+    ignores: ['dist/**', 'node_modules/**', '*.log', 'smoke-screenshots/**', 'public/**'],
   },
   {
     // Supervisor CI scripts run in Node.
