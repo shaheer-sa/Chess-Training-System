@@ -199,7 +199,9 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     // Illegal drop: the piece stays on its square and stays selected (selected at drag start).
   };
 
+  const dragFromRef = useRef<number | null>(null);
   const handlePieceDragStart = (from: number) => {
+    dragFromRef.current = from;
     if (selectedSquare !== from) selectPiece(from);
   };
 
@@ -301,11 +303,13 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   };
 
   const selectPiece = (index: number) => {
+    // Invalidate the previous piece's request and clear its badges before asking for the new piece.
+    const token = ++requestToken.current;
     setSelectedSquare(index);
     setPreviewSquare(null);
+    setMovesInfo([]);
+    setAnalyzing(hintsOn);
     if (hintsOn) {
-      setAnalyzing(true);
-      const token = ++requestToken.current;
       const sqName = formatSquare(index);
       engineClient.classifyMovesFrom(game.currentFen, sqName).then(result => {
         if (token === requestToken.current && result) {
@@ -319,13 +323,9 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   };
 
   const handleDragOverSquare = (index: number | null) => {
-    if (index === null) {
-      setPreviewSquare(null);
-    } else if (selectedSquare !== null && legalDestinations(game, selectedSquare).includes(index)) {
-      setPreviewSquare(index);
-    } else {
-      setPreviewSquare(null);
-    }
+    const from = dragFromRef.current;
+    if (index === null) dragFromRef.current = null;
+    setPreviewSquare(hintsOn && index !== null && from !== null && legalDestinations(game, from).includes(index) ? index : null);
   };
 
   const handleSquareClick = (index: number) => {
@@ -763,11 +763,11 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                   <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '12px' }}>Level:</span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div className="rv-seg">
+                    <div className="rv-seg rv-seg--levels">
                       {([1, 2, 3, 4, 5, 6] as BotLevel[]).map(lvl => (
                         <button key={lvl} aria-label={`Level ${lvl}, about ${LEVEL_ELO[lvl]} rating (estimate)`} aria-pressed={settings.level === lvl} onClick={() => onChange(game, { ...settings, level: lvl })} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4px 8px', gap: '2px', lineHeight: 1.1 }}>
                           <span style={{ fontWeight: 'bold' }}>{lvl}</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>&approx;{LEVEL_ELO[lvl]}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>≈{LEVEL_ELO[lvl]}</span>
                         </button>
                       ))}
                     </div>

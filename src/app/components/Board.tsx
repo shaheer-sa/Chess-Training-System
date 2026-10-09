@@ -136,13 +136,9 @@ export const Board: React.FC<BoardProps> = ({
       if (onPieceDragStart) onPieceDragStart(dragState.startIndex);
     }
     const hoverIndex = squareAt(e.clientX, e.clientY);
-    setDragState(prev => {
-      if (!prev) return null;
-      if (prev.isActive && prev.hoverIndex !== hoverIndex && onDragOverSquare) {
-        onDragOverSquare(hoverIndex);
-      }
-      return { ...prev, isActive: true, currentX: e.clientX, currentY: e.clientY, hoverIndex };
-    });
+    // Report the hovered square outside the state updater (updaters must stay pure), including the first one.
+    if (onDragOverSquare && (!dragState.isActive || dragState.hoverIndex !== hoverIndex)) onDragOverSquare(hoverIndex);
+    setDragState(prev => prev ? { ...prev, isActive: true, currentX: e.clientX, currentY: e.clientY, hoverIndex } : null);
   };
 
   const endDrag = (e: React.PointerEvent, drop: boolean) => {

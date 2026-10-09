@@ -163,3 +163,5 @@ input:focus-visible,
 @keyframes rv-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 .rv-tray{display:flex;flex-wrap:wrap;align-items:center;gap:2px;min-height:30px;padding:3px 8px;border-radius:6px;background:var(--board-light);border:1px solid var(--border-strong);color:var(--board-coord);font-size:.85rem}
 .rv-tray img{width:20px;height:20px}
+.rv-seg--levels{display:grid;grid-template-columns:repeat(6,auto)}
+@media (max-width:480px){.rv-seg--levels{grid-template-columns:repeat(3,minmax(0,1fr))}}

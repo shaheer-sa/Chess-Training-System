@@ -41,11 +41,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
     { label: 'How labels work', screen: 'help' },
   ];
 
-  const navItemStyle = (screen: ScreenName): React.CSSProperties => ({
+  const navItemStyle: React.CSSProperties = {
     fontFamily: 'IBM Plex Sans, sans-serif',
     fontSize: '0.9rem',
     border: 'none',
-  });
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -82,7 +82,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
                 className="rv-navlink"
                 aria-current={currentScreen === screen ? 'page' : undefined}
                 onClick={(e) => { e.preventDefault(); onNavigate(screen); }}
-                style={navItemStyle(screen)}
+                style={navItemStyle}
               >
                 {label}
               </a>
@@ -139,7 +139,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
                 aria-current={currentScreen === screen ? 'page' : undefined}
                 onClick={(e) => { e.preventDefault(); onNavigate(screen); setMenuOpen(false); }}
                 style={{
-                  ...navItemStyle(screen),
+                  ...navItemStyle,
                   display: 'flex',
                   width: '100%',
                   marginBottom: '4px',
