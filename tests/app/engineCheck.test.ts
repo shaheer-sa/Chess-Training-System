@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { engineVerdict, turnContext, materialForSideToMove, scoreValue, EngineScores } from '../../src/app/play/engineVerdict.js';
 import { EngineCheck, parseInfoLines } from '../../src/app/bot/EngineCheck.js';
-import { tacticInProgress, loadVerdicts, serializeVerdicts, pruneVerdicts, toPlayed, fromPlayed, PlayedVerdicts } from '../../src/app/play/playedVerdicts.js';
+import { tacticInProgress, loadVerdicts, serializeVerdicts, pruneVerdicts, toPlayed, fromPlayed, decidePlayedVerdict, PlayedVerdicts } from '../../src/app/play/playedVerdicts.js';
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -167,5 +167,24 @@ describe('played verdicts (pure)', () => {
     expect(fromPlayed(toPlayed({ kind: 'danger', mateAgainst: true }) ?? undefined)).toEqual({ kind: 'danger', mateAgainst: true });
     expect(fromPlayed(toPlayed({ kind: 'tactic' }) ?? undefined)).toEqual({ kind: 'tactic' });
     expect(toPlayed({ kind: 'none' })).toBeNull();
+  });
+});
+
+describe('decidePlayedVerdict (ordered verdict queue)', () => {
+  const W = 'white' as const, B = 'black' as const;
+  const tactic = { kind: 'tactic' } as const;
+  type Row = [string, ('white' | 'black')[], PlayedVerdicts, number, Parameters<typeof decidePlayedVerdict>[0], string | null];
+  const rows: Row[] = [
+    ['first Tactic is recorded', [W, B], {}, 0, tactic, 'tactic'],
+    ['race case: my previous Tactic (now final in the ledger) suppresses a quick second Tactic', [W, B, W], { 0: 'tactic' }, 2, tactic, null],
+    ['still suppressed on my second turn after the Tactic', [W, B, W, B, W], { 0: 'tactic' }, 4, tactic, null],
+    ['after two own turns a new Tactic counts again', [W, B, W, B, W, B, W], { 0: 'tactic' }, 6, tactic, 'tactic'],
+    ["the opponent's Tactic never suppresses mine", [W, B, W], { 1: 'tactic' }, 2, tactic, 'tactic'],
+    ['a suppressed follow-up does not extend the window (not recorded, so it cannot restart it)', [W, B, W, B, W, B, W], { 0: 'tactic' }, 6, tactic, 'tactic'],
+    ['danger is always recorded, even while suppressed', [W, B, W], { 0: 'tactic' }, 2, { kind: 'danger', mateAgainst: false }, 'danger'],
+    ['verdicts at or after this index are ignored (undo/redo at the same index)', [W, B, W], { 2: 'tactic', 4: 'tactic' }, 2, tactic, 'tactic'],
+  ];
+  it.each(rows)('%s', (_n, colors, before, i, verdict, expected) => {
+    expect(decidePlayedVerdict(verdict, colors, before, i)).toBe(expected);
   });
 });

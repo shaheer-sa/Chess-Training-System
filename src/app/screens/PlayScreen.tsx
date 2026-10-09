@@ -14,7 +14,7 @@ import type { BotLevel } from '../bot/levels.js';
 import { EngineCheck, EngineCheckClient } from '../bot/EngineCheck.js';
 import { EngineScores, TurnContext, turnContext, engineVerdict } from '../play/engineVerdict.js';
 import { DisplayMove, toDisplay, displayText, hintSan } from '../play/display.js';
-import { PlayedVerdicts, VERDICTS_KEY, loadVerdicts, serializeVerdicts, pruneVerdicts, tacticInProgress, toPlayed, fromPlayed } from '../play/playedVerdicts.js';
+import { PlayedVerdict, PlayedVerdicts, VERDICTS_KEY, loadVerdicts, serializeVerdicts, pruneVerdicts, tacticInProgress, fromPlayed, decidePlayedVerdict } from '../play/playedVerdicts.js';
 import { legalUciMoves } from '../play/game.js';
 
 
@@ -68,16 +68,26 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const [playedVerdicts, setPlayedVerdicts] = useState<PlayedVerdicts>(() => {
     try { return loadVerdicts(localStorage.getItem(VERDICTS_KEY), game.moves.map(m => m.uci)); } catch { return {}; }
   });
+  // The ledger the verdict queue reads: always the latest committed verdicts (state alone would be a stale closure).
+  const verdictsRef = useRef<PlayedVerdicts>(playedVerdicts);
+  const commitVerdicts = (next: PlayedVerdicts) => { verdictsRef.current = next; setPlayedVerdicts(next); };
+  const commitVerdict = (i: number, p: PlayedVerdict | null) => {
+    const next = { ...verdictsRef.current };
+    if (p) next[i] = p; else delete next[i];
+    commitVerdicts(next);
+  };
   useEffect(() => {
     try { localStorage.setItem(VERDICTS_KEY, serializeVerdicts(game.moves.map(m => m.uci), playedVerdicts)); } catch { /* storage unavailable */ }
   }, [playedVerdicts, game.moves]);
 
   // Moves played before their turn's check finished get their verdict from this on-demand check.
   const lateCheckRef = useRef<EngineCheckClient | null>(null);
-  // Late checks run one after another (never cancel each other); their moves show "Checking…" until done.
-  const lateQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const [pendingVerdicts, setPendingVerdicts] = useState<Record<number, true>>({});
-  const clearPending = (i: number) => setPendingVerdicts(prev => { if (!prev[i]) return prev; const next = { ...prev }; delete next[i]; return next; });
+  // Every played move's verdict is decided in ONE queue, strictly in move order, so each decision sees the final
+  // verdicts of all earlier moves. pendingVerdicts maps move index → the request token that owns its "Checking…".
+  const verdictQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const [pendingVerdicts, setPendingVerdicts] = useState<Record<number, number>>({});
+  const clearPending = (i: number, token: number) =>
+    setPendingVerdicts(prev => { if (prev[i] !== token) return prev; const next = { ...prev }; delete next[i]; return next; });
   useEffect(() => {
     return () => {
       checkRef.current?.dispose(); checkRef.current = null;
@@ -199,7 +209,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const hintsTurn = hintsOn && !gameOutcome && (settings.mode === 'two-player' || pos.turn === settings.humanColor);
   const checkReady = !!check && check.fen === game.currentFen;
   const checkFailed = checkFailedFen === game.currentFen;
-  const checkPending = hintsTurn && !checkReady && !checkFailed;
+  const ownVerdictPending = Object.keys(pendingVerdicts).some(k => game.moves[Number(k)]?.color === pos.turn);
+  const checkPending = hintsTurn && ((!checkReady && !checkFailed) || ownVerdictPending);
   // Derived from history, so Undo and refresh keep it right: while my Tactic is in progress, no Tactic labels for me.
   const suppressTactic = tacticInProgress(game.moves.map(m => m.color), pruneVerdicts(playedVerdicts, game.moves.length), pos.turn);
 
@@ -358,14 +369,11 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       
       // The engine check of THIS position decides the played move's verdict (independent of what the hints showed).
       const checkAtPlay = hintsTurn && checkReady && check ? check : null;
-      const needsLateCheck = hintsTurn && !checkAtPlay;
-      const legalCountBefore = needsLateCheck ? legalUciMoves(game).length : 0;
+      const wantsVerdict = hintsTurn;
+      const legalCountBefore = wantsVerdict && !checkAtPlay ? legalUciMoves(game).length : 0;
       const playedUci = fromStr + toStr + (promotes ? 'q' : '');
-      // A move played while my Tactic is in progress is never recorded as a new Tactic (no reveal, no endless window).
-      const suppressAtPlay = suppressTactic;
-      const record = (v: Parameters<typeof toPlayed>[0]) => { const p = toPlayed(v); return p === 'tactic' && suppressAtPlay ? null : p; };
-      setPlayedVerdicts(prev => { const next = { ...prev }; delete next[moveIndex]; return next; });
-      clearPending(moveIndex);
+      const moveColors = newGameSt.moves.map(m => m.color);
+      commitVerdict(moveIndex, null);
 
       const rook = castlingRookMove(fromIdx, toIdx);
       setAnim(dragged ? null : { moves: rook ? [{ from: fromIdx, to: toIdx }, rook] : [{ from: fromIdx, to: toIdx }], key: newGameSt.moves.length });
@@ -379,34 +387,43 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       if (settings.mode === 'computer' && pos.turn !== settings.humanColor) return;
       const token = ++requestToken.current;
       moveTokens.current[moveIndex] = token;
-      if (needsLateCheck) setPendingVerdicts(prev => ({ ...prev, [moveIndex]: true }));
-      // Classify the move (move list + Last move card), then record its engine verdict.
-      engineClient.classifyMove(fenBefore, { from: fromStr, to: toStr, promotion: promotes ? 'queen' : undefined }).then(res => {
-        if (moveTokens.current[moveIndex] !== token || !res || !res.ok) { clearPending(moveIndex); return; }
-        const base = res.value;
-        if (!needsLateCheck) {
-          setMoveListInfo(prev => ({ ...prev, [moveIndex]: base }));
-          const played = checkAtPlay ? record(engineVerdict(base, checkAtPlay.scores[playedUci], checkAtPlay.ctx)) : null;
-          if (played) setPlayedVerdicts(prev => ({ ...prev, [moveIndex]: played }));
-          return;
-        }
-        // Played before this turn's check finished: queue a check of the position it was played in.
-        lateQueueRef.current = lateQueueRef.current.then(async () => {
-          if (moveTokens.current[moveIndex] !== token) return; // undone meanwhile
-          if (!lateCheckRef.current) lateCheckRef.current = new EngineCheck();
-          try {
-            const scores = await lateCheckRef.current.check(fenBefore, legalCountBefore);
+      const basePromise = engineClient.classifyMove(fenBefore, { from: fromStr, to: toStr, promotion: promotes ? 'queen' : undefined });
+      if (!wantsVerdict) {
+        basePromise.then(res => {
+          if (moveTokens.current[moveIndex] === token && res.ok) setMoveListInfo(prev => ({ ...prev, [moveIndex]: res.value }));
+        }).catch(() => {});
+        return;
+      }
+      setPendingVerdicts(prev => ({ ...prev, [moveIndex]: token }));
+      verdictQueueRef.current = verdictQueueRef.current.then(async () => {
+        try {
+          const res = await basePromise;
+          if (moveTokens.current[moveIndex] !== token || !res.ok) return; // undone, or not classifiable
+          const base = res.value;
+          let scores = checkAtPlay?.scores;
+          let ctx = checkAtPlay?.ctx ?? null;
+          if (!checkAtPlay) {
+            // Played before this turn's check finished: check the position it was played in.
+            if (!lateCheckRef.current) lateCheckRef.current = new EngineCheck();
+            try {
+              scores = await lateCheckRef.current.check(fenBefore, legalCountBefore);
+              ctx = turnContext(fenBefore, scores);
+            } catch {
+              scores = undefined; // check unavailable: the move keeps its square-check label
+            }
             if (moveTokens.current[moveIndex] !== token) return;
-            const late = record(engineVerdict(base, scores[playedUci], turnContext(fenBefore, scores)));
-            if (late) setPlayedVerdicts(prev => ({ ...prev, [moveIndex]: late }));
-          } catch {
-            // Check unavailable: the move keeps its square-check label.
-          } finally {
-            if (moveTokens.current[moveIndex] === token) setMoveListInfo(prev => ({ ...prev, [moveIndex]: base }));
-            clearPending(moveIndex);
           }
-        });
-      }).catch(() => clearPending(moveIndex));
+          const decided = scores
+            ? decidePlayedVerdict(engineVerdict(base, scores[playedUci], ctx), moveColors, verdictsRef.current, moveIndex)
+            : null;
+          commitVerdict(moveIndex, decided);
+          setMoveListInfo(prev => ({ ...prev, [moveIndex]: base }));
+        } catch {
+          // classification failed: no label for this move
+        } finally {
+          clearPending(moveIndex, token);
+        }
+      });
     }
   };
 
@@ -427,8 +444,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     });
     setPromotionMove(null);
     setAnim(null);
-    setPlayedVerdicts(prev => pruneVerdicts(prev, keep));
-    setPendingVerdicts(prev => { const next: Record<number, true> = {}; for (const k of Object.keys(prev)) if (Number(k) < keep) next[Number(k)] = true; return next; });
+    commitVerdicts(pruneVerdicts(verdictsRef.current, keep));
+    setPendingVerdicts(prev => { const next: Record<number, number> = {}; for (const [k, t] of Object.entries(prev)) if (Number(k) < keep) next[Number(k)] = t; return next; });
     onChange(nextGame, settings);
     resetSelection();
   };
@@ -444,7 +461,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     setAnim(null);
     setMoveListInfo({});
     moveTokens.current = {};
-    setPlayedVerdicts({});
+    commitVerdicts({});
     setPendingVerdicts({});
     setPromotionMove(null);
     resetSelection();
@@ -561,7 +578,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     const i = game.moves.length - 1;
     if (i < 0) return null;
     const base = moveListInfo[i];
-    const pending = !!pendingVerdicts[i];
+    const pending = pendingVerdicts[i] !== undefined;
     const info: DisplayMove | undefined = base && !pending ? toDisplay(base, fromPlayed(playedVerdicts[i]), false) : undefined;
     return (
       <div key={`last-${i}`} className="rv-fade-in-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--panel)', borderRadius: '8px', border: '2px solid var(--accent)', padding: '16px' }}>

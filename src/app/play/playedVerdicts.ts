@@ -61,3 +61,20 @@ export const loadVerdicts = (raw: string | null, uciMoves: string[]): PlayedVerd
     return {};
   }
 };
+
+/**
+ * The verdict recorded for move `moveIndex`: the engine verdict, except that a Tactic played while the mover's
+ * previous Tactic is still in progress is not recorded (no reveal, no endless window). `verdictsBefore` must be the
+ * FINAL verdicts of moves 0..moveIndex-1, so moves are decided strictly in order.
+ */
+export const decidePlayedVerdict = (
+  verdict: Verdict,
+  moveColors: ('white' | 'black')[],
+  verdictsBefore: PlayedVerdicts,
+  moveIndex: number
+): PlayedVerdict | null => {
+  const p = toPlayed(verdict);
+  if (p !== 'tactic') return p;
+  const mover = moveColors[moveIndex];
+  return tacticInProgress(moveColors.slice(0, moveIndex), pruneVerdicts(verdictsBefore, moveIndex), mover) ? null : p;
+};
