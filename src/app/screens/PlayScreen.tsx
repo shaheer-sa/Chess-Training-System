@@ -31,6 +31,9 @@ const getPieceName = (c: 'w'|'b', r: string) => {
   return 'King';
 };
 
+const PROMO_TYPE: Record<string, 'Q' | 'R' | 'B' | 'N'> = { queen: 'Q', rook: 'R', bishop: 'B', knight: 'N' };
+const PROMO_NAME: Record<string, string> = { queen: 'Queen', rook: 'Rook', bishop: 'Bishop', knight: 'Knight' };
+
 const formatSquare = (index: number) => {
   const file = String.fromCharCode('a'.charCodeAt(0) + (index & 7));
   const rank = String.fromCharCode('1'.charCodeAt(0) + (index >> 3));
@@ -51,33 +54,24 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const promoDialogRef = useRef<HTMLDivElement>(null);
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [longPressActive, setLongPressActive] = useState(false);
   const ignoreClickRef = useRef(false);
 
-  const handlePointerDown = (index: number) => {
+  const clearLongPress = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
+  };
+
+  // Touch only: a long-press previews a destination without playing it; the click that follows is ignored.
+  const handlePointerDown = (index: number, pointerType: string) => {
+    ignoreClickRef.current = false;
+    clearLongPress();
+    if (pointerType !== 'touch') return;
     if (selectedSquare !== null && hintsOn && legalDestinations(game, selectedSquare).includes(index)) {
       longPressTimer.current = setTimeout(() => {
-        setLongPressActive(true);
+        longPressTimer.current = null;
         setPreviewSquare(index);
         ignoreClickRef.current = true;
       }, 450);
-    }
-  };
-
-  const handlePointerUp = () => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    if (longPressActive) {
-      setLongPressActive(false);
-      setPreviewSquare(null);
-      // ignoreClickRef is reset in onClick
-    }
-  };
-
-  const handlePointerCancel = () => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    if (longPressActive) {
-      setLongPressActive(false);
-      setPreviewSquare(null);
     }
   };
 
@@ -122,6 +116,17 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     }
   }, [promotionMove]);
 
+  useEffect(() => {
+    const i = game.moves.length - 1;
+    if (!hintsOn || i < 0 || moveTokens.current[i] !== undefined) return;
+    const m = game.moves[i];
+    if (m.uci.length > 4 && m.uci[4] !== 'q') return;
+    moveTokens.current[i] = -1;
+    engineClient.classifyMove(undo(game).currentFen, { from: m.uci.slice(0, 2) as Square, to: m.uci.slice(2, 4) as Square, promotion: m.uci.length > 4 ? 'queen' : undefined }).then(res => {
+      if (moveTokens.current[i] === -1 && res.ok) setMoveListInfo(prev => ({ ...prev, [i]: res.value }));
+    }).catch(() => {});
+  }, [game, hintsOn, engineClient]);
+
   const resetSelection = () => {
     requestToken.current++;
     setSelectedSquare(null);
@@ -131,6 +136,10 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   };
 
   const handleSquareClick = (index: number) => {
+    if (ignoreClickRef.current) {
+      ignoreClickRef.current = false;
+      return;
+    }
     if (readOnly) return;
     
     if (promotionMove) return; // Wait for dialog
@@ -172,11 +181,6 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
         return;
       }
 
-      if (hintsOn && previewSquare !== index) {
-        setPreviewSquare(index);
-        return;
-      }
-      
       executeMove(selectedSquare, index);
     }
   };
@@ -254,7 +258,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     // count occurrences for aria-label
     const counts: Record<string, number> = {};
     for (const p of pieces) counts[p] = (counts[p] || 0) + 1;
-    const labels = Object.entries(counts).map(([p, c]) => `${c} ${p}s`).join(', ');
+    const labels = Object.entries(counts).map(([p, c]) => `${c} ${c === 1 ? p : `${p}s`}`).join(', ');
     const ariaLabel = pieces.length > 0 ? `Captured: ${labels}` : '';
     
     let isAhead = false;
@@ -305,15 +309,55 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   
   const currentStatusText = formatStatusMove();
 
+  const labelChip = (c: MoveClassification) => {
+    const b = BADGE_INFO[c.label as keyof typeof BADGE_INFO];
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '2px 8px', borderRadius: '4px', background: b.color, color: b.textColor, fontSize: '0.8rem', fontWeight: 600 }}>
+        <LabelIcon kind={c.label as keyof typeof BADGE_INFO} size={14} />
+        {b.text}
+      </span>
+    );
+  };
+
+  const moveDetails = (c: MoveClassification) => {
+    const e = explain(c);
+    return (
+      <>
+        <div style={{ fontSize: '0.95rem', color: 'var(--text-2)' }}>{e.primary}</div>
+        {e.notes.map((n, i) => <div key={i} style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{n}</div>)}
+      </>
+    );
+  };
+
+  const infoFor = (destIdx: number) => movesInfo.find(m => m.move.to === formatSquare(destIdx));
+
+  const renderLastMoveCard = () => {
+    const i = game.moves.length - 1;
+    if (i < 0) return null;
+    const info = moveListInfo[i];
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--panel)', borderRadius: '8px', border: '2px solid var(--accent)', padding: '16px' }}>
+        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Last move</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span className="mono" style={{ fontWeight: 'bold' }}>{Math.floor(i / 2) + 1}{i % 2 === 0 ? '.' : '...'} {game.moves[i].san}</span>
+          {hintsOn && info && labelChip(info)}
+        </div>
+        {hintsOn && info && moveDetails(info)}
+      </div>
+    );
+  };
+
   const renderHintPanel = () => {
-    if (!hintsOn) return null;
     if (selectedSquare === null) {
+      if (game.moves.length > 0) return renderLastMoveCard();
+      if (!hintsOn) return null;
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px' }}>
           <p style={{ margin: 0, color: 'var(--text-muted)' }}>Tap one of your pieces to see where it can go.</p>
         </div>
       );
     }
+    if (!hintsOn) return null;
     
     const sqName = formatSquare(selectedSquare);
     const piece = pos.board.get(selectedSquare);
@@ -323,7 +367,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     dests.sort((a, b) => a - b);
     
     if (analyzing) {
-       return <div style={{ padding: '16px', background: 'var(--panel)' }}>Analyzing...</div>;
+       return <div style={{ padding: '16px', background: 'var(--panel)', borderRadius: '8px', border: '1px solid var(--border)' }}>Checking squares…</div>;
     }
     
     return (
@@ -331,45 +375,51 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
         <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{pieceName} on {sqName} — where it can go</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
           {dests.map(destIdx => {
-            const destStr = formatSquare(destIdx);
-            const mInfo = movesInfo.find(m => m.move.to === destStr);
+            const mInfo = infoFor(destIdx);
             const isPreview = previewSquare === destIdx;
-            
-            const sanMoveString = previewSan(game, selectedSquare, destIdx) ?? destStr;
-            
+            const san = previewSan(game, selectedSquare, destIdx) ?? formatSquare(destIdx);
             return (
-              <button 
+              <div 
                 key={destIdx}
-                onClick={() => isPreview ? executeMove(selectedSquare, destIdx) : setPreviewSquare(destIdx)}
                 style={{
-                  display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', textAlign: 'left',
+                  display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px',
                   border: isPreview ? '2px solid var(--accent)' : '1px solid var(--border-strong)',
-                  borderRadius: '6px', cursor: 'pointer', background: isPreview ? 'rgba(255,255,255,0.05)' : 'transparent', color: 'var(--text)'
+                  borderRadius: '6px', color: 'var(--text)'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                  <span style={{ fontWeight: 'bold' }}>To {destStr} ({sanMoveString})</span>
-                  {mInfo && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 'bold', textTransform: 'uppercase', color: BADGE_INFO[mInfo.label as keyof typeof BADGE_INFO].textColor }}>
-                      <LabelIcon kind={mInfo.label as keyof typeof BADGE_INFO} size={14} />
-                      {BADGE_INFO[mInfo.label as keyof typeof BADGE_INFO].text}
-                    </div>
-                  )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span className="mono" style={{ fontWeight: 'bold' }}>{san}</span>
+                  {mInfo && labelChip(mInfo)}
                 </div>
-                {mInfo && (
-                  <div style={{ fontSize: '0.95rem', color: 'var(--text-2)' }}>
-                    {explain(mInfo).primary}
-                  </div>
-                )}
-                {isPreview && (
-                  <div style={{ marginTop: '8px', background: 'var(--accent-btn)', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', textAlign: 'center' }}>
-                    Play {sanMoveString}
-                  </div>
-                )}
-              </button>
+                {mInfo && moveDetails(mInfo)}
+              </div>
             );
           })}
         </div>
+      </div>
+    );
+  };
+
+  const renderPreviewSlot = () => {
+    if (!hintsOn) return null;
+    const active = selectedSquare !== null && previewSquare !== null;
+    const info = active ? infoFor(previewSquare) : undefined;
+    const san = active ? previewSan(game, selectedSquare, previewSquare) : null;
+    return (
+      <div style={{ marginTop: '12px', height: '128px', overflowY: 'auto', boxSizing: 'border-box', padding: '12px', background: 'var(--panel)', borderRadius: '6px', border: active ? '2px solid var(--accent)' : '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {active ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span className="mono" style={{ fontWeight: 'bold' }}>{san}</span>
+              {info && labelChip(info)}
+            </div>
+            {info && moveDetails(info)}
+          </>
+        ) : (
+          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+            {selectedSquare === null ? 'Select a piece, then hover, focus or long-press a square to preview the move.' : 'Hover, focus or long-press a highlighted square to preview the move.'}
+          </p>
+        )}
       </div>
     );
   };
@@ -440,8 +490,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 checkSquare={checkSquare}
                 legalDestinations={!hintsOn && selectedSquare !== null ? legalDestinations(game, selectedSquare) : undefined}
                 onSquarePointerDown={handlePointerDown}
-                onSquarePointerUp={handlePointerUp}
-                onSquarePointerCancel={handlePointerCancel}
+                onSquarePointerUp={clearLongPress}
+                onSquarePointerCancel={clearLongPress}
                 onSquareMouseEnter={handleMouseEnter}
                 onSquareMouseLeave={handleMouseLeave}
               />
@@ -450,14 +500,14 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 <div role="dialog" aria-modal="true" ref={promoDialogRef} tabIndex={-1} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                   <div style={{ background: 'var(--panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div style={{ fontWeight: 'bold', textAlign: 'center' }}>Choose promotion</div>
-                    <div style={{ display: 'flex', gap: '16px' }}>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                     {(['queen', 'rook', 'bishop', 'knight'] as Role[]).map(role => (
-                      <button key={role} onClick={() => executeMove(parseSquare(promotionMove.from)!, parseSquare(promotionMove.to)!, role)} style={{ minHeight: '44px', padding: '12px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--text)', textTransform: 'capitalize' }}>
-                        {role}
+                      <button key={role} aria-label={PROMO_NAME[role]} onClick={() => executeMove(parseSquare(promotionMove.from)!, parseSquare(promotionMove.to)!, role)} style={{ width: '60px', height: '60px', padding: '6px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}>
+                        <Piece color={pos.turn === 'white' ? 'w' : 'b'} type={PROMO_TYPE[role]} style={{ width: '100%', height: '100%' }} />
                       </button>
                     ))}
-                    <button onClick={() => setPromotionMove(null)} style={{ minHeight: '44px', padding: '12px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--text)' }}>Cancel</button>
                     </div>
+                    <button onClick={() => setPromotionMove(null)} style={{ minHeight: '44px', padding: '12px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--text)' }}>Cancel</button>
                   </div>
                 </div>
               )}
@@ -470,6 +520,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               {pos.turn === (flipped ? 'black' : 'white') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
             </div>
             
+            {renderPreviewSlot()}
+
             {/* Status Line */}
             <div aria-live="polite" style={{ marginTop: '16px', padding: '12px', background: 'var(--bg-sunken)', borderRadius: '6px', textAlign: 'center', fontWeight: 'bold' }}>
               {currentStatusText}

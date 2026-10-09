@@ -23,7 +23,7 @@ interface BoardProps {
   lastMove?: { from: number; to: number };
   checkSquare?: number;
   legalDestinations?: number[];
-  onSquarePointerDown?: (index: number) => void;
+  onSquarePointerDown?: (index: number, pointerType: string) => void;
   onSquarePointerUp?: (index: number) => void;
   onSquarePointerCancel?: (index: number) => void;
   onSquareMouseEnter?: (index: number) => void;
@@ -163,9 +163,10 @@ export const Board: React.FC<BoardProps> = ({
         onBlur={() => {
           if (onSquareMouseLeave) onSquareMouseLeave(index);
         }}
-        onPointerDown={() => onSquarePointerDown && onSquarePointerDown(index)}
+        onPointerDown={(e) => onSquarePointerDown && onSquarePointerDown(index, e.pointerType)}
         onPointerUp={() => onSquarePointerUp && onSquarePointerUp(index)}
         onPointerCancel={() => onSquarePointerCancel && onSquarePointerCancel(index)}
+        onPointerLeave={() => onSquarePointerCancel && onSquarePointerCancel(index)}
         onMouseEnter={() => onSquareMouseEnter && onSquareMouseEnter(index)}
         onMouseLeave={() => onSquareMouseLeave && onSquareMouseLeave(index)}
         style={{
@@ -263,8 +264,8 @@ export const Board: React.FC<BoardProps> = ({
       aria-label="Chess board" 
       onFocus={() => setHasFocus(true)} 
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHasFocus(false); }}
-      onContextMenu={(e) => e.preventDefault()}
-      style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid var(--border-strong)', boxSizing: 'border-box', overflow: 'hidden', borderRadius: '4px', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none', touchAction: 'none' }}>
+      onContextMenu={onSquarePointerDown ? (e) => e.preventDefault() : undefined}
+      style={{ position: 'relative', width: '100%', paddingBottom: '100%', outline: '1px solid var(--border-strong)', boxSizing: 'border-box', overflow: 'hidden', borderRadius: '4px', ...(onSquarePointerDown ? { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none', touchAction: 'manipulation' } : {}) }}>
       {rows}
       {readOnly && arrow && (() => {
         const fromFile = arrow.from.charCodeAt(0) - 97;

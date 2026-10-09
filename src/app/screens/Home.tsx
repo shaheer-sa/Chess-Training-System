@@ -13,6 +13,8 @@ interface HomeProps {
   engineClient?: EngineClient;
 }
 
+const squareIndex = (sq: string): number => (sq.charCodeAt(1) - 49) * 8 + (sq.charCodeAt(0) - 97);
+
 const HERO_FEN = 'k5br/p3Np1p/P4P1P/8/8/8/8/7K w - - 0 1';
 
 export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
@@ -53,6 +55,12 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
             >
               Analyze a position
             </button>
+            <button 
+              onClick={() => onNavigate('play')}
+              style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border-strong)', padding: '12px 24px', borderRadius: '6px', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', minHeight: '44px' }}
+            >
+              Play a game
+            </button>
           </div>
         </div>
 
@@ -76,7 +84,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
               {moves.length > 0 && (
                 <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {['safe', 'even_trade', 'loses_material', 'unclear'].map(label => {
-                    const mInfo = moves.find(m => m.label === label);
+                    const mInfo = [...moves].sort((a, b) => squareIndex(a.move.to) - squareIndex(b.move.to)).find(m => m.label === label);
                     if (!mInfo) return null;
                     const explanation = explain(mInfo);
                     return (
