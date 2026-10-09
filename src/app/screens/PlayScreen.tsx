@@ -57,9 +57,10 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const botRef = useRef<BotClient | null>(null);
   const [computerThinking, setComputerThinking] = useState(false);
   const [computerError, setComputerError] = useState(false);
+  const [botRetry, setBotRetry] = useState(0);
 
   useEffect(() => {
-    return () => { botRef.current?.dispose(); };
+    return () => { botRef.current?.dispose(); botRef.current = null; };
   }, []);
 
   useEffect(() => {
@@ -97,8 +98,9 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     return () => {
       active = false;
       botRef.current?.cancel();
+      setComputerThinking(false);
     };
-  }, [game, settings]);
+  }, [game, settings, botRetry]);
   
   const [selectedSquare, setSelectedSquare] = useState<number | null>(null);
   const [previewSquare, setPreviewSquare] = useState<number | null>(null);
@@ -203,11 +205,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     if (!hintsOn || i < 0 || moveTokens.current[i] !== undefined) return;
     const m = game.moves[i];
     if (m.uci.length > 4 && m.uci[4] !== 'q') return;
+    if (settings.mode === 'computer' && m.color !== settings.humanColor) return;
     moveTokens.current[i] = -1;
     engineClient.classifyMove(undo(game).currentFen, { from: m.uci.slice(0, 2) as Square, to: m.uci.slice(2, 4) as Square, promotion: m.uci.length > 4 ? 'queen' : undefined }).then(res => {
       if (moveTokens.current[i] === -1 && res.ok) setMoveListInfo(prev => ({ ...prev, [i]: res.value }));
     }).catch(() => {});
-  }, [game, hintsOn, engineClient]);
+  }, [game, hintsOn, engineClient, settings.mode, settings.humanColor]);
 
   const resetSelection = () => {
     requestToken.current++;
@@ -223,6 +226,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       return;
     }
     if (readOnly) return;
+    if (computerThinking || isBotTurn(game, settings)) return; // the human never moves for the computer
     
     if (promotionMove) return; // Wait for dialog
     
@@ -292,6 +296,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       
       // The engine analyses queen promotion only: no label for under-promotions.
       if (promotes && promoRole !== 'queen') return;
+      // Hints are for the human only: the computer's moves are never classified.
+      if (settings.mode === 'computer' && pos.turn !== settings.humanColor) return;
       const token = ++requestToken.current;
       moveTokens.current[moveIndex] = token;
       // Classify the move to add a dot to the move list
@@ -304,7 +310,10 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   };
 
   const handleUndo = () => {
-    const nextGame = undo(game);
+    botRef.current?.cancel();
+    setComputerError(false);
+    let nextGame = game;
+    for (let k = undoPlies(game, settings); k > 0; k--) nextGame = undo(nextGame);
     const keep = nextGame.moves.length;
     // Drop labels and pending classification requests for undone moves.
     for (const k of Object.keys(moveTokens.current)) {
@@ -337,6 +346,19 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const caps = capturedPieces(game);
   const matBal = materialBalance(game);
   
+  const renderStripLabel = (color: 'white' | 'black') => {
+    const isComputer = settings.mode === 'computer' && color !== settings.humanColor;
+    const name = settings.mode === 'two-player' ? (color === 'white' ? 'White' : 'Black') : isComputer ? `Computer · Level ${settings.level}` : 'You';
+    return (
+      <span style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {name}
+        {isComputer && computerThinking && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}><Spinner /> Thinking…</span>
+        )}
+      </span>
+    );
+  };
+
   const renderCaptured = (color: 'white' | 'black') => {
     const pieces = caps[color];
     const order: Record<Role, number> = { queen: 1, rook: 2, bishop: 3, knight: 4, pawn: 5, king: 6 };
@@ -578,7 +600,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           <div className="play-board-col" style={{ flex: '1 1 400px', display: 'flex', flexDirection: 'column' }}>
             {/* Player strip (opponent) */}
             <div style={{ background: 'var(--panel)', padding: '12px 16px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', border: '1px solid var(--border)', borderBottom: 'none', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>{settings.mode === 'two-player' ? (flipped ? 'White' : 'Black') : (settings.humanColor === 'white' ? `Computer · Level ${settings.level}` : `Computer · Level ${settings.level}`)} {computerThinking && <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 'normal' }}><Spinner /> Thinking...</span>}</span>
+              {renderStripLabel(flipped ? 'white' : 'black')}
               {renderCaptured(flipped ? 'white' : 'black')}
               {pos.turn === (flipped ? 'white' : 'black') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
             </div>
@@ -629,7 +651,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
             
             {/* Player strip (self) */}
             <div style={{ background: 'var(--panel)', padding: '12px 16px', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', border: '1px solid var(--border)', borderTop: 'none', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 'bold' }}>{settings.mode === 'two-player' ? (flipped ? 'Black' : 'White') : 'You'}</span>
+              {renderStripLabel(flipped ? 'black' : 'white')}
               {renderCaptured(flipped ? 'black' : 'white')}
               {pos.turn === (flipped ? 'black' : 'white') && <span style={{ color: 'var(--accent-text)', fontWeight: 'bold' }}>to move</span>}
             </div>
@@ -654,7 +676,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
             {computerError && (
               <div style={{ background: 'var(--panel)', padding: '16px', borderRadius: '8px', border: '1px solid var(--danger)', textAlign: 'center' }}>
                 <p style={{ margin: '0 0 16px 0', color: 'var(--danger-text)', fontWeight: 'bold' }}>The computer couldn't move.</p>
-                <button className="rv-hover" onClick={() => { setComputerError(false); setComputerThinking(true); botRef.current?.cancel(); /* runBot will be triggered by effect if we just toggle state? No, runBot only triggers on game/settings change. We need a way to retry. We can force a re-render by doing onChange(game, {...settings}) but game is identical. So let's just make the button do a dummy onChange to trigger effect, or we can pull runBot out. Since runBot is inside useEffect, we can add a retry counter to the dependency array. Let's just do that in patch3.cjs if needed */ onChange({...game}, settings); }} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Try again</button>
+                <button className="rv-hover" onClick={() => { setComputerError(false); setBotRetry(r => r + 1); }} style={{ minHeight: '44px', padding: '0 16px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', cursor: 'pointer' }}>Try again</button>
               </div>
             )}
             {renderHintPanel()}

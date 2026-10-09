@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { loadSavedPlay, serializeSavedPlay, isBotTurn, undoPlies, PlaySettings, DEFAULT_SETTINGS } from '../../src/app/play/playSettings.js';
 import { newGame, playMove, GameState } from '../../src/app/play/game.js';
-import { parseSquare, Square } from 'chessops';
+import { parseSquare } from 'chessops';
 
 describe('playSettings', () => {
   describe('loadSavedPlay and serializeSavedPlay', () => {
