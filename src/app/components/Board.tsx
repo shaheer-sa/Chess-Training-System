@@ -289,7 +289,7 @@ export const Board: React.FC<BoardProps> = ({
         }}
         onPointerDown={(e) => handlePointerDownInternal(e, index)}
         onPointerUp={(e) => handlePointerUpInternal(e, index)}
-        onPointerMove={(e) => handlePointerMoveInternal(e, index)}
+        onPointerMove={(e) => handlePointerMoveInternal(e)}
         onPointerCancel={(e) => handlePointerCancelInternal(e, index)}
         onPointerLeave={() => onSquarePointerCancel && onSquarePointerCancel(index)}
         onMouseEnter={() => onSquareMouseEnter && onSquareMouseEnter(index)}
