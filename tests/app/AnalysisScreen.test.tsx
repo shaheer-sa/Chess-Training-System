@@ -950,11 +950,11 @@ describe('Analysis — playing moves and games (5B.3)', () => {
     expect(screen.getByText('After 1... e5')).toBeTruthy();
   });
 
-  it('PGN: a game from Play opens at its last move; no square labels; a different move starts your line', async () => {
+  it('PGN: a game from Play opens at the start; no square labels; a different move starts your line', async () => {
     const pgn = '[White "You"]\n[Black "Computer (level 2)"]\n[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1';
     const { container } = render(<AnalysisScreen engineClient={new DirectEngineClient()} initialPgn={pgn} onNavigate={() => {}} />);
     expect(await screen.findByText('Game · 4 moves · 0-1')).toBeTruthy();
-    expect(screen.getByText('After 2... Qh4#')).toBeTruthy();
+    expect(screen.getByText('Start position', { selector: '.rv-an-where' })).toBeTruthy();
     expect(screen.queryByText('Show moves for')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /^1\. f3/ }));
     fireEvent.click(container.querySelector('#sq-51')!); // d7: legal squares, no Safe/Even trade labels

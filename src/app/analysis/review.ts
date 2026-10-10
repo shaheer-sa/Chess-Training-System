@@ -123,7 +123,18 @@ export interface MoveReview {
   movedRole: Role | null;
   /** Set for inaccuracies, mistakes and blunders when the engine has a reply. */
   threat: Threat | null;
+  /** Opening theory: the move keeps the game in the opening book (the opening's name when known). */
+  book?: { name: string | null };
 }
+
+/**
+ * A move that keeps the game in the opening book is Best: at review depth the engine can't tell sound opening
+ * moves apart (1.e4 vs 1.d4). Only moves that the engine thinks lose < 5 % count; dubious book lines keep their rating.
+ */
+export const withBook = (r: MoveReview, name: string | null): MoveReview =>
+  r.rating === 'best' || r.rating === 'excellent' || r.rating === 'good'
+    ? { ...r, rating: 'best', accuracy: 100, book: { name } }
+    : r;
 
 const negate = (s: EngineScore): EngineScore => ('mate' in s ? { mate: -s.mate || 0 } : { cp: -s.cp || 0 });
 
@@ -276,6 +287,7 @@ export const explainReview = (r: MoveReview, mv: GameMove): string => {
     : before !== after ? `The position goes from ${before} to ${after} for you.` : 'This gives away part of your advantage.';
   const bad = (word: string) => [word + '.', drop, reason, better].filter(Boolean).join(' ');
   const to = mv.uci.slice(2, 4);
+  if (r.book) return r.book.name ? `Book move: ${r.book.name}.` : 'Book move: a main line of the opening.';
   switch (r.rating) {
     case 'brilliant': return r.movedRole
       ? `Brilliant! You give up your ${ROLE_NAME[r.movedRole]} on ${to}, and it works: ${r.playedIsBest ? 'this is the engine\'s best move' : 'it is almost as good as the engine\'s best move'}.`

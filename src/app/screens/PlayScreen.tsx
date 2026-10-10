@@ -10,6 +10,10 @@ import { Spinner } from '../components/Spinner.js';
 import { GameState, newGame, legalDestinations, playMove, undo, outcome, previewSan, isPromotionMove, capturedPieces, materialBalance, castlingRookMove } from '../play/game.js';
 import { PlaySettings, isBotTurn, undoPlies } from '../play/playSettings.js';
 import { BotClient, StockfishBot } from '../bot/StockfishBot.js';
+import { botPromotion } from '../bot/uci.js';
+import { moveSound, playSound } from '../shared/sound.js';
+import type { MoveBadge } from '../components/Board.js';
+import { FOLLOW_UP_TEXT, FollowUp, followUp, materialFor, tacticStart } from '../play/tacticFollowUp.js';
 import type { BotLevel } from '../bot/levels.js';
 import { LEVEL_ELO } from '../bot/levels.js';
 import { pgnFromGame } from '../analysis/line.js';
@@ -124,7 +128,9 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           const fromIdx = parseSquare(move.slice(0, 2) as unknown as Square);
           const toIdx = parseSquare(move.slice(2, 4) as unknown as Square);
           if (fromIdx !== undefined && toIdx !== undefined) {
-             executeMove(fromIdx, toIdx, move.endsWith('q') ? 'queen' : undefined, false);
+             // The computer promotes by itself: never the human's promotion dialog.
+             const promo = isPromotionMove(game, fromIdx, toIdx) ? botPromotion(move, settings.level) : undefined;
+             executeMove(fromIdx, toIdx, promo, false);
           }
         }
       } catch (err: unknown) {
@@ -212,7 +218,37 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     if (selectedSquare !== from) selectPiece(from);
   };
 
+  /** The latest note on a Tactic follow-up, and the Tactic moves already finished (complete or missed). */
+  const [tacticNote, setTacticNote] = useState<{ kind: FollowUp; text: string; moveIndex: number; square: number } | null>(null);
+  const tacticDone = useRef(new Set<number>());
+  // The note stays until the player's next move; the mark sits on the piece while it is the last move.
+  const shownTacticNote = tacticNote && tacticNote.moveIndex < game.moves.length && game.moves.length - tacticNote.moveIndex <= 2 ? tacticNote : null;
+  const tacticBadge: MoveBadge | null = shownTacticNote && shownTacticNote.moveIndex === game.moves.length - 1 ? {
+    square: shownTacticNote.square,
+    glyph: shownTacticNote.kind === 'missed' ? '✗' : shownTacticNote.kind === 'complete' ? '★' : '✓',
+    label: shownTacticNote.text,
+    color: shownTacticNote.kind === 'missed' ? '#5c493d' : '#6a1b9a',
+    textColor: '#ffffff',
+    effect: shownTacticNote.kind === 'missed' ? null : 'tactic',
+    id: `tactic-${shownTacticNote.moveIndex}-${shownTacticNote.kind}`,
+  } : null;
+  // Sounds: every new move (the player's and the computer's), the end of the game, and Tactic follow-ups.
+  const soundLen = useRef(game.moves.length);
+  useEffect(() => {
+    const n = game.moves.length;
+    if (n === soundLen.current + 1) {
+      const end = outcome(game);
+      playSound(end?.reason === 'checkmate' ? 'mate' : moveSound(game.moves[n - 1].san));
+      if (end && end.reason !== 'checkmate') playSound('end', 300);
+    }
+    soundLen.current = n;
+  }, [game]);
+  useEffect(() => {
+    if (tacticNote) playSound(tacticNote.kind === 'complete' ? 'brilliant' : tacticNote.kind === 'missed' ? 'blunder' : 'tactic', 220);
+  }, [tacticNote]);
   const gameOutcome = outcome(game);
+  /** Moves already played when the screen opened: a game that was already over is not celebrated again. */
+  const movesAtOpen = useRef(game.moves.length);
   const readOnly = !!gameOutcome;
 
   // A "hint turn": hints are on and the side to move gets hints (both sides in two-player, only the human vs computer).
@@ -436,6 +472,20 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           const decided = scores
             ? decidePlayedVerdict(engineVerdict(base, scores[playedUci], ctx), moveColors, verdictsRef.current, moveIndex)
             : null;
+          // A follow-up to the player's own Tactic: say whether it is on track (never a new Tactic label).
+          const start = tacticStart(moveColors, verdictsRef.current, moveIndex);
+          if (scores && start !== null && !tacticDone.current.has(start)) {
+            let atStart = newGameSt;
+            for (let k = newGameSt.moves.length; k > start; k--) atStart = undo(atStart);
+            const mover = moveColors[moveIndex];
+            const gain = materialFor(newGameSt.currentFen, mover) - materialFor(atStart.currentFen, mover);
+            const mated = outcome(newGameSt)?.reason === 'checkmate';
+            const result = followUp(scores[playedUci], ctx, gain, mated);
+            if (result) {
+              if (result !== 'on-track') tacticDone.current.add(start);
+              setTacticNote({ kind: result, text: FOLLOW_UP_TEXT[result](gain, mated), moveIndex, square: toIdx });
+            }
+          }
           commitVerdict(moveIndex, decided);
           setMoveListInfo(prev => ({ ...prev, [moveIndex]: base }));
         } catch {
@@ -464,6 +514,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     });
     setPromotionMove(null);
     setAnim(null);
+    setTacticNote(n => (n && n.moveIndex < keep ? n : null));
+    for (const t of [...tacticDone.current]) if (t >= keep) tacticDone.current.delete(t);
     commitVerdicts(pruneVerdicts(verdictsRef.current, keep));
     setPendingVerdicts(prev => { const next: Record<number, number> = {}; for (const [k, t] of Object.entries(prev)) if (Number(k) < keep) next[Number(k)] = t; return next; });
     onChange(nextGame, settings);
@@ -484,9 +536,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     commitVerdicts({});
     setPendingVerdicts({});
     setPromotionMove(null);
+    setTacticNote(null);
+    tacticDone.current.clear();
     resetSelection();
     setFlipped(nextSettings.mode === 'computer' && nextSettings.humanColor === 'black');
     onChange(newGame(), nextSettings);
+    playSound('start');
     return true;
   };
 
@@ -847,6 +902,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 readOnly={readOnly}
                 lastMove={lastMoveObj}
                 checkSquare={checkSquare}
+                checkKey={game.moves.length}
+                mate={gameOutcome?.reason === 'checkmate' && game.moves.length > movesAtOpen.current ? { winner: gameOutcome.winner, id: `${game.startFen}|${game.moves.length}` } : null}
                 legalDestinations={selectedSquare !== null ? legalDestinations(game, selectedSquare) : undefined}
                 onSquarePointerDown={handlePointerDown}
                 onSquarePointerUp={clearLongPress}
@@ -857,6 +914,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 onPieceDrop={handlePieceDrop}
                 onPieceDragStart={handlePieceDragStart}
                 onDragOverSquare={handleDragOverSquare}
+                moveBadge={tacticBadge}
                 animateMoves={anim?.moves}
                 animationKey={anim?.key}
               />
@@ -894,6 +952,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           </div>
           
           <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
+            {shownTacticNote && (
+              <div key={shownTacticNote.moveIndex} role="status" className={`rv-tactic-note rv-tactic-note--${shownTacticNote.kind}`}>
+                <span className="rv-tactic-note-icon" aria-hidden="true">{shownTacticNote.kind === 'missed' ? '✗' : shownTacticNote.kind === 'complete' ? '★' : '✓'}</span>
+                <span>{shownTacticNote.text}</span>
+              </div>
+            )}
             {mateIn !== null && (
               <div role="status" className="rv-rise" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'var(--panel)', border: '2px solid var(--accent)', borderRadius: '8px', color: 'var(--text)', fontWeight: 600 }}>
                 <LabelIcon kind="tactic" size={18} />

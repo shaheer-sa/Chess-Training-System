@@ -13,7 +13,8 @@ import type { EngineClient } from '../engine/EngineClient.js';
 import { EngineCheck, PvLine } from '../bot/EngineCheck.js';
 import type { GameMove } from '../play/game.js';
 import { terminalOf } from './gameAnalyzer.js';
-import { MoveReview, PositionEval, REVIEW_DEPTH, REVIEW_MULTIPV, isSacrifice, reviewMove } from './review.js';
+import { MoveReview, PositionEval, REVIEW_DEPTH, REVIEW_MULTIPV, isSacrifice, reviewMove, withBook } from './review.js';
+import { OpeningBook, loadOpeningBook } from './openingBook.js';
 import { loadReview, reviewKey, saveReview } from './reviewCache.js';
 
 export interface Searcher {
@@ -162,6 +163,14 @@ export const useLineReview = (
     if (game) check(game.fens, game.moves);
   }, [engineClient, fens, moves, game]);
 
+  // Opening book (its own chunk): known opening moves are rated Best.
+  const [book, setBook] = useState<OpeningBook | null>(null);
+  useEffect(() => {
+    let live = true;
+    loadOpeningBook().then(b => { if (live) setBook(b); }, () => undefined);
+    return () => { live = false; };
+  }, []);
+
   const retry = useCallback(() => {
     attemptsRef.current.clear();
     bump();
@@ -170,10 +179,16 @@ export const useLineReview = (
   const result = useMemo<LineReview>(() => {
     const rate = (fs: string[], ms: GameMove[]) => {
       const evals = fs.map(f => evalsRef.current.get(f));
+      // Still in the book: every position so far is a book position (or the start).
+      let inBook = !!book;
+      let opening: string | null = null;
       const reviews = ms.map((mv, i) => {
         const b = evals[i], a = evals[i + 1];
+        inBook = inBook && !!book && (i === 0 || book.has(fs[i])) && book.has(fs[i + 1]);
+        if (inBook) opening = book!.name(fs[i + 1]) ?? opening;
         if (!b || !a) return undefined;
-        return reviewMove(fs[i], mv, ms[i - 1], b, a, sacRef.current.get(`${fs[i]}|${mv.uci}`) ?? false);
+        const r = reviewMove(fs[i], mv, ms[i - 1], b, a, sacRef.current.get(`${fs[i]}|${mv.uci}`) ?? false);
+        return inBook ? withBook(r, opening) : r;
       });
       const missing = fs.filter(f => !evalsRef.current.has(f) && (attemptsRef.current.get(f) ?? 0) >= MAX_ATTEMPTS).length;
       return { evals, reviews, done: evals.filter(Boolean).length, total: fs.length, missing };
@@ -185,7 +200,7 @@ export const useLineReview = (
       game: g && { reviews: g.reviews, done: g.done, total: g.total, missing: g.missing },
       retry,
     };
-  }, [fens, moves, game, version, retry]);
+  }, [fens, moves, game, version, retry, book]);
 
   // Save a finished game review (once per game), only when every position was really evaluated.
   const savedRef = useRef<string | null>(null);

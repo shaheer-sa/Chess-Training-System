@@ -4,6 +4,7 @@ import { MoveClassification, Square } from '../../engine/types.js';
 import { Chess, fen as fenOps } from 'chessops';
 import { Board, BoardArrow, MoveBadge } from '../components/Board.js';
 import { RATING_INFO } from '../shared/ratingInfo.js';
+import { moveSound, playSound } from '../shared/sound.js';
 import { ResultPanel } from '../components/ResultPanel.js';
 import { getStepText } from '../shared/exchange.js';
 import { ExchangeControls } from '../shared/ExchangeControls.js';
@@ -52,7 +53,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   const [pgnLine, setPgnLine] = useState<LineState | null>(() => {
     if (!initialPgn) return null;
     const r = lineFromPgn(initialPgn);
-    return r.ok ? goTo(r.line, r.line.game.length) : null;
+    return r.ok ? goTo(r.line, 0) : null; // a game opens at the start, ready to step through
   });
   const line = source === 'pgn' ? pgnLine : source === 'fen' ? fenLine : null;
   // Moving one step forward (playing a move, Next) slides the piece, as in Play.
@@ -71,7 +72,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     setBetterFor(null);
     if (source === 'pgn') setPgnLine(l); else setFenLine(l);
   };
-  const [showBest, setShowBest] = useState(false);
+  const [showBest, setShowBest] = useState(true);
   /**
    * The move whose better alternative is shown on the position before it. Tied to the exact line object, so any
    * navigation or new line (which always makes a new object) ends the preview and coming back never revives it.
@@ -426,7 +427,19 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   // there (a move from the earlier position can't be drawn on the board after the move: its piece has moved).
   const moveId = cursor > 0 && path[cursor - 1] ? `${cursor}-${path[cursor - 1].uci}` : null;
   const reviewed = cursor > 0 ? review.reviews[cursor - 1] : undefined;
-  const canShowBetter = !!reviewed && !reviewed.playedIsBest && !!reviewed.bestUci && !!reviewed.bestSan;
+  const canShowBetter = !!reviewed && !reviewed.playedIsBest && !reviewed.book && !!reviewed.bestUci && !!reviewed.bestSan;
+  // Sounds when you step to a move: the move itself, then its rating for Brilliant, Great and Blunder.
+  const soundAt = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const id = moveId ? `${source}|${moveId}` : null;
+    if (soundAt.current !== undefined && id && id !== soundAt.current) {
+      const mv = path[cursor - 1];
+      if (mv) playSound(moveSound(mv.san));
+      const rating = review.reviews[cursor - 1]?.rating;
+      if (rating === 'brilliant' || rating === 'great' || rating === 'blunder') playSound(rating, 200);
+    }
+    soundAt.current = id;
+  }, [moveId, source]);
   const previewing = canShowBetter && moveId !== null && !!line && betterFor?.line === line && betterFor.id === moveId && betterFor.source === source;
   const shownIdx = previewing ? cursor - 1 : cursor;
   const shownFen = previewing ? fens[cursor - 1] : currentFen;
@@ -453,21 +466,49 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   };
   const graphValues = review.evals.map((e, i) => (e && (e.lines.length > 0 || e.terminal) ? winPercent(whiteScore(fens[i], e)) : null));
   const bestNext = currentEval?.lines[0]?.uci;
-  // Arrows. On the board after a move: the opponent's best reply after a bad move (red, dashed). At the start of a
-  // line: the best move. The better move the mover had is drawn on the position before the move (see above).
-  const toArrow = (u: string, kind: 'best' | 'threat'): BoardArrow => ({ from: u.slice(0, 2) as Square, to: u.slice(2, 4) as Square, kind });
+  // Arrows, after a move: green = the better move the mover had (a faded copy of the piece marks its old square
+  // when it has moved away), blue = the opponent's best reply (red and dashed after a bad move). At the start of a
+  // line: the best move. The exact better move can also be shown on the position before the move (see above).
+  const toArrow = (u: string, kind: 'best' | 'reply' | 'threat'): BoardArrow => ({ from: u.slice(0, 2) as Square, to: u.slice(2, 4) as Square, kind });
+  const sideName = (c: 'white' | 'black' | undefined) => (c === 'white' ? 'White' : 'Black');
+  const lastMover = cursor > 0 ? path[cursor - 1]?.color : undefined;
+  const replyLine = cursor > 0 && currentEval && !currentEval.terminal ? currentEval.lines[0] : undefined;
+  const replyKind: 'reply' | 'threat' = lastReview?.threat ? 'threat' : 'reply';
+  const missedBest = cursor > 0 && lastReview && !lastReview.playedIsBest && !lastReview.book && lastReview.bestUci ? lastReview.bestUci : null;
   const arrowOptions: BoardArrow[] = cursor > 0
-    ? (lastReview?.threat ? [toArrow(lastReview.threat.uci, 'threat')] : [])
+    ? [...(missedBest ? [toArrow(missedBest, 'best')] : []), ...(replyLine ? [toArrow(replyLine.uci, replyKind)] : [])]
     : bestNext ? [toArrow(bestNext, 'best')] : [];
   const arrows = previewing && reviewed?.bestUci ? [toArrow(reviewed.bestUci, 'best')] : showBest ? arrowOptions : [];
-  const lastMover = cursor > 0 ? path[cursor - 1]?.color : undefined;
+  // The piece the better move starts from, if the move played took it away.
+  const ghost = (() => {
+    if (!showBest || previewing || !missedBest || !position || cursor === 0) return null;
+    const from = (missedBest.charCodeAt(1) - 49) * 8 + (missedBest.charCodeAt(0) - 97);
+    const setup = fenOps.parseFen(fens[cursor - 1] ?? '');
+    const before = setup.isOk ? setup.unwrap().board.get(from) : undefined;
+    const now = position.board.get(from);
+    if (!before || (now && now.color === before.color && now.role === before.role)) return null;
+    return { square: from, color: before.color, role: before.role };
+  })();
   const playedLabel = cursor > 0 && path[cursor - 1] ? `${moveLabel(cursor - 1) || `${Math.floor((startPly + cursor - 1) / 2) + 1}...`} ${path[cursor - 1].san}` : '';
+  const replySan = replyLine ? sanOfUci(currentFen, replyLine.uci) : null;
   const arrowsNote = previewing && reviewed?.bestSan
     ? `Green arrow: ${reviewed.bestSan}, the better move, on the position before ${playedLabel}.`
     : arrows.length === 0 ? ''
       : cursor === 0
         ? `Green arrow: the best move here (${currentEval?.lines[0] ? sanOfUci(currentFen, currentEval.lines[0].uci) : ''}).`
-        : lastReview?.threat ? `Red dashed arrow: ${lastMover === 'white' ? 'Black' : 'White'}'s best reply, ${lastReview.threat.san}.` : '';
+        : [
+          missedBest && lastReview?.bestSan ? `Green arrow: ${lastReview.bestSan}, the better move for ${sideName(lastMover)}${ghost ? ' (the faded piece shows where it stood)' : ''}.` : '',
+          replySan ? `${replyKind === 'threat' ? 'Red dashed' : 'Blue'} arrow: ${sideName(lastMover === 'white' ? 'black' : 'white')}'s best reply, ${replySan}.` : '',
+        ].filter(Boolean).join(' ');
+  // Check and checkmate on the board shown.
+  const shownPos = previewPos ?? position;
+  const shownCheck = (() => {
+    if (!shownPos || !shownPos.isCheck()) return null;
+    const k = shownPos.board.kingOf(shownPos.turn);
+    return k === undefined ? null : k;
+  })();
+  const shownMate = shownPos && !previewing && shownPos.isCheckmate()
+    ? { winner: (shownPos.turn === 'white' ? 'black' : 'white') as 'white' | 'black', id: `${shownIdx}-${shownFen}` } : null;
   // The move's rating on the square it landed on; Brilliant and Great moves get an effect.
   const lastMove = cursor > 0 ? path[cursor - 1] : undefined;
   const moveBadge: MoveBadge | null = lastMove && lastReview && !previewing ? {
@@ -656,6 +697,10 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 focusedSquare={focusedSquare}
                 setFocusedSquare={setFocusedSquare}
                 lastMove={previewing ? undefined : lastMoveObj}
+                checkSquare={shownCheck ?? undefined}
+                checkKey={`${shownIdx}-${previewing ? 'p' : ''}`}
+                mate={shownMate}
+                ghost={ghost}
                 draggableSquares={movableSquares}
                 onPieceDrop={(from, to) => playHere(from, to, false)}
                 onPieceDragStart={(from) => { if (selectedSquare !== from) void onSquareClick(from); }}
@@ -691,7 +736,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               </div>
               <div className="rv-an-tools">
                 <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={evalBarOn} onClick={toggleEvalBar}>Evaluation bar</button>
-                <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={showBest} onClick={() => setShowBest(v => !v)} disabled={arrowOptions.length === 0}>{cursor === 0 ? 'Show best move' : 'Show reply'}</button>
+                <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={showBest} onClick={() => setShowBest(v => !v)} disabled={arrowOptions.length === 0}>Show arrows</button>
                 {exploring && line && <button type="button" className="rv-btn rv-btn--primary" onClick={() => setLine(backToGame(line), { animate: false })}>Back to game line</button>}
               </div>
               {source === 'pgn' && <EvalGraph values={graphValues} cursor={cursor} valueText={graphText} onJump={(i) => line && setLine(goTo(line, i), { animate: false })} />}

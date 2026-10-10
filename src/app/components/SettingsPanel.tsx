@@ -98,6 +98,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose, set
               <Toggle label="Board coordinates" hint="Letters and numbers along the board edges." checked={settings.coordinates} onChange={(v) => set({ coordinates: v })} />
               <Toggle label="Loading screen" hint="Show the Rookvex mark when the site first opens." checked={settings.loadingScreen} onChange={(v) => set({ loadingScreen: v })} />
               <Toggle label="Evaluation bar" hint="Show the engine's evaluation beside the board in Analyze." checked={settings.evalBar} onChange={(v) => set({ evalBar: v })} />
+              <Toggle label="Sounds" hint="Sounds for moves, checks, the end of a game and special moves." checked={settings.sound} onChange={(v) => set({ sound: v })} />
               <p className="rv-sheet-note">Settings are saved in this browser.</p>
             </div>
           )}
@@ -108,7 +109,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose, set
               <h3>Built with</h3>
               <ul>
                 <li>chessops — chess rules and move generation</li>
-                <li>Stockfish 19 (Lite) — the engine check and the computer opponent</li>
+                <li>Stockfish 19 (Lite) — the engine check, the computer opponent and game review</li>
+                <li>Lichess opening names (public domain) — opening moves in game review</li>
                 <li>React and Vite</li>
               </ul>
               <p><a href={REPO} target="_blank" rel="noopener noreferrer">Source code on GitHub</a></p>

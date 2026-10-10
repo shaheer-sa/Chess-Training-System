@@ -13,8 +13,8 @@ import { squareOffset } from './boardGeometry.js';
 export interface BoardArrow {
   from: Square;
   to: Square;
-  /** best: the move to play (solid); threat: the opponent's reply (dashed). */
-  kind?: 'best' | 'threat';
+  /** best: the better move (solid green); reply: the next best move (solid blue); threat: a reply after a bad move (dashed red). */
+  kind?: 'best' | 'reply' | 'threat';
 }
 
 /** The rating mark shown on the square a move landed on, with an effect for special moves. */
@@ -24,12 +24,12 @@ export interface MoveBadge {
   label: string;
   color: string;
   textColor: string;
-  effect: 'brilliant' | 'great' | null;
+  effect: 'brilliant' | 'great' | 'tactic' | null;
   /** Changes when the badge should appear (and its effect play) again. */
   id: string;
 }
 
-const ARROW_COLOR = { best: 'rgba(129, 182, 76, 0.9)', threat: 'rgba(229, 83, 75, 0.9)' } as const;
+const ARROW_COLOR = { best: 'rgba(129, 182, 76, 0.9)', reply: 'rgba(96, 156, 232, 0.88)', threat: 'rgba(229, 83, 75, 0.9)' } as const;
 
 interface BoardProps {
   position: Chess;
@@ -48,6 +48,12 @@ interface BoardProps {
   arrow?: { from: Square; to: Square } | null;
   arrows?: BoardArrow[];
   moveBadge?: MoveBadge | null;
+  /** A faded piece where a piece stood before the last move (the start of a "better move" arrow). */
+  ghost?: { square: number; color: 'white' | 'black'; role: string } | null;
+  /** Changes with every new check, so the king shakes again. */
+  checkKey?: string | number;
+  /** Game over by checkmate: a celebration and who won. */
+  mate?: { winner: 'white' | 'black'; id: string } | null;
   lastMove?: { from: number; to: number };
   checkSquare?: number;
   legalDestinations?: number[];
@@ -72,7 +78,7 @@ const getSquareName = (index: number) => {
 
 export const Board: React.FC<BoardProps> = ({
   position, flipped, onSquareClick, selectedSquare, destinationSquare, moves, expandedLevel, exchangeStep, selectedDestInfo,
-  focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow, arrows, moveBadge,
+  focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow, arrows, moveBadge, ghost, checkKey, mate,
   lastMove, checkSquare, legalDestinations,
   onSquarePointerDown, onSquarePointerUp, onSquarePointerCancel, onSquareMouseEnter, onSquareMouseLeave,
   animateMoves, animationKey, draggableSquares, onPieceDrop, onPieceDragStart, onDragOverSquare
@@ -351,7 +357,7 @@ export const Board: React.FC<BoardProps> = ({
         )}
         
         {checkSquare === index && (
-          <div className="rv-check-glow" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(circle, rgba(212,92,28,0.65) 0%, rgba(212,92,28,0) 70%)', pointerEvents: 'none' }} />
+          <div key={`glow-${checkKey ?? ''}`} className="rv-check-glow" aria-hidden="true" />
         )}
         {piece && (
           <div className="rv-piece-wrap" style={{
@@ -360,7 +366,9 @@ export const Board: React.FC<BoardProps> = ({
             transition: transitioning[index] ? 'transform 180ms ease-out' : 'none',
             opacity: dragState?.isActive && dragState.startIndex === index ? 0.3 : 1
           }}>
-            <div className="rv-piece" style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <div key={checkSquare === index ? `check-${checkKey ?? ''}` : 'piece'}
+              className={`rv-piece${checkSquare === index ? (mate ? ' rv-piece--mated' : ' rv-piece--check') : ''}`}
+              style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <Piece 
                 color={piece.color === 'white' ? 'w' : 'b'} 
                 type={piece.role === 'pawn' ? 'P' : piece.role === 'knight' ? 'N' : piece.role === 'bishop' ? 'B' : piece.role === 'rook' ? 'R' : piece.role === 'queen' ? 'Q' : 'K'} 
@@ -476,7 +484,7 @@ export const Board: React.FC<BoardProps> = ({
         return (
           <svg aria-hidden="true" viewBox="0 0 100 100" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 20 }}>
             <defs>
-              {(['best', 'threat'] as const).map(k => (
+              {(['best', 'reply', 'threat'] as const).map(k => (
                 <marker key={k} id={`rv-arrowhead-${k}`} markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto">
                   <polygon points="0 0, 3 1.5, 0 3" fill={ARROW_COLOR[k]} />
                 </marker>
@@ -498,6 +506,16 @@ export const Board: React.FC<BoardProps> = ({
         );
       })()}
 
+      {ghost && (() => {
+        const f = ghost.square & 7, r = ghost.square >> 3;
+        const t = ({ pawn: 'P', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', king: 'K' } as Record<string, 'P' | 'N' | 'B' | 'R' | 'Q' | 'K'>)[ghost.role];
+        return (
+          <div className="rv-ghost" aria-hidden="true" style={{ left: `${(flipped ? 7 - f : f) * 12.5}%`, top: `${(flipped ? r : 7 - r) * 12.5}%` }}>
+            <Piece color={ghost.color === 'white' ? 'w' : 'b'} type={t ?? 'P'} style={{ width: '80%', height: '80%' }} />
+          </div>
+        );
+      })()}
+
       {moveBadge && (() => {
         const f = moveBadge.square & 7, r = moveBadge.square >> 3;
         const left = (flipped ? 7 - f : f) * 12.5, top = (flipped ? r : 7 - r) * 12.5;
@@ -512,7 +530,7 @@ export const Board: React.FC<BoardProps> = ({
                 {moveBadge.effect === 'brilliant' && <div className="rv-fx-sheen" />}
                 <div className="rv-fx-square" style={{ left: `${left}%`, top: `${top}%` }}>
                   <span className="rv-fx-ring" />
-                  {moveBadge.effect === 'brilliant' && <span className="rv-fx-ring rv-fx-ring--2" />}
+                  {moveBadge.effect !== 'great' && <span className="rv-fx-ring rv-fx-ring--2" />}
                   {moveBadge.effect === 'brilliant' && Array.from({ length: 10 }, (_, i) => (
                     <span key={i} className="rv-fx-spark" style={{ ['--a' as string]: `${i * 36}deg` }} />
                   ))}
@@ -526,6 +544,36 @@ export const Board: React.FC<BoardProps> = ({
           </div>
         );
       })()}
+      {mate && <MateCelebration key={mate.id} winner={mate.winner} />}
+    </div>
+  );
+};
+
+/** Checkmate: confetti and a card saying who won (closes on click; no confetti with reduced motion). */
+const MateCelebration: React.FC<{ winner: 'white' | 'black' }> = ({ winner }) => {
+  const [open, setOpen] = React.useState(true);
+  if (!open) return null;
+  const name = winner === 'white' ? 'White' : 'Black';
+  const colors = ['#f0894a', '#ffd166', '#1de9b6', '#8c9eff', '#ef476f', '#f3efe6'];
+  return (
+    <div className="rv-mate" onClick={() => setOpen(false)}>
+      <div className="rv-confetti" aria-hidden="true">
+        {Array.from({ length: 36 }, (_, i) => (
+          <span key={i} style={{
+            ['--x' as string]: `${(i * 37) % 100}%`,
+            ['--d' as string]: `${(i % 9) * 90}ms`,
+            ['--r' as string]: `${(i * 53) % 360}deg`,
+            ['--s' as string]: `${0.7 + ((i * 7) % 6) / 10}`,
+            background: colors[i % colors.length],
+          }} />
+        ))}
+      </div>
+      <div className={`rv-mate-card rv-mate-card--${winner}`} role="status">
+        <div className="rv-mate-crown" aria-hidden="true">♚</div>
+        <div className="rv-mate-title">{name} wins!</div>
+        <div className="rv-mate-sub">by checkmate</div>
+        <button type="button" className="rv-mate-close" onClick={(e) => { e.stopPropagation(); setOpen(false); }}>Close</button>
+      </div>
     </div>
   );
 };

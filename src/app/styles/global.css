@@ -179,7 +179,6 @@ input:focus-visible,
 .rv-sq--target::after{content:'';position:absolute;inset:0;background-color:rgba(21,23,27,0);transition:background-color 100ms ease;pointer-events:none;z-index:3}
 .rv-sq--target:hover::after{background-color:rgba(21,23,27,.2)}
 .rv-sq-selected{position:absolute;inset:0;background:rgba(212,92,28,.42);pointer-events:none;animation:rv-fade-in 120ms ease-out}
-.rv-check-glow{animation:rv-pulse 700ms ease-in-out 3}
 /* Engine check / computer thinking: a progress bar along the top of the board. */
 .rv-progress{position:absolute;left:0;right:0;top:0;height:4px;overflow:hidden;z-index:20;pointer-events:none;background:rgba(212,92,28,.2);border-radius:4px 4px 0 0}
 .rv-progress::before{content:'';position:absolute;top:0;bottom:0;left:0;width:40%;background:var(--accent);animation:rv-progress 1s ease-in-out infinite}
@@ -482,3 +481,41 @@ html.rv-reduce-motion .rv-movebadge{animation:none!important}
 .rv-evalbar-wrap:hover .rv-evaltip,.rv-evalbar-wrap:focus-within .rv-evaltip{opacity:1}
 @media (max-width:767px){.rv-evalbar-wrap{display:block}.rv-evaltip{left:50%;top:calc(100% + 6px);transform:translateX(-50%)}}
 .rv-movecard-note{margin:0;font-size:.85rem;color:var(--text-muted)}
+
+/* ---- Check and checkmate (phase 6D) ---- */
+.rv-check-glow{position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle,rgba(229,57,53,.85) 0%,rgba(229,57,53,.45) 38%,rgba(229,57,53,0) 72%);animation:rv-check-aura 1.4s ease-in-out infinite}
+@keyframes rv-check-aura{0%,100%{opacity:.75;transform:scale(.92)}50%{opacity:1;transform:scale(1.06)}}
+.rv-piece--check{animation:rv-king-shake 520ms 190ms cubic-bezier(.36,.07,.19,.97) both}
+@keyframes rv-king-shake{10%,90%{transform:translateX(-2%) rotate(-2deg)}20%,80%{transform:translateX(4%) rotate(3deg)}30%,50%,70%{transform:translateX(-6%) rotate(-5deg)}40%,60%{transform:translateX(6%) rotate(5deg)}}
+.rv-piece--mated{animation:rv-king-fall 900ms 250ms cubic-bezier(.5,0,.6,1.4) both}
+@keyframes rv-king-fall{0%{transform:none}30%{transform:translateX(-6%) rotate(-8deg)}100%{transform:translate(8%,10%) rotate(78deg);filter:grayscale(.6) brightness(.85)}}
+.rv-ghost{position:absolute;width:12.5%;height:12.5%;display:flex;align-items:center;justify-content:center;opacity:.38;pointer-events:none;z-index:19;filter:saturate(.4)}
+.rv-arrow--reply{opacity:.95}
+.rv-mate{position:absolute;inset:0;z-index:40;container-type:size;display:flex;align-items:center;justify-content:center;background:rgba(21,23,27,.28);animation:rv-fade-in 300ms 500ms ease-out both;cursor:pointer;overflow:hidden}
+.rv-confetti{position:absolute;inset:0;pointer-events:none}
+.rv-confetti span{position:absolute;top:-6%;left:var(--x);width:2.2%;height:3.4%;border-radius:2px;opacity:0;transform:rotate(var(--r)) scale(var(--s));animation:rv-confetti-fall 2.6s calc(600ms + var(--d)) cubic-bezier(.25,.6,.45,1) both}
+.rv-confetti span:nth-child(3n){border-radius:50%;width:1.8%;height:1.8%}
+@keyframes rv-confetti-fall{0%{opacity:1;transform:translate(0,0) rotate(var(--r)) scale(var(--s))}100%{opacity:0;transform:translate(calc((var(--s) - 1) * 220%),3200%) rotate(calc(var(--r) + 540deg)) scale(var(--s))}}
+.rv-mate-card{position:relative;min-width:56%;padding:6% 7%;border-radius:14px;text-align:center;background:linear-gradient(160deg,#3a2c24,#241b16);border:2px solid var(--accent);box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 6px rgba(240,137,74,.15);color:var(--text);
+  animation:rv-mate-pop 650ms 650ms cubic-bezier(.3,1.5,.5,1) both;cursor:default}
+@keyframes rv-mate-pop{0%{opacity:0;transform:scale(.4) translateY(20%)}100%{opacity:1;transform:none}}
+.rv-mate-crown{font-size:clamp(28px,7cqw,64px);line-height:1;color:#ffd166;text-shadow:0 0 18px rgba(255,209,102,.6);animation:rv-crown 1.6s 1.2s ease-in-out infinite}
+.rv-mate-card--black .rv-mate-crown{color:#f3efe6;text-shadow:0 0 18px rgba(243,239,230,.45)}
+@keyframes rv-crown{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-8%) rotate(4deg)}}
+.rv-mate-title{font:800 clamp(22px,5.4cqw,46px)/1.1 'Cinzel',serif;margin-top:4%;letter-spacing:.02em}
+.rv-mate-sub{font:600 clamp(12px,2.4cqw,18px)/1.4 'IBM Plex Sans',sans-serif;color:var(--text-2);margin-top:2%}
+.rv-mate-close{margin-top:5%;padding:8px 18px;border-radius:999px;border:1px solid var(--border-strong);background:var(--bg-sunken);color:var(--text);font:600 .9rem 'IBM Plex Sans',sans-serif;cursor:pointer}
+.rv-mate-close:hover{border-color:var(--accent-text)}
+@media (prefers-reduced-motion: reduce){.rv-confetti{display:none}.rv-check-glow,.rv-piece--check,.rv-mate-crown{animation:none}.rv-piece--mated{animation:none;transform:rotate(78deg)}}
+html.rv-reduce-motion .rv-confetti{display:none}
+html.rv-reduce-motion .rv-piece--mated{transform:rotate(78deg)}
+
+/* Tactic follow-up (Play) */
+.rv-fx--tactic{--fx:#ce93d8;--fx-soft:rgba(186,104,200,.45)}
+.rv-fx--tactic .rv-movebadge{animation:rv-badge-pop 380ms 170ms cubic-bezier(.3,1.6,.5,1) both,rv-badge-glow 1.4s 550ms ease-in-out 1}
+.rv-tactic-note{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;font-weight:600;color:var(--text);background:var(--panel);border:2px solid #8e24aa;animation:rv-tactic-in 420ms cubic-bezier(.3,1.4,.5,1) both}
+.rv-tactic-note--missed{border-color:var(--border-strong);color:var(--text-2)}
+.rv-tactic-note--complete{background:linear-gradient(100deg,rgba(142,36,170,.28),var(--panel) 70%)}
+.rv-tactic-note-icon{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#6a1b9a;color:#fff;font-size:.9rem;flex-shrink:0}
+.rv-tactic-note--missed .rv-tactic-note-icon{background:#5c493d}
+@keyframes rv-tactic-in{0%{opacity:0;transform:translateY(-8px) scale(.96)}100%{opacity:1;transform:none}}
