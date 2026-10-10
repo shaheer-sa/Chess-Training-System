@@ -40,6 +40,8 @@ describe('move ratings (ADR-005 thresholds)', () => {
     ['sound sacrifice', { playedIsBest: true, sacrifice: true }, 'brilliant'],
     ['sacrifice in an already won position is not brilliant', { playedIsBest: true, sacrifice: true, bestWin: 99, playedWin: 99, secondWin: 98 }, 'best'],
     ['sacrifice that loses', { sacrifice: true, playedWin: 45 }, 'mistake'],
+    ['sacrifice nearly as good as the best move (8.Rxg4!! deflection, −2.4 %)', { sacrifice: true, bestWin: 72.4, playedWin: 70.0 }, 'brilliant'],
+    ['sacrifice 4 % worse than the best move is just Good', { sacrifice: true, playedWin: 56 }, 'good'],
     ['sacrifice that is the only win in a won position (Qb8+!!)', { playedIsBest: true, sacrifice: true, bestWin: 100, playedWin: 100, secondWin: 60 }, 'brilliant'],
     ['loses 1 %', { playedWin: 59 }, 'excellent'],
     ['loses 3 %', { playedWin: 57 }, 'good'],

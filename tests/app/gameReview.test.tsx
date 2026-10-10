@@ -6,7 +6,12 @@ import { render, screen, fireEvent, waitFor, cleanup, within, renderHook, act } 
 import React from 'react';
 import { AnalysisScreen } from '../../src/app/screens/AnalysisScreen.js';
 import { DirectEngineClient } from '../../src/app/engine/DirectEngineClient.js';
-import { formatEval, explainReview, reviewMove, PositionEval, REVIEW_DEPTH } from '../../src/app/analysis/review.js';
+import { formatEval, explainReview, reviewMove, PositionEval, REVIEW_DEPTH, threatOf, describeWin } from '../../src/app/analysis/review.js';
+import { Board } from '../../src/app/components/Board.js';
+import { PlayScreen } from '../../src/app/screens/PlayScreen.js';
+import { Chess } from 'chessops';
+import { newGame } from '../../src/app/play/game.js';
+import { DEFAULT_SETTINGS } from '../../src/app/play/playSettings.js';
 import { reviewKey } from '../../src/app/analysis/reviewCache.js';
 import { fensOf, lineFromPgn } from '../../src/app/analysis/line.js';
 import { RatingChip, EvalBar, SummaryCard } from '../../src/app/components/ReviewViews.js';
@@ -33,7 +38,7 @@ describe('review text', () => {
     const mv = { uci: 'f2f3', san: 'f3', color: 'white' as const };
     const r = reviewMove(fen, mv as never, undefined, before, after, false);
     expect(r.rating).toBe('mistake');
-    expect(explainReview(r, mv as never)).toBe('Mistake. The position goes from equal to slightly worse for you. Better was e4 (+0.3).');
+    expect(explainReview(r, mv as never)).toBe("Mistake. The position goes from equal to slightly worse for you. Black's best answer is ...e5. Better was e4 (+0.3).");
   });
 
   it('lists every position of the line, start included', () => {
@@ -55,7 +60,8 @@ describe('review views', () => {
 
   it('the evaluation bar reads out the score', () => {
     render(<div><EvalBar score={{ cp: -150 }} flipped={false} /><EvalBar score={null} flipped /></div>);
-    expect(screen.getByRole('img', { name: 'Evaluation −1.5 (from White\'s side)' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Evaluation −1.5 (from White\'s side). Black is slightly better (about 1.5 pawns ahead).' })).toBeTruthy();
+    expect(screen.getByText('Black is slightly better (about 1.5 pawns ahead)')).toBeTruthy(); // hover / focus tooltip
     expect(screen.getByRole('img', { name: 'Evaluating…' })).toBeTruthy();
   });
 
@@ -105,10 +111,10 @@ describe('Analyze — game review', () => {
     expect(within(moves).getAllByRole('img', { name: 'Blunder' })).toHaveLength(1);
     // The card for the last move (checkmate) and the evaluation bar.
     expect(screen.getByText('Checkmate. Best move.')).toBeTruthy();
-    expect(screen.getByRole('img', { name: "Evaluation 1-0 (from White's side)" })).toBeTruthy();
+    expect(screen.getByRole('img', { name: "Evaluation 1-0 (from White's side). Game over: White won by checkmate." })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Nf6' }));
-    expect(await screen.findByText(/^Blunder\. This allows a forced checkmate\. Better was g6/)).toBeTruthy();
+    expect(await screen.findByText('Blunder. White can now checkmate with Qxf7#. Better was g6 (+0.4).')).toBeTruthy();
 
     // A game review never shows the square labels (Safe, Loses material…).
     const html = container.innerHTML;
@@ -262,5 +268,85 @@ describe('useLineReview — stopping searches nobody needs', () => {
     await act(async () => { rerender({ cur: a.fens[1] }); });
     expect(cancels).toBe(0);
     expect(searched).toEqual([a.fens[3]]);
+  });
+});
+
+describe('6C: ratings on the board, arrows, reasons, training mode', () => {
+  const GAME = '1. e4 d5 2. exd5 Qxd5 3. Nc3 Qe6+ 4. Be2 Qg6 5. Nf3 Qxg2 6. Rg1 Qh3 7. Bc4 Bg4 8. Rxg4 Qxg4 9. Bxf7+ Kxf7 10. Ne5+ *';
+
+  it('a sacrifice that is the second engine line is rated from the same search (8.Rxg4 is Brilliant)', () => {
+    const r = lineFromPgn(GAME);
+    if (!r.ok) throw new Error(r.error);
+    const fens = fensOf(r.line);
+    const mv = r.line.game[14]; // 8. Rxg4
+    expect(mv.san).toBe('Rxg4');
+    // Real depth-14 lines: Bxf7+ +2.39, Rxg4 +2.25. The separate search after Rxg4 happened to say only +1.0.
+    const before: PositionEval = { lines: [{ uci: 'c4f7', score: { cp: 239 }, pv: ['c4f7'] }, { uci: 'g1g4', score: { cp: 225 }, pv: ['g1g4'] }] };
+    const after: PositionEval = { lines: [{ uci: 'h3g4', score: { cp: -100 }, pv: ['h3g4'] }] };
+    const rv = reviewMove(fens[14], mv, r.line.game[13], before, after, true);
+    expect(rv.rating).toBe('brilliant');
+    expect(explainReview(rv, mv)).toBe("Brilliant! You give up your rook on g4, and it works: it is almost as good as the engine's best move.");
+  });
+
+  it('says what the opponent wins after a bad move (9...Kxf7?? allows Ne5+ and Nxg4)', () => {
+    const t = threatOf('rn3bnr/ppp1pkpp/8/8/6q1/2N2N2/PPPP1P1P/R1BQK3 w Q - 0 10', { uci: 'f3e5', score: { cp: 900 }, pv: ['f3e5', 'f7e8', 'e5g4', 'b8c6'] }, 'black');
+    expect(t).toEqual({ uci: 'f3e5', san: 'Ne5+', line: ['Ne5+', 'Ke8', 'Nxg4'], mateIn: null, wins: 'your queen' });
+    const r = lineFromPgn(GAME);
+    if (!r.ok) throw new Error(r.error);
+    const fens = fensOf(r.line);
+    const mv = r.line.game[17]; // 9... Kxf7
+    const before: PositionEval = { lines: [{ uci: 'e8d8', score: { cp: -250 }, pv: ['e8d8'] }] };
+    const after: PositionEval = { lines: [{ uci: 'f3e5', score: { cp: 900 }, pv: ['f3e5', 'f7e8', 'e5g4', 'b8c6'] }] };
+    const rv = reviewMove(fens[17], mv, r.line.game[16], before, after, false);
+    expect(rv.rating).toBe('blunder');
+    expect(explainReview(rv, mv)).toBe('Blunder. The position goes from clearly worse to losing for you. White can answer Ne5+ and win your queen (Ne5+ ...Ke8 Nxg4). Better was Kd8 (+2.5).');
+  });
+
+  it('names what a line wins', () => {
+    expect(describeWin(['pawn'], [])).toBe('a pawn');
+    expect(describeWin(['rook'], ['bishop'])).toBe('the exchange');
+    expect(describeWin(['knight'], [])).toBe('a piece');
+    expect(describeWin(['rook'], [])).toBe('a rook');
+    expect(describeWin(['queen'], ['knight'])).toBe('your queen');
+    expect(describeWin(['knight'], ['bishop'])).toBeNull();
+  });
+
+  it('the board shows the rating mark on the square and plays the Brilliant effect', () => {
+    const pos = Chess.default();
+    const { container, rerender } = render(<Board position={pos} flipped={false} selectedSquare={null} destinationSquare={null} moves={[]} expandedLevel={1} exchangeStep={0} selectedDestInfo={null}
+      moveBadge={{ square: 28, glyph: '!!', label: 'Brilliant', color: '#00796b', textColor: '#fff', effect: 'brilliant', id: 'a' }}
+      arrows={[{ from: 'g1', to: 'f3', kind: 'best' }, { from: 'e7', to: 'e5', kind: 'threat' }]} />);
+    const badge = container.querySelector('.rv-movebadge')!;
+    expect(badge.textContent).toBe('!!');
+    expect(badge.getAttribute('title')).toBe('Brilliant');
+    expect(container.querySelector('.rv-fx--brilliant .rv-fx-spark')).toBeTruthy();
+    expect(container.querySelectorAll('.rv-arrow--best')).toHaveLength(1);
+    expect(container.querySelector('.rv-arrow--threat')?.getAttribute('stroke-dasharray')).toBeTruthy(); // not colour alone
+    rerender(<Board position={pos} flipped={false} selectedSquare={null} destinationSquare={null} moves={[]} expandedLevel={1} exchangeStep={0} selectedDestInfo={null}
+      moveBadge={{ square: 28, glyph: '✓', label: 'Good', color: '#c5d6b8', textColor: '#15171b', effect: null, id: 'b' }} />);
+    expect(container.querySelector('.rv-fx-square')).toBeNull();
+    expect(container.querySelector('.rv-movebadge')!.textContent).toBe('✓');
+  });
+
+  it('Analyze: a bad move shows its mark on the board, the better move and the reply as arrows, with words', async () => {
+    const { container } = render(<AnalysisScreen engineClient={new DirectEngineClient()} initialPgn={SCHOLAR} onNavigate={() => {}} createReviewSearcher={fakeSearcher([])} />);
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull(), { timeout: 5000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Nf6' }));
+    await waitFor(() => expect(container.querySelector('.rv-movebadge')?.textContent).toBe('??'));
+    const toggle = screen.getByRole('button', { name: 'Show best move' });
+    if (toggle.getAttribute('aria-pressed') !== 'true') fireEvent.click(toggle);
+    expect(container.querySelectorAll('.rv-arrow--best')).toHaveLength(1);
+    expect(container.querySelectorAll('.rv-arrow--threat')).toHaveLength(1);
+    expect(screen.getByText("Green arrow: g6, the better move. Red dashed arrow: White's best reply, Qxf7#.")).toBeTruthy();
+  });
+
+  it('Play: without training mode, "Analyze this position" waits for the end of the game', () => {
+    const props = { engineClient: new DirectEngineClient(), game: newGame(), onNavigate: () => {} };
+    const { rerender } = render(<PlayScreen {...props} settings={{ ...DEFAULT_SETTINGS, trainingMode: true }} onChange={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Analyze this position' })).toBeTruthy();
+    rerender(<PlayScreen {...props} settings={{ ...DEFAULT_SETTINGS, trainingMode: false }} onChange={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Analyze this position' })).toBeNull();
+    expect(screen.getByText('Fair play: analysis opens when the game is over.')).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: 'Training mode' })).toBeTruthy();
   });
 });

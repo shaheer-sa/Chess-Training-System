@@ -15,15 +15,33 @@ export const RatingChip: React.FC<{ rating: MoveRating; compact?: boolean }> = (
   );
 };
 
-/** Evaluation bar: White's share of the winning chances. Vertical beside the board; horizontal on phones. */
+/** Plain words for an evaluation from White's side: "White is winning (about 11.5 pawns ahead)". */
+export const evalWords = (score: EngineScore, label: string): string => {
+  if (label === '1-0' || label === '0-1') return `Game over: ${label === '1-0' ? 'White' : 'Black'} won by checkmate`;
+  if (label === '½-½') return 'Game over: draw';
+  if ('mate' in score) return score.mate > 0 ? `White can force checkmate in ${score.mate}` : `Black can force checkmate in ${-score.mate}`;
+  const w = winPercent(score);
+  const pawns = Math.abs(score.cp / 100).toFixed(1);
+  const side = w >= 50 ? 'White' : 'Black';
+  const share = w >= 50 ? w : 100 - w;
+  const state = share >= 90 ? 'is winning' : share >= 70 ? 'is clearly better' : share >= 55 ? 'is slightly better' : null;
+  if (!state) return 'The position is about equal';
+  return `${side} ${state} (about ${pawns} ${pawns === '1.0' ? 'pawn' : 'pawns'} ahead)`;
+};
+
+/** Evaluation bar: White's share of the winning chances. Vertical beside the board; horizontal on phones. Hover or focus it for the score in words. */
 export const EvalBar: React.FC<{ score: EngineScore | null; flipped: boolean; label?: string }> = ({ score, flipped, label: given }) => {
   const white = score ? winPercent(score) : 50;
   const label = score ? given ?? formatEval(score) : '…';
   const whiteAhead = white >= 50;
+  const words = score ? evalWords(score, label) : 'The engine is still evaluating this position';
   return (
-    <div className={`rv-evalbar${flipped ? ' rv-evalbar--flipped' : ''}${score ? '' : ' rv-evalbar--loading'}`} role="img" aria-label={score ? `Evaluation ${label} (from White's side)` : 'Evaluating…'}>
-      <div className="rv-evalbar-white" style={{ ['--w' as string]: `${white}%` }} />
-      <span className={`rv-evalbar-label ${whiteAhead ? 'rv-evalbar-label--white' : 'rv-evalbar-label--black'}`} aria-hidden="true">{label}</span>
+    <div className="rv-evalbar-wrap">
+      <div tabIndex={0} className={`rv-evalbar${flipped ? ' rv-evalbar--flipped' : ''}${score ? '' : ' rv-evalbar--loading'}`} role="img" aria-label={score ? `Evaluation ${label} (from White's side). ${words}.` : 'Evaluating…'}>
+        <div className="rv-evalbar-white" style={{ ['--w' as string]: `${white}%` }} />
+        <span className={`rv-evalbar-label ${whiteAhead ? 'rv-evalbar-label--white' : 'rv-evalbar-label--black'}`} aria-hidden="true">{label}</span>
+      </div>
+      <div className="rv-evaltip" aria-hidden="true"><strong>{label}</strong>{words}</div>
     </div>
   );
 };
@@ -80,12 +98,15 @@ export const EvalGraph: React.FC<{
 /** The current move: rating, a short explanation, and the evaluation. */
 export const MoveCard: React.FC<{
   move: GameMove | null; label: string; review: MoveReview | undefined; pending: boolean;
-}> = ({ move, label, review, pending }) => {
+  /** What the arrows on the board show (they are never the only way to tell). */
+  note?: string;
+}> = ({ move, label, review, pending, note }) => {
   if (!move) {
     return (
       <div className="rv-movecard">
         <div className="rv-movecard-head"><strong>Start position</strong></div>
         <p className="rv-movecard-text">Step through the moves, or play your own on the board.</p>
+        {note && <p className="rv-movecard-note">{note}</p>}
       </div>
     );
   }
@@ -102,6 +123,7 @@ export const MoveCard: React.FC<{
       ) : (
         <p className="rv-movecard-text" style={{ color: 'var(--text-muted)' }}>No review for this move.</p>
       )}
+      {review && note && <p className="rv-movecard-note">{note}</p>}
     </div>
   );
 };

@@ -441,3 +441,44 @@ html.rv-loading,html.rv-loading body{overflow:hidden}
 .rv-summary-count{display:inline-flex;align-items:center;gap:3px;font-size:.85rem;color:var(--text-2)}
 .rv-mchip .rv-rating--compact{margin-left:2px}
 @media (max-width:767px){.rv-movecard,.rv-summary{padding:14px 16px}.rv-an-tools{padding:0 16px 12px}.rv-evalgraph{margin:0 16px 12px;width:calc(100% - 32px)}}
+
+/* ---- Move rating on the board (phase 6C) ---- */
+.rv-movebadge-layer{position:absolute;inset:0;pointer-events:none;z-index:22;container-type:size}
+.rv-movebadge{position:absolute;width:5.4cqw;height:5.4cqw;min-width:18px;min-height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font:800 max(9px,2.3cqw)/1 'IBM Plex Sans',sans-serif;letter-spacing:-.04em;border:2px solid rgba(255,255,255,.92);box-shadow:0 2px 5px rgba(0,0,0,.45);
+  transform:var(--t);animation:rv-badge-pop 300ms 170ms cubic-bezier(.3,1.5,.5,1) both}
+@keyframes rv-badge-pop{0%{transform:var(--t) scale(0)}100%{transform:var(--t) scale(1)}}
+.rv-fx--brilliant{--fx:#1de9b6;--fx-soft:rgba(29,233,182,.45)}
+.rv-fx--great{--fx:#8c9eff;--fx-soft:rgba(140,158,255,.4)}
+.rv-fx--brilliant .rv-movebadge{animation:rv-badge-brilliant 700ms 170ms cubic-bezier(.3,1.4,.5,1) both,rv-badge-glow 1.4s 870ms ease-in-out 2}
+.rv-fx--great .rv-movebadge{animation:rv-badge-pop 360ms 170ms cubic-bezier(.3,1.6,.5,1) both,rv-badge-glow 1.4s 530ms ease-in-out 1}
+@keyframes rv-badge-brilliant{0%{transform:var(--t) scale(0) rotate(-200deg)}60%{transform:var(--t) scale(1.45) rotate(12deg)}100%{transform:var(--t) scale(1) rotate(0)}}
+@keyframes rv-badge-glow{0%,100%{box-shadow:0 2px 5px rgba(0,0,0,.45)}50%{box-shadow:0 0 0 4px var(--fx-soft),0 0 18px 4px var(--fx)}}
+.rv-fx-square{position:absolute;width:12.5%;height:12.5%}
+.rv-fx-square::before{content:'';position:absolute;inset:-30%;border-radius:50%;background:radial-gradient(circle,var(--fx-soft) 0%,transparent 65%);animation:rv-fx-glow 1300ms 160ms ease-out both}
+@keyframes rv-fx-glow{0%{opacity:0;transform:scale(.5)}35%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.2)}}
+.rv-fx-ring{position:absolute;inset:0;border-radius:50%;border:3px solid var(--fx);opacity:0;animation:rv-fx-ring 900ms 180ms ease-out both}
+.rv-fx-ring--2{animation-delay:420ms}
+@keyframes rv-fx-ring{0%{transform:scale(.4);opacity:.95}100%{transform:scale(2.6);opacity:0}}
+.rv-fx-spark{position:absolute;inset:0;transform:rotate(var(--a))}
+.rv-fx-spark::after{content:'';position:absolute;left:45%;top:45%;width:10%;height:10%;border-radius:50%;background:var(--fx);box-shadow:0 0 6px var(--fx);opacity:0;animation:rv-fx-spark 850ms 200ms cubic-bezier(.15,.7,.3,1) both}
+.rv-fx-spark:nth-child(odd)::after{background:#fff;animation-duration:1000ms}
+@keyframes rv-fx-spark{0%{transform:translateY(0) scale(1.2);opacity:1}100%{transform:translateY(-850%) scale(.3);opacity:0}}
+.rv-fx-sheen{position:absolute;inset:0;background:linear-gradient(115deg,transparent 38%,rgba(29,233,182,.22) 50%,transparent 62%);background-size:300% 100%;animation:rv-fx-sheen 1200ms 220ms ease-out both}
+@keyframes rv-fx-sheen{0%{background-position:100% 0;opacity:1}100%{background-position:0 0;opacity:0}}
+@media (prefers-reduced-motion: reduce){.rv-fx-square,.rv-fx-sheen{display:none}.rv-movebadge{animation:none!important}}
+html.rv-reduce-motion .rv-fx-square,html.rv-reduce-motion .rv-fx-sheen{display:none}
+html.rv-reduce-motion .rv-movebadge{animation:none!important}
+.rv-arrow{animation:rv-fade-in 220ms ease-out both}
+
+/* Evaluation bar: the score on hover / focus */
+.rv-evalbar{cursor:help}
+.rv-evalbar:focus-visible{outline:3px solid var(--accent-text);outline-offset:2px}
+.rv-evaltip{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);z-index:30;white-space:nowrap;padding:6px 10px;border-radius:6px;
+  background:#15171b;color:#f3efe6;border:1px solid var(--border-strong);font:600 .82rem/1.3 'IBM Plex Sans',sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.4);
+  opacity:0;pointer-events:none;transition:opacity 120ms ease}
+.rv-evaltip strong{font-family:'IBM Plex Mono',monospace;margin-right:6px}
+.rv-evalbar-wrap{position:relative;display:flex}
+.rv-evalbar-wrap:hover .rv-evaltip,.rv-evalbar-wrap:focus-within .rv-evaltip{opacity:1}
+@media (max-width:767px){.rv-evalbar-wrap{display:block}.rv-evaltip{left:50%;top:calc(100% + 6px);transform:translateX(-50%)}}
+.rv-movecard-note{margin:0;font-size:.85rem;color:var(--text-muted)}

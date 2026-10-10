@@ -8,13 +8,16 @@ export interface PlaySettings {
   level: BotLevel;
   humanColor: 'white' | 'black';
   hintsOn: boolean;
+  /** Training mode: "Analyze this position" is available during a game. Off = fair play (analysis after the game). */
+  trainingMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: PlaySettings = {
   mode: 'two-player',
   level: 2,
   humanColor: 'white',
-  hintsOn: true
+  hintsOn: true,
+  trainingMode: true
 };
 
 export const serializeSavedPlay = (game: GameState, s: PlaySettings): string => {
@@ -22,6 +25,7 @@ export const serializeSavedPlay = (game: GameState, s: PlaySettings): string => 
     startFen: game.startFen,
     moves: game.moves.map(m => m.uci),
     hintsOn: s.hintsOn,
+    trainingMode: s.trainingMode,
     mode: s.mode,
     level: s.level,
     humanColor: s.humanColor
@@ -39,7 +43,8 @@ export const loadSavedPlay = (raw: string | null): { game: GameState; settings: 
       mode: data.mode === 'computer' ? 'computer' : 'two-player',
       level: [1, 2, 3, 4, 5, 6].includes(data.level) ? (data.level as BotLevel) : DEFAULT_SETTINGS.level,
       humanColor: data.humanColor === 'black' ? 'black' : 'white',
-      hintsOn: typeof data.hintsOn === 'boolean' ? data.hintsOn : DEFAULT_SETTINGS.hintsOn
+      hintsOn: typeof data.hintsOn === 'boolean' ? data.hintsOn : DEFAULT_SETTINGS.hintsOn,
+      trainingMode: typeof data.trainingMode === 'boolean' ? data.trainingMode : DEFAULT_SETTINGS.trainingMode
     };
     return { game, settings };
   } catch {

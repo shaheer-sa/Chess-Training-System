@@ -10,6 +10,27 @@ import { MoveClassification, Square } from '../../engine/types.js';
 import { LabelIcon } from './LabelIcon.js';
 import { squareOffset } from './boardGeometry.js';
 
+export interface BoardArrow {
+  from: Square;
+  to: Square;
+  /** best: the move to play (solid); threat: the opponent's reply (dashed). */
+  kind?: 'best' | 'threat';
+}
+
+/** The rating mark shown on the square a move landed on, with an effect for special moves. */
+export interface MoveBadge {
+  square: number;
+  glyph: string;
+  label: string;
+  color: string;
+  textColor: string;
+  effect: 'brilliant' | 'great' | null;
+  /** Changes when the badge should appear (and its effect play) again. */
+  id: string;
+}
+
+const ARROW_COLOR = { best: 'rgba(129, 182, 76, 0.9)', threat: 'rgba(229, 83, 75, 0.9)' } as const;
+
 interface BoardProps {
   position: Chess;
   flipped: boolean;
@@ -25,6 +46,8 @@ interface BoardProps {
   readOnly?: boolean;
   showBadgesOnReadOnly?: boolean;
   arrow?: { from: Square; to: Square } | null;
+  arrows?: BoardArrow[];
+  moveBadge?: MoveBadge | null;
   lastMove?: { from: number; to: number };
   checkSquare?: number;
   legalDestinations?: number[];
@@ -49,7 +72,7 @@ const getSquareName = (index: number) => {
 
 export const Board: React.FC<BoardProps> = ({
   position, flipped, onSquareClick, selectedSquare, destinationSquare, moves, expandedLevel, exchangeStep, selectedDestInfo,
-  focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow,
+  focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow, arrows, moveBadge,
   lastMove, checkSquare, legalDestinations,
   onSquarePointerDown, onSquarePointerUp, onSquarePointerCancel, onSquareMouseEnter, onSquareMouseLeave,
   animateMoves, animationKey, draggableSquares, onPieceDrop, onPieceDragStart, onDragOverSquare
@@ -443,26 +466,64 @@ export const Board: React.FC<BoardProps> = ({
         );
       })()}
 
-      {arrow && (() => {
-        const fromFile = arrow.from.charCodeAt(0) - 97;
-        const fromRank = arrow.from.charCodeAt(1) - 49;
-        const toFile = arrow.to.charCodeAt(0) - 97;
-        const toRank = arrow.to.charCodeAt(1) - 49;
-        
-        const x1 = (flipped ? 7 - fromFile : fromFile) * 12.5 + 6.25;
-        const y1 = (flipped ? fromRank : 7 - fromRank) * 12.5 + 6.25;
-        const x2 = (flipped ? 7 - toFile : toFile) * 12.5 + 6.25;
-        const y2 = (flipped ? toRank : 7 - toRank) * 12.5 + 6.25;
-        
+      {(() => {
+        const list: BoardArrow[] = [...(arrows ?? []), ...(arrow ? [{ ...arrow, kind: 'best' as const }] : [])];
+        if (list.length === 0) return null;
+        const centre = (sq: Square) => {
+          const f = sq.charCodeAt(0) - 97, r = sq.charCodeAt(1) - 49;
+          return { x: (flipped ? 7 - f : f) * 12.5 + 6.25, y: (flipped ? r : 7 - r) * 12.5 + 6.25 };
+        };
         return (
-          <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 20 }}>
+          <svg aria-hidden="true" viewBox="0 0 100 100" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 20 }}>
             <defs>
-              <marker id="rv-arrowhead" markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto">
-                <polygon points="0 0, 3 1.5, 0 3" fill="rgba(240, 137, 74, 0.9)" />
-              </marker>
+              {(['best', 'threat'] as const).map(k => (
+                <marker key={k} id={`rv-arrowhead-${k}`} markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto">
+                  <polygon points="0 0, 3 1.5, 0 3" fill={ARROW_COLOR[k]} />
+                </marker>
+              ))}
             </defs>
-            <line className="rv-fade-in-panel" x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke="rgba(240, 137, 74, 0.85)" strokeWidth="2.2%" strokeLinecap="round" markerEnd="url(#rv-arrowhead)" />
+            {list.map((a, i) => {
+              const k = a.kind ?? 'best';
+              const p1 = centre(a.from), p2 = centre(a.to);
+              // Stop short of the centre so the head sits on the target square.
+              const len = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+              const x2 = p2.x - ((p2.x - p1.x) / len) * 3, y2 = p2.y - ((p2.y - p1.y) / len) * 3;
+              return (
+                <line key={`${a.from}${a.to}${i}`} className={`rv-arrow rv-arrow--${k}`} x1={p1.x} y1={p1.y} x2={x2} y2={y2}
+                  stroke={ARROW_COLOR[k]} strokeWidth="2.2" strokeLinecap="round" strokeDasharray={k === 'threat' ? '3.2 2.4' : undefined}
+                  markerEnd={`url(#rv-arrowhead-${k})`} />
+              );
+            })}
           </svg>
+        );
+      })()}
+
+      {moveBadge && (() => {
+        const f = moveBadge.square & 7, r = moveBadge.square >> 3;
+        const left = (flipped ? 7 - f : f) * 12.5, top = (flipped ? r : 7 - r) * 12.5;
+        const fx = moveBadge.effect ? ` rv-fx--${moveBadge.effect}` : '';
+        // Overlap the square's top-right corner, except on the board's right or top edge (it would be cut off).
+        const edgeRight = left === 87.5, edgeTop = top === 0;
+        const t = `translate(${edgeRight ? '-104%' : '-62%'}, ${edgeTop ? '4%' : '-38%'})`;
+        return (
+          <div key={moveBadge.id} className={`rv-movebadge-layer${fx}`} aria-hidden="true">
+            {moveBadge.effect && (
+              <>
+                {moveBadge.effect === 'brilliant' && <div className="rv-fx-sheen" />}
+                <div className="rv-fx-square" style={{ left: `${left}%`, top: `${top}%` }}>
+                  <span className="rv-fx-ring" />
+                  {moveBadge.effect === 'brilliant' && <span className="rv-fx-ring rv-fx-ring--2" />}
+                  {moveBadge.effect === 'brilliant' && Array.from({ length: 10 }, (_, i) => (
+                    <span key={i} className="rv-fx-spark" style={{ ['--a' as string]: `${i * 36}deg` }} />
+                  ))}
+                </div>
+              </>
+            )}
+            <div className="rv-movebadge" title={moveBadge.label}
+              style={{ left: `${left + 12.5}%`, top: `${top}%`, background: moveBadge.color, color: moveBadge.textColor, ['--t' as string]: t }}>
+              {moveBadge.glyph}
+            </div>
+          </div>
         );
       })()}
     </div>

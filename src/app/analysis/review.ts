@@ -3,14 +3,14 @@
  *
  * Ratings use the loss in winning chances between the best move and the move played, from the mover's side
  * (win % from the engine's centipawns, the formula Lichess uses). Owner-approved thresholds (ADR-005):
- *   Brilliant  best (or within 2 %) and a piece sacrifice (the moved piece is lost on its square); in an already
+ *   Brilliant  a piece sacrifice (the moved piece is lost on its square) within 3 % of the best move; in an already
  *              won position only when it is also the only good move (e.g. Qb8+ in the Opera Game)
  *   Great      the only good move: best, every other move ≥ 10 % worse — and not an obvious one
  *              (captures, replies to check and checkmating moves are just Best)
  *   Best       the engine's top move
  *   Excellent  < 2 %   Good < 5 %   Inaccuracy < 10 %   Mistake < 20 %   Blunder ≥ 20 %
  */
-import { Chess, fen as fenOps, parseUci } from 'chessops';
+import { Chess, Role, fen as fenOps, parseUci } from 'chessops';
 import { makeSan } from 'chessops/san';
 import { normalizeMove } from 'chessops/chess';
 import type { EngineScore } from '../play/engineVerdict.js';
@@ -73,10 +73,16 @@ export interface RatingInput {
   obvious: boolean;
 }
 
+/**
+ * A sound sacrifice may cost up to this much winning chance against the engine's top move and still be Brilliant
+ * (e.g. 8.Rxg4!, a deflection: +2.3 against +2.6 for the best move at depth 14).
+ */
+export const BRILLIANT_MAX_LOSS = 3;
+
 export const rateMove = (m: RatingInput): MoveRating => {
   const loss = m.playedIsBest ? 0 : Math.max(0, m.bestWin - m.playedWin);
   const onlyMove = m.secondWin !== null && m.bestWin - m.secondWin >= 10;
-  if (loss < 2 && m.sacrifice && m.playedWin >= 40 && (m.bestWin < 97 || onlyMove)) return 'brilliant';
+  if (loss < BRILLIANT_MAX_LOSS && m.sacrifice && m.playedWin >= 40 && (m.bestWin < 97 || onlyMove)) return 'brilliant';
   if (m.playedIsBest && !m.obvious && onlyMove) return 'great';
   if (m.playedIsBest) return 'best';
   if (loss < 2) return 'excellent';
@@ -85,6 +91,18 @@ export const rateMove = (m: RatingInput): MoveRating => {
   if (loss < 20) return 'mistake';
   return 'blunder';
 };
+
+/** What the opponent can do after a bad move: their best reply, and what it wins along the engine line. */
+export interface Threat {
+  uci: string;
+  san: string;
+  /** The opponent's line in SAN, up to the point where the material count settles (at most 8 moves). */
+  line: string[];
+  /** The opponent forces checkmate in this many moves. */
+  mateIn: number | null;
+  /** What the line wins from the mover ("a pawn", "a piece", "the exchange", "a rook", "your queen", …), if anything. */
+  wins: string | null;
+}
 
 export interface MoveReview {
   rating: MoveRating;
@@ -99,11 +117,18 @@ export interface MoveReview {
   /** Mover's score after the best move, and after the move played. */
   bestScore: EngineScore | null;
   playedScore: EngineScore;
+  /** The move played was the engine's top move. */
+  playedIsBest: boolean;
+  /** The piece that moved (for the explanation of a sacrifice). */
+  movedRole: Role | null;
+  /** Set for inaccuracies, mistakes and blunders when the engine has a reply. */
+  threat: Threat | null;
 }
 
 const negate = (s: EngineScore): EngineScore => ('mate' in s ? { mate: -s.mate || 0 } : { cp: -s.cp || 0 });
 
-const sanOf = (fen: string, uci: string): string | null => {
+/** SAN of a UCI move in a position (null if it can't be read). */
+export const sanOfUci = (fen: string, uci: string): string | null => {
   try {
     const pos = Chess.fromSetup(fenOps.parseFen(fen).unwrap()).unwrap();
     const mv = parseUci(uci);
@@ -113,14 +138,69 @@ const sanOf = (fen: string, uci: string): string | null => {
   }
 };
 
+const ROLE_VALUE: Record<Role, number> = { pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 };
+
+const parsePos = (fen: string): Chess | null => {
+  try { return Chess.fromSetup(fenOps.parseFen(fen).unwrap()).unwrap(); } catch { return null; }
+};
+
+/** Name what a line wins, from the losing side's point of view. */
+export const describeWin = (lost: Role[], gained: Role[]): string | null => {
+  const value = (rs: Role[]) => rs.reduce((a, r) => a + ROLE_VALUE[r], 0);
+  const net = value(lost) - value(gained);
+  if (net < 1) return null;
+  const has = (rs: Role[], r: Role) => rs.includes(r);
+  if (has(lost, 'queen') && net >= 6) return 'your queen';
+  if (has(lost, 'rook') && net >= 4) return 'a rook';
+  if (has(lost, 'rook') && net === 2 && (has(gained, 'knight') || has(gained, 'bishop'))) return 'the exchange';
+  if ((has(lost, 'knight') || has(lost, 'bishop')) && net >= 2) return 'a piece';
+  if (net === 1) return 'a pawn';
+  if (net === 2) return 'two pawns';
+  return 'material';
+};
+
+/** The opponent's best line after a move: SAN, mate, and the material it wins from `mover` once captures stop. */
+export const threatOf = (fenAfter: string, reply: PvLine, mover: 'white' | 'black'): Threat | null => {
+  const pos = parsePos(fenAfter);
+  if (!pos || reply.pv.length === 0) return null;
+  const sans: string[] = [];
+  const lost: Role[] = [], gained: Role[] = [];
+  const settledAt: { plies: number; wins: string | null }[] = [];
+  const moves = reply.pv.slice(0, 8);
+  for (let i = 0; i < moves.length; i++) {
+    const m = parseUci(moves[i]);
+    if (!m || !pos.isLegal(normalizeMove(pos, m))) break;
+    const nm = normalizeMove(pos, m);
+    const target = 'from' in nm ? pos.board.get(nm.to) : undefined;
+    const capture = 'from' in nm && ((target && target.color !== pos.turn) || (pos.board.get(nm.from)?.role === 'pawn' && nm.to === pos.epSquare));
+    if (capture) (pos.turn === mover ? gained : lost).push(target && target.color !== pos.turn ? target.role : 'pawn');
+    sans.push(makeSan(pos, nm));
+    pos.play(nm);
+    // The count is settled after a move when the next move in the line is not a capture.
+    const next = moves[i + 1] ? parseUci(moves[i + 1]) : undefined;
+    const nextCapture = !!next && 'from' in next && !!pos.board.get(next.to) && pos.board.get(next.to)!.color !== pos.turn;
+    if (!nextCapture) settledAt.push({ plies: i + 1, wins: describeWin(lost, gained) });
+  }
+  if (sans.length === 0) return null;
+  const mateIn = 'mate' in reply.score && reply.score.mate > 0 ? reply.score.mate : null;
+  // What the line wins once captures stop, shown up to the first point where that is already won.
+  const final = settledAt[settledAt.length - 1]?.wins ?? null;
+  const shownPlies = settledAt.find(p => p.wins === final)?.plies ?? 1;
+  return { uci: reply.uci, san: sans[0], line: sans.slice(0, Math.max(1, shownPlies)), mateIn, wins: mateIn ? null : final };
+};
+
 /** Review one move: `before`/`after` are the engine views of the positions before and after it. */
 export const reviewMove = (
   fenBefore: string, mv: GameMove, prev: GameMove | undefined, before: PositionEval, after: PositionEval, sacrifice: boolean,
 ): MoveReview => {
   const best = before.lines[0];
   const bestScore = best ? best.score : null;
+  // When the move played is one of the engine's lines, use that score: it comes from the same search as the best
+  // move, so the two compare fairly. Otherwise use the search of the position after it.
+  const inSearch = before.lines.find(l => l.uci === mv.uci);
   // The move that checkmates wins outright (negating "mate 0" would lose who was mated).
-  const playedScore: EngineScore = after.terminal === 'checkmate' ? { mate: 1 } : negate(positionScore(after));
+  const playedScore: EngineScore = after.terminal === 'checkmate' ? { mate: 1 }
+    : inSearch ? inSearch.score : negate(positionScore(after));
   const bestWin = bestScore ? winPercent(bestScore) : winPercent(playedScore);
   const playedWin = winPercent(playedScore);
   const playedIsBest = !!best && best.uci === mv.uci;
@@ -131,10 +211,18 @@ export const reviewMove = (
     playedIsBest, sacrifice, obvious,
   });
   const winBefore = playedIsBest ? playedWin : Math.max(bestWin, playedWin);
+  const posBefore = parsePos(fenBefore);
+  const from = parseUci(mv.uci);
+  const movedRole = posBefore && from && 'from' in from ? posBefore.board.get(from.from)?.role ?? null : null;
+  let threat: Threat | null = null;
+  if ((rating === 'inaccuracy' || rating === 'mistake' || rating === 'blunder') && after.lines[0] && posBefore && from) {
+    posBefore.play(normalizeMove(posBefore, from));
+    threat = threatOf(fenOps.makeFen(posBefore.toSetup()), after.lines[0], mv.color);
+  }
   return {
     rating, winBefore, winAfter: playedWin, accuracy: moveAccuracy(winBefore, playedWin),
-    bestUci: best?.uci ?? null, bestSan: best ? sanOf(fenBefore, best.uci) : null, bestLine: best?.pv ?? [],
-    bestScore, playedScore,
+    bestUci: best?.uci ?? null, bestSan: best ? sanOfUci(fenBefore, best.uci) : null, bestLine: best?.pv ?? [],
+    bestScore, playedScore, playedIsBest, movedRole, threat,
   };
 };
 
@@ -158,23 +246,47 @@ const stateOf = (win: number): string =>
 
 const toWhite = (s: EngineScore, mover: 'white' | 'black'): EngineScore => (mover === 'white' ? s : negate(s));
 
-/** One or two plain sentences for the move card (no engine jargon beyond the move and the evaluation). */
+const SIDE = { white: 'White', black: 'Black' } as const;
+const ROLE_NAME: Record<Role, string> = { pawn: 'pawn', knight: 'knight', bishop: 'bishop', rook: 'rook', queen: 'queen', king: 'king' };
+
+/** "...Qxg4" for a Black move, "Qxg4" for a White one. */
+const moveText = (san: string, color: 'white' | 'black') => (color === 'black' ? `...${san}` : san);
+
+/** The concrete reason a move was bad: what the opponent can do now. */
+export const threatText = (t: Threat, mover: 'white' | 'black'): string => {
+  const opp = mover === 'white' ? 'black' : 'white';
+  // Moves of the line alternate, starting with the opponent's.
+  const line = t.line.map((san, i) => moveText(san, i % 2 === 0 ? opp : mover)).join(' ');
+  if (t.mateIn === 1) return `${SIDE[opp]} can now checkmate with ${moveText(t.san, opp)}.`;
+  if (t.mateIn) return `${SIDE[opp]} can now force checkmate in ${t.mateIn}, starting with ${moveText(t.san, opp)}.`;
+  if (t.wins) return t.line.length > 1
+    ? `${SIDE[opp]} can answer ${moveText(t.san, opp)} and win ${t.wins} (${line}).`
+    : `${SIDE[opp]} can answer ${moveText(t.san, opp)} and win ${t.wins}.`;
+  return `${SIDE[opp]}'s best answer is ${moveText(t.san, opp)}.`;
+};
+
+/** One to three plain sentences for the move card (no engine jargon beyond the moves and the evaluation). */
 export const explainReview = (r: MoveReview, mv: GameMove): string => {
   const better = r.bestSan && r.bestScore ? `Better was ${r.bestSan} (${formatEval(toWhite(r.bestScore, mv.color))}).` : '';
   const before = stateOf(r.winBefore);
   const after = stateOf(r.winAfter);
   const allowsMate = 'mate' in r.playedScore && r.playedScore.mate < 0;
-  const drop = allowsMate ? 'This allows a forced checkmate.'
+  const reason = r.threat ? threatText(r.threat, mv.color) : allowsMate ? 'This allows a forced checkmate.' : '';
+  const drop = r.threat?.mateIn ? '' // the reason already says it
     : before !== after ? `The position goes from ${before} to ${after} for you.` : 'This gives away part of your advantage.';
+  const bad = (word: string) => [word + '.', drop, reason, better].filter(Boolean).join(' ');
+  const to = mv.uci.slice(2, 4);
   switch (r.rating) {
-    case 'brilliant': return 'Brilliant! You give up material here, and it works: this is the engine\'s best move.';
+    case 'brilliant': return r.movedRole
+      ? `Brilliant! You give up your ${ROLE_NAME[r.movedRole]} on ${to}, and it works: ${r.playedIsBest ? 'this is the engine\'s best move' : 'it is almost as good as the engine\'s best move'}.`
+      : 'Brilliant! You give up material here, and it works.';
     case 'great': return `Great move! The only move that keeps the position ${after === 'equal' ? 'equal' : after + ' for you'}.`;
     case 'best': return mv.san.includes('#') ? 'Checkmate. Best move.' : 'Best move.';
     case 'excellent': return r.bestSan ? `Excellent. Almost as good as ${r.bestSan}.` : 'Excellent.';
     case 'good': return r.bestSan ? `Good move. ${r.bestSan} was a little better.` : 'Good move.';
-    case 'inaccuracy': return `Inaccuracy. ${drop} ${better}`.trim();
-    case 'mistake': return `Mistake. ${drop} ${better}`.trim();
-    case 'blunder': return `Blunder. ${drop} ${better}`.trim();
+    case 'inaccuracy': return bad('Inaccuracy');
+    case 'mistake': return bad('Mistake');
+    case 'blunder': return bad('Blunder');
   }
 };
 

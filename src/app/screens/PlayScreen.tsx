@@ -802,11 +802,22 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               <input type="checkbox" checked={hintsOn} onChange={(e) => { onChange(game, { ...settings, hintsOn: e.target.checked }); resetSelection(); }} />
               Show hints
             </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', minHeight: '44px' }}>
+              <input type="checkbox" checked={settings.trainingMode} aria-describedby="rv-training-help" onChange={(e) => onChange(game, { ...settings, trainingMode: e.target.checked })} />
+              Training mode
+            </label>
             <button className="rv-btn" onClick={handleUndo} disabled={undoPlies(game, settings) === 0}>Undo</button>
             <button className="rv-btn" onClick={() => setFlipped(!flipped)}>Flip board</button>
             <button className="rv-btn" onClick={handleNewGame}>New game</button>
-            <button className="rv-btn" onClick={() => onNavigate?.('analysis', game.currentFen)}>Analyze this position</button>
+            {(settings.trainingMode || gameOutcome) && (
+              <button className="rv-btn" onClick={() => onNavigate?.('analysis', game.currentFen)}>Analyze this position</button>
+            )}
           </div>
+          <p id="rv-training-help" style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            {settings.trainingMode
+              ? 'Training mode: you can analyze the position during the game.'
+              : 'Fair play: analysis opens when the game is over.'}
+          </p>
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', width: '100%', maxWidth: '1000px' }}>

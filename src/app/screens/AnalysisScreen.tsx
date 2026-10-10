@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { EngineClient } from '../engine/EngineClient.js';
 import { MoveClassification, Square } from '../../engine/types.js';
 import { Chess, fen as fenOps } from 'chessops';
-import { Board } from '../components/Board.js';
+import { Board, BoardArrow, MoveBadge } from '../components/Board.js';
+import { RATING_INFO } from '../shared/ratingInfo.js';
 import { ResultPanel } from '../components/ResultPanel.js';
 import { getStepText } from '../shared/exchange.js';
 import { ExchangeControls } from '../shared/ExchangeControls.js';
@@ -15,7 +16,7 @@ import { RvSelect, RvOption } from '../components/RvSelect.js';
 import { LineState, newLine, pathOf, stateAt, playOnLine, goTo, backToGame, isExploring, lineFromPgn, fensOf } from '../analysis/line.js';
 import { legalDestinations, castlingRookMove } from '../play/game.js';
 import { Searcher, useLineReview } from '../analysis/useLineReview.js';
-import { evalLabel, summarize, whiteScore, winPercent, MoveReview } from '../analysis/review.js';
+import { evalLabel, sanOfUci, summarize, whiteScore, winPercent, MoveReview } from '../analysis/review.js';
 import { EvalBar, EvalGraph, MoveCard, SummaryCard, RatingChip } from '../components/ReviewViews.js';
 import { readSettings, saveSettings, applySettings, SETTINGS_EVENT } from '../settings.js';
 
@@ -429,7 +430,34 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   };
   const graphValues = review.evals.map((e, i) => (e && (e.lines.length > 0 || e.terminal) ? winPercent(whiteScore(fens[i], e)) : null));
   const bestNext = currentEval?.lines[0]?.uci;
-  const arrow = showBest && bestNext ? { from: bestNext.slice(0, 2) as Square, to: bestNext.slice(2, 4) as Square } : null;
+  // Arrows: after a move, the better move the mover had (if they missed it) and, after a bad move, the opponent's
+  // best reply; at the start of the line, the best move for the side to move.
+  const toArrow = (u: string, kind: 'best' | 'threat'): BoardArrow => ({ from: u.slice(0, 2) as Square, to: u.slice(2, 4) as Square, kind });
+  const arrowOptions: BoardArrow[] = cursor > 0
+    ? [
+      ...(lastReview && !lastReview.playedIsBest && lastReview.bestUci ? [toArrow(lastReview.bestUci, 'best')] : []),
+      ...(lastReview?.threat ? [toArrow(lastReview.threat.uci, 'threat')] : []),
+    ]
+    : bestNext ? [toArrow(bestNext, 'best')] : [];
+  const arrows = showBest ? arrowOptions : [];
+  const lastMover = cursor > 0 ? path[cursor - 1]?.color : undefined;
+  const arrowsNote = arrows.length === 0 ? '' : cursor === 0
+    ? `Green arrow: the best move here (${currentEval?.lines[0] ? sanOfUci(currentFen, currentEval.lines[0].uci) : ''}).`
+    : [
+      arrows.some(a => a.kind === 'best') && lastReview?.bestSan ? `Green arrow: ${lastReview.bestSan}, the better move.` : '',
+      arrows.some(a => a.kind === 'threat') && lastReview?.threat ? `Red dashed arrow: ${lastMover === 'white' ? 'Black' : 'White'}'s best reply, ${lastReview.threat.san}.` : '',
+    ].filter(Boolean).join(' ');
+  // The move's rating on the square it landed on; Brilliant and Great moves get an effect.
+  const lastMove = cursor > 0 ? path[cursor - 1] : undefined;
+  const moveBadge: MoveBadge | null = lastMove && lastReview ? {
+    square: (lastMove.uci.charCodeAt(3) - 49) * 8 + (lastMove.uci.charCodeAt(2) - 97),
+    glyph: RATING_INFO[lastReview.rating].glyph,
+    label: RATING_INFO[lastReview.rating].text,
+    color: RATING_INFO[lastReview.rating].color,
+    textColor: RATING_INFO[lastReview.rating].textColor,
+    effect: lastReview.rating === 'brilliant' || lastReview.rating === 'great' ? lastReview.rating : null,
+    id: `${cursor}-${lastMove.uci}-${lastReview.rating}`,
+  } : null;
   const legalFrom = selectedSquare !== null && canPlayNow && lineState ? legalDestinations(lineState, selectedSquare) : undefined;
   const whiteName = (initialPgn?.match(/\[White "([^"]*)"\]/)?.[1]) || 'White';
   const blackName = (initialPgn?.match(/\[Black "([^"]*)"\]/)?.[1]) || 'Black';
@@ -591,7 +619,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 destinationSquare={source === 'fen' ? shownDest : null}
                 moves={source === 'fen' ? moves : []}
                 legalDestinations={legalFrom}
-                arrow={arrow}
+                arrows={arrows}
+                moveBadge={moveBadge}
                 animateMoves={anim?.moves}
                 animationKey={anim?.key}
                 onSquarePointerDown={onSquarePointerDown}
@@ -640,7 +669,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               </div>
               <div className="rv-an-tools">
                 <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={evalBarOn} onClick={toggleEvalBar}>Evaluation bar</button>
-                <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={showBest} onClick={() => setShowBest(v => !v)} disabled={!bestNext}>Show best move</button>
+                <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={showBest} onClick={() => setShowBest(v => !v)} disabled={arrowOptions.length === 0}>Show best move</button>
                 {exploring && line && <button type="button" className="rv-btn rv-btn--primary" onClick={() => setLine(backToGame(line), { animate: false })}>Back to game line</button>}
               </div>
               {source === 'pgn' && <EvalGraph values={graphValues} cursor={cursor} valueText={graphText} onJump={(i) => line && setLine(goTo(line, i), { animate: false })} />}
@@ -651,7 +680,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               <SummaryCard summary={summary} done={(review.game ?? review).done} total={(review.game ?? review).total} missing={(review.game ?? review).missing} onRetry={review.retry} whiteName={whiteName} blackName={blackName} />
             )}
             {path.length > 0 && (
-              <MoveCard move={cursor > 0 ? path[cursor - 1] : null} label={cursor > 0 ? (moveLabel(cursor - 1) || `${Math.floor((startPly + cursor - 1) / 2) + 1}...`) : ''} review={lastReview} pending={review.done + review.missing < review.total} />
+              <MoveCard move={cursor > 0 ? path[cursor - 1] : null} label={cursor > 0 ? (moveLabel(cursor - 1) || `${Math.floor((startPly + cursor - 1) / 2) + 1}...`) : ''} review={lastReview} pending={review.done + review.missing < review.total} note={arrowsNote} />
             )}
             {source === 'fen' && <ResultPanel
               selectedDestInfo={selectedDestInfo}

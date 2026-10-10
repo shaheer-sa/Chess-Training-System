@@ -31,7 +31,7 @@ describe('playSettings', () => {
 
     it('round-trips full data', () => {
       const g = playMove(newGame(), parseSquare('e2')!, parseSquare('e4')!);
-      const s: PlaySettings = { mode: 'computer', level: 5, humanColor: 'black', hintsOn: false };
+      const s: PlaySettings = { mode: 'computer', level: 5, humanColor: 'black', hintsOn: false, trainingMode: false };
       const raw = serializeSavedPlay(g!, s);
       const { game, settings } = loadSavedPlay(raw);
       expect(game.moves.length).toBe(1);
@@ -53,6 +53,7 @@ describe('playSettings', () => {
       expect(settings.hintsOn).toBe(false);
       expect(settings.level).toBe(DEFAULT_SETTINGS.level); // 2
       expect(settings.humanColor).toBe(DEFAULT_SETTINGS.humanColor); // 'white'
+      expect(settings.trainingMode).toBe(true); // saved before training mode existed: on
     });
 
     it('returns new game and defaults if move list is illegal', () => {
