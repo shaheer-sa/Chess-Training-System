@@ -1,5 +1,5 @@
 import { GameState, legalUciMoves } from '../play/game.js';
-import { BotLevel, levelSettings } from './levels.js';
+import { BotLevel, levelSettings, moveCommands } from './levels.js';
 import { parseBestMove, chooseMove } from './uci.js';
 
 export interface BotClient {
@@ -136,9 +136,7 @@ export class StockfishBot implements BotClient {
         this.discardWorker(); // an engine that missed its deadline is not trusted again
       }, s.movetimeMs + 5000);
       this.search = { id, resolve, reject, timer };
-      worker.postMessage(`setoption name Skill Level value ${s.skill}`);
-      worker.postMessage(`position fen ${game.currentFen}`);
-      worker.postMessage(`go depth ${s.depth} movetime ${s.movetimeMs}`);
+      for (const cmd of moveCommands(s, game.currentFen)) worker.postMessage(cmd);
     });
     return chooseMove(engineMove, legal, s.randomMoveChance, this.rng);
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { levelSettings, LEVEL_ELO } from '../../src/app/bot/levels.js';
+import { levelSettings, LEVEL_ELO, moveCommands } from '../../src/app/bot/levels.js';
 import { parseBestMove, chooseMove } from '../../src/app/bot/uci.js';
 import { StockfishBot } from '../../src/app/bot/StockfishBot.js';
 import { newGame } from '../../src/app/play/game.js';
@@ -7,12 +7,22 @@ import { newGame } from '../../src/app/play/game.js';
 describe('Bot Logic', () => {
   describe('levels.ts', () => {
     it('levelSettings returns exact values for all levels', () => {
-      expect(levelSettings(1)).toEqual({ skill: 0, depth: 1, movetimeMs: 50, randomMoveChance: 0.35 });
-      expect(levelSettings(2)).toEqual({ skill: 2, depth: 2, movetimeMs: 100, randomMoveChance: 0.20 });
-      expect(levelSettings(3)).toEqual({ skill: 5, depth: 4, movetimeMs: 200, randomMoveChance: 0.08 });
-      expect(levelSettings(4)).toEqual({ skill: 9, depth: 6, movetimeMs: 400, randomMoveChance: 0 });
-      expect(levelSettings(5)).toEqual({ skill: 14, depth: 10, movetimeMs: 800, randomMoveChance: 0 });
-      expect(levelSettings(6)).toEqual({ skill: 20, depth: 14, movetimeMs: 1500, randomMoveChance: 0 });
+      expect(levelSettings(1)).toEqual({ skill: 0, depth: 1, movetimeMs: 50, randomMoveChance: 0.45 });
+      expect(levelSettings(2)).toEqual({ skill: 0, depth: 1, movetimeMs: 50, randomMoveChance: 0.20 });
+      expect(levelSettings(3)).toEqual({ skill: 20, depth: null, movetimeMs: 500, randomMoveChance: 0.10, limitElo: 1320 });
+      expect(levelSettings(4)).toEqual({ skill: 20, depth: null, movetimeMs: 500, randomMoveChance: 0, limitElo: 1320 });
+      expect(levelSettings(5)).toEqual({ skill: 20, depth: null, movetimeMs: 500, randomMoveChance: 0, limitElo: 1600 });
+      expect(levelSettings(6)).toEqual({ skill: 20, depth: null, movetimeMs: 500, randomMoveChance: 0, limitElo: 2000 });
+    });
+
+    it('moveCommands: skill levels switch the limiter off; limiter levels set UCI_Elo and search by time only', () => {
+      const fen = '4k3/8/8/8/8/8/8/4K3 w - - 0 1';
+      expect(moveCommands(levelSettings(1), fen)).toEqual([
+        'setoption name UCI_LimitStrength value false', 'setoption name Skill Level value 0', `position fen ${fen}`, 'go depth 1 movetime 50',
+      ]);
+      expect(moveCommands(levelSettings(5), fen)).toEqual([
+        'setoption name UCI_LimitStrength value true', 'setoption name UCI_Elo value 1600', 'setoption name Skill Level value 20', `position fen ${fen}`, 'go movetime 500',
+      ]);
     });
 
     it('LEVEL_ELO has all six levels and strictly increases', () => {
