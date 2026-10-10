@@ -28,25 +28,52 @@ export const EvalBar: React.FC<{ score: EngineScore | null; flipped: boolean; la
   );
 };
 
-/** Evaluation over the game (White's winning chances); click to jump to a position. */
-export const EvalGraph: React.FC<{ values: (number | null)[]; cursor: number; onJump: (i: number) => void }> = ({ values, cursor, onJump }) => {
+/**
+ * Evaluation over the game (White's winning chances). A slider: click a point, or focus it and use
+ * ←/→ (one move), Home/End, PageUp/PageDown (ten moves) to jump.
+ */
+export const EvalGraph: React.FC<{
+  values: (number | null)[]; cursor: number; onJump: (i: number) => void; valueText: (i: number) => string;
+}> = ({ values, cursor, onJump, valueText }) => {
   const n = values.length;
   if (n < 2) return null;
   const x = (i: number) => (i / (n - 1)) * 100;
   const pts = values.map((v, i) => (v === null ? null : `${x(i).toFixed(2)},${(100 - v).toFixed(2)}`));
   const known = pts.filter((p): p is string => p !== null);
   const area = known.length > 1 ? `M0,100 L${known.join(' L')} L${x(n - 1)},100 Z` : '';
+  const jump = (i: number) => { const t = Math.max(0, Math.min(n - 1, i)); if (t !== cursor) onJump(t); };
+  const onKey = (e: React.KeyboardEvent) => {
+    const to: Record<string, number> = {
+      ArrowLeft: cursor - 1, ArrowDown: cursor - 1, ArrowRight: cursor + 1, ArrowUp: cursor + 1,
+      Home: 0, End: n - 1, PageDown: cursor - 10, PageUp: cursor + 10,
+    };
+    if (!(e.key in to)) return;
+    e.preventDefault();
+    jump(to[e.key]);
+  };
   return (
-    <svg className="rv-evalgraph" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Evaluation over the game. Click to jump to a move."
+    <div
+      className="rv-evalgraph"
+      role="slider"
+      tabIndex={0}
+      aria-label="Evaluation graph: move through the game"
+      aria-valuemin={0}
+      aria-valuemax={n - 1}
+      aria-valuenow={cursor}
+      aria-valuetext={valueText(cursor)}
+      onKeyDown={onKey}
       onClick={(e) => {
-        const r = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
-        onJump(Math.round(((e.clientX - r.left) / r.width) * (n - 1)));
-      }}>
-      <rect x="0" y="0" width="100" height="100" className="rv-evalgraph-bg" />
-      {area && <path d={area} className="rv-evalgraph-area" />}
-      <line x1="0" y1="50" x2="100" y2="50" className="rv-evalgraph-mid" />
-      <line x1={x(cursor)} y1="0" x2={x(cursor)} y2="100" className="rv-evalgraph-cursor" />
-    </svg>
+        const r = e.currentTarget.getBoundingClientRect();
+        if (r.width > 0) jump(Math.round(((e.clientX - r.left) / r.width) * (n - 1)));
+      }}
+    >
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+        <rect x="0" y="0" width="100" height="100" className="rv-evalgraph-bg" />
+        {area && <path d={area} className="rv-evalgraph-area" />}
+        <line x1="0" y1="50" x2="100" y2="50" className="rv-evalgraph-mid" />
+        <line x1={x(cursor)} y1="0" x2={x(cursor)} y2="100" className="rv-evalgraph-cursor" />
+      </svg>
+    </div>
   );
 };
 
@@ -80,16 +107,24 @@ export const MoveCard: React.FC<{
 };
 
 /** Accuracy per side and how many moves got each rating. */
-export const SummaryCard: React.FC<{ summary: ReviewSummary; done: number; total: number; whiteName: string; blackName: string }> = ({ summary, done, total, whiteName, blackName }) => {
-  const finished = done >= total;
+export const SummaryCard: React.FC<{
+  summary: ReviewSummary; done: number; total: number; missing: number; onRetry: () => void; whiteName: string; blackName: string;
+}> = ({ summary, done, total, missing, onRetry, whiteName, blackName }) => {
+  const working = done + missing < total;
   const pct = (v: number | null) => (v === null ? '–' : `${Math.round(v)}%`);
   return (
     <div className="rv-summary">
       <div className="rv-summary-head">
         <h3>Game review</h3>
-        {!finished && <span className="rv-summary-progress" role="status">Reviewing… {done} / {total}</span>}
+        {working && <span className="rv-summary-progress" role="status">Reviewing… {done} / {total}</span>}
       </div>
-      {!finished && <div className="rv-summary-bar" aria-hidden="true"><div style={{ width: `${(done / Math.max(1, total)) * 100}%` }} /></div>}
+      {working && <div className="rv-summary-bar" aria-hidden="true"><div style={{ width: `${(done / Math.max(1, total)) * 100}%` }} /></div>}
+      {!working && missing > 0 && (
+        <div className="rv-summary-missing" role="alert">
+          <span>{missing === 1 ? '1 position' : `${missing} positions`} couldn't be checked, so some moves have no rating.</span>
+          <button type="button" className="rv-btn" onClick={onRetry}>Try again</button>
+        </div>
+      )}
       <div className="rv-summary-grid">
         {(['white', 'black'] as const).map(side => (
           <div key={side} className="rv-summary-side">

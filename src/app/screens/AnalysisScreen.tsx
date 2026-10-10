@@ -201,7 +201,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target;
-      if (t instanceof Element && t.closest('input, textarea, select, [role="grid"]')) return;
+      if (e.defaultPrevented) return; // a control (the evaluation graph, a list) already handled the key
+      if (t instanceof Element && t.closest('input, textarea, select, [role="grid"], [role="slider"], [role="listbox"]')) return;
       if (e.key === 'ArrowLeft') { e.preventDefault(); stepRef.current(-1); }
       if (e.key === 'ArrowRight') { e.preventDefault(); stepRef.current(1); }
     };
@@ -418,6 +419,11 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   const summaryReviews = review.game ? review.game.reviews : review.reviews;
   const rated = summaryMoves.map((m, i) => ({ m, r: summaryReviews[i] })).filter((x): x is { m: typeof x.m; r: MoveReview } => !!x.r);
   const summary = summarize(rated.map(x => x.m), rated.map(x => x.r));
+  const graphText = (i: number): string => {
+    const where = i === 0 ? 'Start position' : `After ${moveLabel(i - 1) || `${Math.floor((startPly + i - 1) / 2) + 1}...`} ${path[i - 1]?.san ?? ''}`;
+    const e = review.evals[i];
+    return e ? `${where}, ${evalLabel(fens[i], e)}` : where;
+  };
   const graphValues = review.evals.map((e, i) => (e && (e.lines.length > 0 || e.terminal) ? winPercent(whiteScore(fens[i], e)) : null));
   const bestNext = currentEval?.lines[0]?.uci;
   const arrow = showBest && bestNext ? { from: bestNext.slice(0, 2) as Square, to: bestNext.slice(2, 4) as Square } : null;
@@ -573,7 +579,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               <div className={`rv-an-boardrow${evalBarOn ? ' rv-an-boardrow--bar' : ''}`}>
               {evalBarOn && <EvalBar score={barScore} flipped={flipped} label={barLabel} />}
               <div className="rv-an-boardwrap">
-              {review.done < review.total && <div className="rv-progress" aria-hidden="true" />}
+              {review.done + review.missing < review.total && <div className="rv-progress" aria-hidden="true" />}
               <Board
                 position={position}
                 flipped={flipped}
@@ -634,15 +640,15 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={showBest} onClick={() => setShowBest(v => !v)} disabled={!bestNext}>Show best move</button>
                 {exploring && line && <button type="button" className="rv-btn rv-btn--primary" onClick={() => setLine(backToGame(line), { animate: false })}>Back to game line</button>}
               </div>
-              {source === 'pgn' && <EvalGraph values={graphValues} cursor={cursor} onJump={(i) => line && setLine(goTo(line, i), { animate: false })} />}
+              {source === 'pgn' && <EvalGraph values={graphValues} cursor={cursor} valueText={graphText} onJump={(i) => line && setLine(goTo(line, i), { animate: false })} />}
             </div>
             
             <div className="rv-an-side" onMouseEnter={cancelLeave} onMouseLeave={() => { if (destinationSquare === null && hoverDest !== null) clearPreviewSoon(); }}>
             {source === 'pgn' && path.length > 0 && (
-              <SummaryCard summary={summary} done={review.game?.done ?? review.done} total={review.game?.total ?? review.total} whiteName={whiteName} blackName={blackName} />
+              <SummaryCard summary={summary} done={(review.game ?? review).done} total={(review.game ?? review).total} missing={(review.game ?? review).missing} onRetry={review.retry} whiteName={whiteName} blackName={blackName} />
             )}
             {path.length > 0 && (
-              <MoveCard move={cursor > 0 ? path[cursor - 1] : null} label={cursor > 0 ? (moveLabel(cursor - 1) || `${Math.floor((startPly + cursor - 1) / 2) + 1}...`) : ''} review={lastReview} pending={!review.failed} />
+              <MoveCard move={cursor > 0 ? path[cursor - 1] : null} label={cursor > 0 ? (moveLabel(cursor - 1) || `${Math.floor((startPly + cursor - 1) / 2) + 1}...`) : ''} review={lastReview} pending={review.done + review.missing < review.total} />
             )}
             {source === 'fen' && <ResultPanel
               selectedDestInfo={selectedDestInfo}
