@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { EngineClient } from '../engine/EngineClient.js';
 import { MoveClassification, Square } from '../../engine/types.js';
 import { Chess, fen as fenOps } from 'chessops';
@@ -12,7 +12,12 @@ import { explain } from '../explain/explain.js';
 import { Spinner } from '../components/Spinner.js';
 import type { ScreenName } from '../App.js';
 import { RvSelect, RvOption } from '../components/RvSelect.js';
-import { LineState, newLine, pathOf, stateAt, playOnLine, goTo, backToGame, isExploring, lineFromPgn } from '../analysis/line.js';
+import { LineState, newLine, pathOf, stateAt, playOnLine, goTo, backToGame, isExploring, lineFromPgn, fensOf } from '../analysis/line.js';
+import { legalDestinations, castlingRookMove } from '../play/game.js';
+import { Searcher, useLineReview } from '../analysis/useLineReview.js';
+import { evalLabel, summarize, whiteScore, winPercent, MoveReview } from '../analysis/review.js';
+import { EvalBar, EvalGraph, MoveCard, SummaryCard, RatingChip } from '../components/ReviewViews.js';
+import { readSettings, saveSettings, applySettings, SETTINGS_EVENT } from '../settings.js';
 
 /** Where the analysis comes from. PGN is the default; PGN and My games arrive in later phases. */
 export type AnalyzeSource = 'pgn' | 'fen' | 'games';
@@ -28,9 +33,11 @@ interface AnalysisScreenProps {
   /** A game to open straight away (from Play: "Analyze this game"). */
   initialPgn?: string;
   onNavigate?: (screen: ScreenName) => void;
+  /** Engine used for the game review (tests pass a fake). */
+  createReviewSearcher?: () => Searcher;
 }
 
-export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, initialFen, initialPgn, onNavigate }) => {
+export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, initialFen, initialPgn, onNavigate, createReviewSearcher }) => {
   const [source, setSource] = useState<AnalyzeSource>(initialPgn ? 'pgn' : initialFen ? 'fen' : 'pgn');
   const initSetup = initialFen && !initialPgn ? fenOps.parseFen(initialFen) : null;
   const initPosRes = initSetup?.isOk ? Chess.fromSetup(initSetup.unwrap()) : null;
@@ -47,7 +54,33 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     return r.ok ? goTo(r.line, r.line.game.length) : null;
   });
   const line = source === 'pgn' ? pgnLine : source === 'fen' ? fenLine : null;
-  const setLine = (l: LineState) => (source === 'pgn' ? setPgnLine(l) : setFenLine(l));
+  // Moving one step forward (playing a move, Next) slides the piece, as in Play.
+  const [anim, setAnim] = useState<{ moves: { from: number; to: number }[]; key: number } | null>(null);
+  const animKey = useRef(0);
+  const setLine = (l: LineState, opts: { animate?: boolean } = {}) => {
+    const step = line && l.cursor === line.cursor + 1 && opts.animate !== false ? pathOf(l)[l.cursor - 1] : null;
+    if (step) {
+      const sqi = (x: string) => (x.charCodeAt(1) - 49) * 8 + (x.charCodeAt(0) - 97);
+      const from = sqi(step.uci.slice(0, 2)), to = sqi(step.uci.slice(2, 4));
+      const rook = step.role === 'king' ? castlingRookMove(from, to) : null;
+      setAnim({ moves: rook ? [{ from, to }, rook] : [{ from, to }], key: ++animKey.current });
+    } else {
+      setAnim(null);
+    }
+    if (source === 'pgn') setPgnLine(l); else setFenLine(l);
+  };
+  const [showBest, setShowBest] = useState(false);
+  const [evalBarOn, setEvalBarOn] = useState(() => readSettings().evalBar);
+  useEffect(() => {
+    const sync = () => setEvalBarOn(readSettings().evalBar);
+    window.addEventListener(SETTINGS_EVENT, sync);
+    return () => window.removeEventListener(SETTINGS_EVENT, sync);
+  }, []);
+  const toggleEvalBar = () => {
+    const next = { ...readSettings(), evalBar: !evalBarOn };
+    saveSettings(next);
+    applySettings(next);
+  };
   const lineState = line ? stateAt(line) : null;
   const currentFen = lineState ? lineState.currentFen : '';
 
@@ -153,12 +186,12 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     setFlipped(/\[Black "You"\]/.test(text));
   };
 
-  const playHere = (from: number, to: number) => {
+  const playHere = (from: number, to: number, animate = true) => {
     if (!line || !position) return;
     const piece = position.board.get(from);
     const promo = piece?.role === 'pawn' && ((to >> 3) === 7 || (to >> 3) === 0) ? 'queen' : undefined;
     const next = playOnLine(line, from, to, promo);
-    if (next) setLine(next);
+    if (next) setLine(next, { animate });
   };
   const step = (delta: number) => { if (line) setLine(goTo(line, line.cursor + delta)); };
 
@@ -206,6 +239,12 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       setDestinationSquare(null);
     }
 
+    if (ignoreClickRef.current) { ignoreClickRef.current = false; return; } // the click after a long-press preview
+    // Tap a legal square of the picked piece: the move is played (as in Play).
+    if (selectedSquare !== null && canPlayNow && lineState && legalDestinations(lineState, selectedSquare).includes(index)) {
+      playHere(selectedSquare, index);
+      return;
+    }
     if (color === showMovesFor) {
       // F6: tap again to cancel
       if (selectedSquare === index) {
@@ -214,6 +253,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       }
       // Select own piece
       setSelectedSquare(index);
+      if (source === 'pgn') return; // game review: ratings only, no square labels
       setEngineError(false);
       setDestinationSquare(null);
       setMoves([]);
@@ -305,6 +345,21 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     }
   };
   const onDestLeave = (index: number) => { if (destinationSquare === null && index === hoverDest) clearPreviewSoon(); };
+  // Touch: a long press on a highlighted square previews it (a tap plays the move).
+  const ignoreClickRef = useRef(false);
+  const pressTimer = useRef<number | null>(null);
+  const clearPress = () => { if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; } };
+  useEffect(() => clearPress, []);
+  const onSquarePointerDown = (index: number, pointerType: string) => {
+    clearPress();
+    if (pointerType === 'mouse' || source !== 'fen' || !moves.some(m => m.move.to === getSquareName(index))) return;
+    pressTimer.current = window.setTimeout(() => {
+      pressTimer.current = null;
+      ignoreClickRef.current = true;
+      cancelLeave();
+      setHoverDest(index); setExpandedLevel(1); setExchangeStep(0);
+    }, 450);
+  };
   // Opening the details of a previewed move pins it, so moving the mouse doesn't swap it away.
   const setLevel = (lvl: number) => { if (destinationSquare === null && hoverDest !== null) setDestinationSquare(hoverDest); setExpandedLevel(lvl); };
   const stepText = getStepText(selectedDestInfo, exchangeStep);
@@ -343,6 +398,33 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     const n = startPly + i;
     return n % 2 === 0 ? `${n / 2 + 1}.` : i === 0 ? `${Math.floor(n / 2) + 1}...` : '';
   };
+  // Engine review of the line on the board (and the whole game in PGN mode).
+  const pathKey = path.map(m => m.uci).join(' ');
+  const fens = useMemo(() => (line ? fensOf(line) : []), [line?.startFen, pathKey]);
+  const gameInfo = useMemo(() => {
+    if (source !== 'pgn' || !line) return null;
+    const g = { ...line, branchAt: null, branch: [] };
+    return { startFen: line.startFen, ucis: line.game.map(m => m.uci), fens: fensOf(g), moves: line.game };
+  }, [source, line?.startFen, line?.game]);
+  const review = useLineReview(engineClient, fens, path, currentFen || null, gameInfo, createReviewSearcher);
+  const cursor = line?.cursor ?? 0;
+  const currentEval = review.evals[cursor];
+  const barKnown = !!currentEval && (currentEval.lines.length > 0 || !!currentEval.terminal);
+  const barScore = barKnown ? whiteScore(currentFen, currentEval!) : null;
+  const barLabel = barKnown ? evalLabel(currentFen, currentEval!) : undefined;
+  const lastReview: MoveReview | undefined = cursor > 0 ? review.reviews[cursor - 1] : undefined;
+  // The game summary covers the loaded game's moves (it stays put while you explore your own line).
+  const summaryMoves = review.game ? (line?.game ?? []) : path;
+  const summaryReviews = review.game ? review.game.reviews : review.reviews;
+  const rated = summaryMoves.map((m, i) => ({ m, r: summaryReviews[i] })).filter((x): x is { m: typeof x.m; r: MoveReview } => !!x.r);
+  const summary = summarize(rated.map(x => x.m), rated.map(x => x.r));
+  const graphValues = review.evals.map((e, i) => (e && (e.lines.length > 0 || e.terminal) ? winPercent(whiteScore(fens[i], e)) : null));
+  const bestNext = currentEval?.lines[0]?.uci;
+  const arrow = showBest && bestNext ? { from: bestNext.slice(0, 2) as Square, to: bestNext.slice(2, 4) as Square } : null;
+  const legalFrom = selectedSquare !== null && canPlayNow && lineState ? legalDestinations(lineState, selectedSquare) : undefined;
+  const whiteName = (initialPgn?.match(/\[White "([^"]*)"\]/)?.[1]) || 'White';
+  const blackName = (initialPgn?.match(/\[Black "([^"]*)"\]/)?.[1]) || 'Black';
+
   const NavIcon: React.FC<{ d: string }> = ({ d }) => (
     <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
   );
@@ -428,7 +510,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               />
             </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {source === 'fen' && <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Show moves for</span>
                 <div style={{ display: 'flex', background: 'var(--bg-sunken)', borderRadius: '6px', padding: '4px' }}>
@@ -458,7 +540,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 </div>
               )}
 
-            </div>
+            </div>}
             <div style={{ display: 'flex', gap: '8px' }}>
               <button className="rv-hover" 
                 onClick={() => setFlipped(!flipped)}
@@ -488,15 +570,26 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                   Showing the exchange — step {exchangeStep} of {selectedDestInfo.exchange.bestLine.length}
                 </div>
               )}
+              <div className={`rv-an-boardrow${evalBarOn ? ' rv-an-boardrow--bar' : ''}`}>
+              {evalBarOn && <EvalBar score={barScore} flipped={flipped} label={barLabel} />}
+              <div className="rv-an-boardwrap">
+              {review.done < review.total && <div className="rv-progress" aria-hidden="true" />}
               <Board
                 position={position}
                 flipped={flipped}
                 onSquareClick={onSquareClick}
                 selectedSquare={selectedSquare}
-                destinationSquare={shownDest}
-                moves={moves}
-                onSquareMouseEnter={onDestHover}
-                onSquareMouseLeave={onDestLeave}
+                destinationSquare={source === 'fen' ? shownDest : null}
+                moves={source === 'fen' ? moves : []}
+                legalDestinations={legalFrom}
+                arrow={arrow}
+                animateMoves={anim?.moves}
+                animationKey={anim?.key}
+                onSquarePointerDown={onSquarePointerDown}
+                onSquarePointerUp={clearPress}
+                onSquarePointerCancel={clearPress}
+                onSquareMouseEnter={source === 'fen' ? onDestHover : undefined}
+                onSquareMouseLeave={source === 'fen' ? onDestLeave : undefined}
                 expandedLevel={expandedLevel}
                 exchangeStep={exchangeStep}
                 selectedDestInfo={selectedDestInfo}
@@ -504,22 +597,19 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 setFocusedSquare={setFocusedSquare}
                 lastMove={lastMoveObj}
                 draggableSquares={movableSquares}
-                onPieceDrop={(from, to) => playHere(from, to)}
+                onPieceDrop={(from, to) => playHere(from, to, false)}
                 onPieceDragStart={(from) => { if (selectedSquare !== from) void onSquareClick(from); }}
               />
+              </div>
+              </div>
               
-              <div style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'space-between', background: 'var(--panel)', borderBottom: '1px solid var(--border)' }}>
+              {source === 'fen' && <div style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'space-between', background: 'var(--panel)', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ flex: 1 }}>
                   {!(selectedDestInfo && !(expandedLevel >= 3 && exchangeStep > 0)) && (
                     <div aria-hidden="true" style={{ fontSize: '0.95rem', color: 'var(--text-2)' }}>{liveText}</div>
                   )}
                   {showAnalyzingIndicator && <div aria-hidden="true" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}><span style={{display:"flex",alignItems:"center",gap:"8px"}}><Spinner /> Checking moves…</span></div>}
                 </div>
-                {selectedDestInfo && destinationSquare !== null && selectedSquare !== null && canPlayNow && !(expandedLevel >= 3 && exchangeStep > 0) && (
-                  <button className="rv-btn rv-btn--primary" onClick={() => playHere(selectedSquare, destinationSquare)}>
-                    Play this move
-                  </button>
-                )}
                 {selectedDestInfo && (
                   <ExchangeControls
                     expandedLevel={expandedLevel}
@@ -528,49 +618,60 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                     selectedDestInfo={selectedDestInfo}
                   />
                 )}
-              </div>
+              </div>}
 
               <div className="rv-an-nav" role="group" aria-label="Move navigation">
-                <button className="rv-btn" aria-label="Go to start" disabled={!line || line.cursor === 0} onClick={() => line && setLine(goTo(line, 0))}><NavIcon d="M18 18l-6-6 6-6M8 6v12" /></button>
+                <button className="rv-btn" aria-label="Go to start" disabled={!line || line.cursor === 0} onClick={() => line && setLine(goTo(line, 0), { animate: false })}><NavIcon d="M18 18l-6-6 6-6M8 6v12" /></button>
                 <button className="rv-btn" aria-label="Previous move" disabled={!line || line.cursor === 0} onClick={() => step(-1)}><NavIcon d="M15 18l-6-6 6-6" /></button>
                 <span className="rv-an-where" aria-live="polite">
                   {!line || line.cursor === 0 ? 'Start position' : `After ${moveLabel(line.cursor - 1) || `${Math.floor((startPly + line.cursor - 1) / 2) + 1}...`} ${path[line.cursor - 1].san}`}
                 </span>
                 <button className="rv-btn" aria-label="Next move" disabled={!line || line.cursor >= path.length} onClick={() => step(1)}><NavIcon d="M9 18l6-6-6-6" /></button>
-                <button className="rv-btn" aria-label="Go to end" disabled={!line || line.cursor >= path.length} onClick={() => line && setLine(goTo(line, path.length))}><NavIcon d="M6 18l6-6-6-6M16 6v12" /></button>
+                <button className="rv-btn" aria-label="Go to end" disabled={!line || line.cursor >= path.length} onClick={() => line && setLine(goTo(line, path.length), { animate: false })}><NavIcon d="M6 18l6-6-6-6M16 6v12" /></button>
               </div>
+              <div className="rv-an-tools">
+                <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={evalBarOn} onClick={toggleEvalBar}>Evaluation bar</button>
+                <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={showBest} onClick={() => setShowBest(v => !v)} disabled={!bestNext}>Show best move</button>
+                {exploring && line && <button type="button" className="rv-btn rv-btn--primary" onClick={() => setLine(backToGame(line), { animate: false })}>Back to game line</button>}
+              </div>
+              {source === 'pgn' && <EvalGraph values={graphValues} cursor={cursor} onJump={(i) => line && setLine(goTo(line, i), { animate: false })} />}
             </div>
             
             <div className="rv-an-side" onMouseEnter={cancelLeave} onMouseLeave={() => { if (destinationSquare === null && hoverDest !== null) clearPreviewSoon(); }}>
-            <ResultPanel
+            {source === 'pgn' && path.length > 0 && (
+              <SummaryCard summary={summary} done={review.game?.done ?? review.done} total={review.game?.total ?? review.total} whiteName={whiteName} blackName={blackName} />
+            )}
+            {path.length > 0 && (
+              <MoveCard move={cursor > 0 ? path[cursor - 1] : null} label={cursor > 0 ? (moveLabel(cursor - 1) || `${Math.floor((startPly + cursor - 1) / 2) + 1}...`) : ''} review={lastReview} pending={!review.failed} />
+            )}
+            {source === 'fen' && <ResultPanel
               selectedDestInfo={selectedDestInfo}
               expandedLevel={expandedLevel}
               setExpandedLevel={setLevel}
               exchangeStep={exchangeStep}
               setExchangeStep={setExchangeStep}
               stepText={stepText}
-              emptyText={selectedSquare === null ? undefined : !analyzing && moves.length === 0 ? 'This piece has no legal moves.' : 'Hover over a highlighted square (or tap it) to see what happens there.'}
-            />
+              emptyText={selectedSquare === null ? undefined : !analyzing && moves.length === 0 ? 'This piece has no legal moves.' : 'Hover over a highlighted square (or long-press it on a phone) to see what happens there. Tap it to play the move.'}
+            />}
             <div className="rv-an-moves">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
                 <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Moves</h3>
-                {exploring && line && (
-                  <button className="rv-btn" onClick={() => setLine(backToGame(line))}>Back to game line</button>
-                )}
               </div>
               {exploring && line && line.branchAt !== null && (
                 <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Your own moves are marked. The game continued with {line.game[line.branchAt]?.san ?? 'no more moves'}.</p>
               )}
               {path.length === 0 ? (
-                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>Play a move on the board: pick a piece and a square, then Play this move — or drag the piece. You can move for both sides.</p>
+                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>Play a move on the board: tap a piece, then a square (or drag it). You can move for both sides, and every move gets rated.</p>
               ) : (
                 <div className="rv-movelist" aria-label="Moves">
                   {path.map((m, i) => {
                     const own = !!line && line.game.length > 0 && line.branchAt !== null && i >= line.branchAt;
+                    const rv = review.reviews[i];
                     return (
-                      <button key={i} type="button" className={'rv-mchip' + (own ? ' rv-mchip--own' : '')} aria-label={`${moveLabel(i) ? moveLabel(i) + ' ' : ''}${m.san}${own ? ' (your move)' : ''}`} aria-current={line?.cursor === i + 1 ? 'step' : undefined} onClick={() => line && setLine(goTo(line, i + 1))}>
+                      <button key={i} type="button" className={'rv-mchip' + (own ? ' rv-mchip--own' : '')} aria-label={`${moveLabel(i) ? moveLabel(i) + ' ' : ''}${m.san}${own ? ' (your move)' : ''}`} aria-current={line?.cursor === i + 1 ? 'step' : undefined} onClick={() => line && setLine(goTo(line, i + 1), { animate: false })}>
                         {moveLabel(i) && <span className="rv-mchip-no">{moveLabel(i)}</span>}
                         <span className="mono">{m.san}</span>
+                        {rv && <RatingChip rating={rv.rating} compact />}
                       </button>
                     );
                   })}
@@ -587,6 +688,9 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
         @media (max-width: 767px) {
           .board-container { width: 100%; max-width: none !important; }
           .board-container > div[role="grid"] { border-left: none !important; border-right: none !important; outline: none !important; }
+        }
+        @media (min-width: 768px) and (max-width: 1023px) {
+          .board-container { padding: 16px; border-right: 1px solid var(--border); }
         }
         @media (min-width: 1024px) {
           .board-container { padding: 24px; border-right: 1px solid var(--border); }

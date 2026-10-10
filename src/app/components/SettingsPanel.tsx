@@ -97,6 +97,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose, set
               <Toggle label="Reduce animations" hint="No sliding or moving effects. Loading indicators and fades stay." checked={settings.reduceMotion} onChange={(v) => set({ reduceMotion: v })} />
               <Toggle label="Board coordinates" hint="Letters and numbers along the board edges." checked={settings.coordinates} onChange={(v) => set({ coordinates: v })} />
               <Toggle label="Loading screen" hint="Show the Rookvex mark when the site first opens." checked={settings.loadingScreen} onChange={(v) => set({ loadingScreen: v })} />
+              <Toggle label="Evaluation bar" hint="Show the engine's evaluation beside the board in Analyze." checked={settings.evalBar} onChange={(v) => set({ evalBar: v })} />
               <p className="rv-sheet-note">Settings are saved in this browser.</p>
             </div>
           )}

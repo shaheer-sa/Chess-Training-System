@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ScreenName } from '../App.js';
 import { Logo } from './Logo.js';
 import { SettingsPanel } from './SettingsPanel.js';
-import { SiteSettings, readSettings, saveSettings, applySettings } from '../settings.js';
+import { SiteSettings, readSettings, saveSettings, applySettings, SETTINGS_EVENT } from '../settings.js';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -19,6 +19,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children, onNavigate, curren
   const [settings, setSettings] = useState<SiteSettings>(() => readSettings());
   const gearRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { applySettings(settings); }, [settings]);
+  // Settings changed elsewhere (e.g. the evaluation bar toggle in Analyze): pick them up.
+  useEffect(() => {
+    const sync = () => {
+      const latest = readSettings();
+      setSettings(cur => (JSON.stringify(cur) === JSON.stringify(latest) ? cur : latest));
+    };
+    window.addEventListener(SETTINGS_EVENT, sync);
+    return () => window.removeEventListener(SETTINGS_EVENT, sync);
+  }, []);
   const changeSettings = (s: SiteSettings) => { setSettings(s); saveSettings(s); };
   const closeSheet = React.useCallback(() => { setSheetOpen(false); gearRef.current?.focus(); }, []);
   const menuRef = useRef<HTMLDivElement>(null);

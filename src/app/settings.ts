@@ -6,10 +6,12 @@ export interface SiteSettings {
   coordinates: boolean;
   /** The Rookvex loading screen on the first visit of a session. */
   loadingScreen: boolean;
+  /** Evaluation bar beside the board in Analyze. */
+  evalBar: boolean;
 }
 
 export const SETTINGS_KEY = 'rookvex.settings.v1';
-export const DEFAULT_SETTINGS: SiteSettings = { reduceMotion: false, coordinates: true, loadingScreen: true };
+export const DEFAULT_SETTINGS: SiteSettings = { reduceMotion: false, coordinates: true, loadingScreen: true, evalBar: true };
 
 export const loadSettings = (raw: string | null): SiteSettings => {
   try {
@@ -17,7 +19,7 @@ export const loadSettings = (raw: string | null): SiteSettings => {
     if (!data || typeof data !== 'object') return { ...DEFAULT_SETTINGS };
     const d = data as Partial<Record<keyof SiteSettings, unknown>>;
     const pick = (k: keyof SiteSettings) => (typeof d[k] === 'boolean' ? (d[k] as boolean) : DEFAULT_SETTINGS[k]);
-    return { reduceMotion: pick('reduceMotion'), coordinates: pick('coordinates'), loadingScreen: pick('loadingScreen') };
+    return { reduceMotion: pick('reduceMotion'), coordinates: pick('coordinates'), loadingScreen: pick('loadingScreen'), evalBar: pick('evalBar') };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

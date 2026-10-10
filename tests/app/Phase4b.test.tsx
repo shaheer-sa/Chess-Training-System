@@ -66,7 +66,7 @@ describe('Phase 4B — Specific Acceptance Tests', () => {
     await screen.findByRole('grid');
     fireEvent.click(container.querySelector('#sq-12')!); // select e2 pawn
     await waitFor(() => expect(container.innerHTML).toMatch(/Tap a square to see why/i));
-    fireEvent.click(container.querySelector('#sq-28')!); // click e4 destination
+    fireEvent.mouseEnter(container.querySelector('#sq-28')!); // hover e4 destination (a tap would play the move)
     
     // wait for analysis to complete
     await waitFor(() => {

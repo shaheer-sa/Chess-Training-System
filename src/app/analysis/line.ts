@@ -49,6 +49,19 @@ const uciTo = (uci: string) => sq(uci.slice(2, 4));
 /** Game state at the cursor (start position plus the first `cursor` moves of the path). */
 export const stateAt = (s: LineState): GameState => replay(s.startFen, pathOf(s).slice(0, s.cursor));
 
+/** Every position along the path: the start, then the position after each move (length = moves + 1). */
+export const fensOf = (s: LineState): string[] => {
+  let g = newGame(s.startFen);
+  const out = [g.currentFen];
+  for (const m of pathOf(s)) {
+    const next = playMove(g, uciFrom(m.uci), uciTo(m.uci), m.uci.length > 4 ? PROMO_ROLE[m.uci[4]] : undefined);
+    if (!next) break;
+    g = next;
+    out.push(g.currentFen);
+  }
+  return out;
+};
+
 export const goTo = (s: LineState, cursor: number): LineState =>
   ({ ...s, cursor: Math.max(0, Math.min(cursor, pathOf(s).length)) });
 

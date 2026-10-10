@@ -9,7 +9,7 @@ import { Home } from '../../src/app/screens/Home.js';
 import { DirectEngineClient } from '../../src/app/engine/DirectEngineClient.js';
 
 afterEach(() => { cleanup(); document.documentElement.classList.remove('rv-reduce-motion'); });
-const S = { reduceMotion: false, coordinates: true, loadingScreen: true };
+const S = { reduceMotion: false, coordinates: true, loadingScreen: true, evalBar: true };
 
 describe('settings panel and reduced motion (review fixes)', () => {
   it('a closing panel is no longer a modal dialog and cannot be reached', () => {

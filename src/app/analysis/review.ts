@@ -113,35 +113,70 @@ const sanOf = (fen: string, uci: string): string | null => {
   }
 };
 
+/** Review one move: `before`/`after` are the engine views of the positions before and after it. */
+export const reviewMove = (
+  fenBefore: string, mv: GameMove, prev: GameMove | undefined, before: PositionEval, after: PositionEval, sacrifice: boolean,
+): MoveReview => {
+  const best = before.lines[0];
+  const bestScore = best ? best.score : null;
+  // The move that checkmates wins outright (negating "mate 0" would lose who was mated).
+  const playedScore: EngineScore = after.terminal === 'checkmate' ? { mate: 1 } : negate(positionScore(after));
+  const bestWin = bestScore ? winPercent(bestScore) : winPercent(playedScore);
+  const playedWin = winPercent(playedScore);
+  const playedIsBest = !!best && best.uci === mv.uci;
+  const second = before.lines[1];
+  const obvious = mv.san.includes('x') || mv.san.includes('#') || (!!prev && /[+#]$/.test(prev.san));
+  const rating = rateMove({
+    bestWin, playedWin, secondWin: second ? winPercent(second.score) : null,
+    playedIsBest, sacrifice, obvious,
+  });
+  const winBefore = playedIsBest ? playedWin : Math.max(bestWin, playedWin);
+  return {
+    rating, winBefore, winAfter: playedWin, accuracy: moveAccuracy(winBefore, playedWin),
+    bestUci: best?.uci ?? null, bestSan: best ? sanOf(fenBefore, best.uci) : null, bestLine: best?.pv ?? [],
+    bestScore, playedScore,
+  };
+};
+
 /**
  * Review every move of a game. `fens[i]` is the position before move i (fens.length = moves.length + 1),
  * `evals[i]` its engine view, `sacrifices[i]` whether move i is a sacrifice (isSacrifice on its square check).
  */
 export const reviewMoves = (fens: string[], moves: GameMove[], evals: PositionEval[], sacrifices: boolean[]): MoveReview[] =>
-  moves.map((mv, i) => {
-    const before = evals[i];
-    const after = evals[i + 1];
-    const best = before.lines[0];
-    const bestScore = best ? best.score : null;
-    // The move that checkmates wins outright (negating "mate 0" would lose who was mated).
-    const playedScore: EngineScore = after.terminal === 'checkmate' ? { mate: 1 } : negate(positionScore(after));
-    const bestWin = bestScore ? winPercent(bestScore) : winPercent(playedScore);
-    const playedWin = winPercent(playedScore);
-    const playedIsBest = !!best && best.uci === mv.uci;
-    const second = before.lines[1];
-    const prev = moves[i - 1];
-    const obvious = mv.san.includes('x') || mv.san.includes('#') || (!!prev && /[+#]$/.test(prev.san));
-    const rating = rateMove({
-      bestWin, playedWin, secondWin: second ? winPercent(second.score) : null,
-      playedIsBest, sacrifice: !!sacrifices[i], obvious,
-    });
-    const winBefore = playedIsBest ? playedWin : Math.max(bestWin, playedWin);
-    return {
-      rating, winBefore, winAfter: playedWin, accuracy: moveAccuracy(winBefore, playedWin),
-      bestUci: best?.uci ?? null, bestSan: best ? sanOf(fens[i], best.uci) : null, bestLine: best?.pv ?? [],
-      bestScore, playedScore,
-    };
-  });
+  moves.map((mv, i) => reviewMove(fens[i], mv, moves[i - 1], evals[i], evals[i + 1], !!sacrifices[i]));
+
+/** "+1.2", "−0.4", "M3" (mate for White), "−M2", "0.0" — from White's side. */
+export const formatEval = (s: EngineScore): string => {
+  if ('mate' in s) return s.mate === 0 ? '#' : s.mate > 0 ? `M${s.mate}` : `−M${-s.mate}`;
+  const v = s.cp / 100;
+  return v === 0 ? '0.0' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`;
+};
+
+const stateOf = (win: number): string =>
+  win >= 90 ? 'winning' : win >= 70 ? 'clearly better' : win >= 55 ? 'slightly better' : win > 45 ? 'equal'
+    : win > 30 ? 'slightly worse' : win > 10 ? 'clearly worse' : 'losing';
+
+const toWhite = (s: EngineScore, mover: 'white' | 'black'): EngineScore => (mover === 'white' ? s : negate(s));
+
+/** One or two plain sentences for the move card (no engine jargon beyond the move and the evaluation). */
+export const explainReview = (r: MoveReview, mv: GameMove): string => {
+  const better = r.bestSan && r.bestScore ? `Better was ${r.bestSan} (${formatEval(toWhite(r.bestScore, mv.color))}).` : '';
+  const before = stateOf(r.winBefore);
+  const after = stateOf(r.winAfter);
+  const allowsMate = 'mate' in r.playedScore && r.playedScore.mate < 0;
+  const drop = allowsMate ? 'This allows a forced checkmate.'
+    : before !== after ? `The position goes from ${before} to ${after} for you.` : 'This gives away part of your advantage.';
+  switch (r.rating) {
+    case 'brilliant': return 'Brilliant! You give up material here, and it works: this is the engine\'s best move.';
+    case 'great': return `Great move! The only move that keeps the position ${after === 'equal' ? 'equal' : after + ' for you'}.`;
+    case 'best': return mv.san.includes('#') ? 'Checkmate. Best move.' : 'Best move.';
+    case 'excellent': return r.bestSan ? `Excellent. Almost as good as ${r.bestSan}.` : 'Excellent.';
+    case 'good': return r.bestSan ? `Good move. ${r.bestSan} was a little better.` : 'Good move.';
+    case 'inaccuracy': return `Inaccuracy. ${drop} ${better}`.trim();
+    case 'mistake': return `Mistake. ${drop} ${better}`.trim();
+    case 'blunder': return `Blunder. ${drop} ${better}`.trim();
+  }
+};
 
 export interface ReviewSummary {
   accuracy: { white: number | null; black: number | null };
@@ -162,8 +197,14 @@ export const summarize = (moves: GameMove[], reviews: MoveReview[]): ReviewSumma
   return { accuracy: { white: sideAccuracy(acc.white), black: sideAccuracy(acc.black) }, counts };
 };
 
-/** Score from White's side for the evaluation bar/graph. */
+/** Score from White's side for the evaluation bar/graph. A checkmate counts as a won game for the side that gave it. */
 export const whiteScore = (fen: string, p: PositionEval): EngineScore => {
+  const whiteToMove = fen.split(' ')[1] === 'w';
+  if (p.terminal === 'checkmate') return whiteToMove ? { mate: 0 } : { mate: 1 };
   const s = positionScore(p);
-  return fen.split(' ')[1] === 'w' ? s : negate(s);
+  return whiteToMove ? s : negate(s);
 };
+
+/** Text for the evaluation bar: the score from White's side, or the result once the game is over. */
+export const evalLabel = (fen: string, p: PositionEval): string =>
+  p.terminal === 'checkmate' ? (fen.split(' ')[1] === 'w' ? '0-1' : '1-0') : p.terminal === 'draw' ? '½-½' : formatEval(whiteScore(fen, p));

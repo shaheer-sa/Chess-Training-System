@@ -385,3 +385,57 @@ html{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent;overf
 html.rv-loading,html.rv-loading body{overflow:hidden}
 /* Dashboard: the readout keeps one height, so the hero (and its background) never shifts as examples change. */
 .rv-demo-readout{min-height:9.6em}
+
+/* ---- Game review (phase 6) ---- */
+.rv-rating{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:4px;font-size:.8rem;font-weight:700;line-height:1.4;white-space:nowrap}
+.rv-rating-glyph{font-family:'IBM Plex Mono',monospace;font-weight:700}
+.rv-rating--compact{padding:0 5px;min-width:18px;justify-content:center;font-size:.72rem;border-radius:9px}
+.rv-an-boardrow{display:flex;gap:10px;align-items:stretch}
+.rv-an-boardwrap{position:relative;flex:1;min-width:0}
+.rv-evalbar{position:relative;width:22px;flex-shrink:0;border-radius:4px;overflow:hidden;background:#2b2b2b;border:1px solid var(--border-strong)}
+.rv-evalbar-white{position:absolute;left:0;right:0;bottom:0;height:var(--w);background:#f3efe6;transition:height 400ms cubic-bezier(.2,.8,.2,1)}
+.rv-evalbar--flipped .rv-evalbar-white{bottom:auto;top:0}
+.rv-evalbar--loading .rv-evalbar-white{opacity:.6}
+.rv-evalbar-label{position:absolute;left:0;right:0;text-align:center;font:700 10px/1 'IBM Plex Mono',monospace;writing-mode:vertical-rl;transform:rotate(180deg);padding:4px 0}
+.rv-evalbar-label--white{bottom:0;color:#2b2b2b}
+.rv-evalbar-label--black{top:0;color:#f3efe6}
+.rv-evalbar--flipped .rv-evalbar-label--white{bottom:auto;top:0}
+.rv-evalbar--flipped .rv-evalbar-label--black{top:auto;bottom:0}
+@media (max-width:767px){
+  .rv-an-boardrow{flex-direction:column;gap:6px}
+  .rv-evalbar{width:auto;height:18px;margin:0 16px}
+  .rv-evalbar-white{top:0;bottom:0;left:0;right:auto;height:auto;width:var(--w);transition:width 400ms cubic-bezier(.2,.8,.2,1)}
+  .rv-evalbar--flipped .rv-evalbar-white{left:auto;right:0}
+  .rv-evalbar-label{writing-mode:horizontal-tb;transform:none;top:0;bottom:0;display:flex;align-items:center;padding:0 6px;font-size:11px}
+  .rv-evalbar-label--white{left:0;right:auto;justify-content:flex-start}
+  .rv-evalbar-label--black{left:auto;right:0;justify-content:flex-end}
+  .rv-evalbar--flipped .rv-evalbar-label--white{left:auto;right:0}
+  .rv-evalbar--flipped .rv-evalbar-label--black{right:auto;left:0}
+}
+.rv-an-tools{display:flex;flex-wrap:wrap;gap:8px;padding:0 0 12px}
+.rv-chiptoggle{min-height:38px;font-size:.88rem}
+.rv-chiptoggle[aria-pressed="true"]{border-color:var(--accent);background:var(--panel-hover)}
+.rv-chiptoggle[aria-pressed="true"]::before{content:'✓';margin-right:2px;color:var(--accent-text)}
+.rv-evalgraph{display:block;width:100%;height:64px;border-radius:6px;cursor:pointer;margin-bottom:12px;border:1px solid var(--border)}
+.rv-evalgraph-bg{fill:#2b2b2b}
+.rv-evalgraph-area{fill:#e9e4d9}
+.rv-evalgraph-mid{stroke:var(--border-strong);stroke-width:.6;vector-effect:non-scaling-stroke}
+.rv-evalgraph-cursor{stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}
+.rv-movecard{padding:18px 24px;background:var(--panel);border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.rv-movecard-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rv-movecard-text{margin:0;color:var(--text-2);line-height:1.55}
+.rv-summary{padding:18px 24px;background:var(--panel);display:flex;flex-direction:column;gap:10px}
+.rv-summary-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rv-summary-head h3{margin:0;font-size:1.05rem}
+.rv-summary-progress{font-size:.85rem;color:var(--text-muted)}
+.rv-summary-bar{height:4px;border-radius:4px;background:rgba(212,92,28,.2);overflow:hidden}
+.rv-summary-bar>div{height:100%;background:var(--accent);transition:width 300ms ease}
+.rv-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rv-summary-side{padding:10px 12px;border-radius:8px;background:var(--bg-sunken);border:1px solid var(--border)}
+.rv-summary-name{font-weight:600;color:var(--text-2);font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-summary-acc{font:700 1.6rem/1.2 'IBM Plex Sans',sans-serif;color:var(--text);display:flex;align-items:baseline;gap:6px}
+.rv-summary-acc span{font-size:.75rem;font-weight:500;color:var(--text-muted)}
+.rv-summary-counts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.rv-summary-count{display:inline-flex;align-items:center;gap:3px;font-size:.85rem;color:var(--text-2)}
+.rv-mchip .rv-rating--compact{margin-left:2px}
+@media (max-width:767px){.rv-movecard,.rv-summary{padding:14px 16px}.rv-an-tools{padding:0 16px 12px}.rv-evalgraph{margin:0 16px 12px;width:calc(100% - 32px)}}

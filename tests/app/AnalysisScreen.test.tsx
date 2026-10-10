@@ -261,7 +261,7 @@ describe('Analysis Screen', () => {
       await waitFor(() => {
         expect(screen.getByLabelText(/g5, empty, legal destination, Loses material/i)).toBeTruthy();
       });
-      await user.click(screen.getByLabelText(/g5, empty, legal destination, Loses material/i));
+      await user.hover(screen.getByLabelText(/g5, empty, legal destination, Loses material/i));
       
       expect(screen.getByText('Loses material')).toBeTruthy();
       expect(document.querySelector('svg')).toBeTruthy();
@@ -477,7 +477,7 @@ describe('Analysis Screen', () => {
       fireEvent.click(screen.getByLabelText('e2, white pawn'));
       
       const e4Square = await screen.findByLabelText(/e4, empty, legal destination/i);
-      fireEvent.click(e4Square);
+      fireEvent.mouseEnter(e4Square);
       
       const indicator = container.querySelector('[style*="dashed"]');
       expect(indicator).toBeTruthy();
@@ -566,7 +566,7 @@ describe('Analysis Screen', () => {
       fireEvent.click(e6Square);
       
       const g5Square = await screen.findByLabelText(/g5, empty/);
-      fireEvent.click(g5Square);
+      fireEvent.mouseEnter(g5Square);
       
       const showWhy = await screen.findByText('Show why');
       fireEvent.click(showWhy);
@@ -597,7 +597,7 @@ describe('Analysis Screen', () => {
       render(<AnalysisScreen engineClient={client} initialFen="4k3/8/8/8/8/8/8/3QK3 w - - 0 1" />);
       
       fireEvent.click(screen.getByLabelText(/e1, white king/));
-      fireEvent.click(await screen.findByLabelText(/e2/));
+      fireEvent.mouseEnter(await screen.findByLabelText(/e2/));
       fireEvent.click(await screen.findByText('Show why'));
       
       await waitFor(() => {
@@ -612,7 +612,7 @@ describe('Analysis Screen', () => {
       render(<AnalysisScreen engineClient={client} initialFen="4k3/8/8/2p5/8/8/3P4/3QK3 w - - 0 1" />);
       
       fireEvent.click(screen.getByLabelText(/d2, white pawn/));
-      fireEvent.click(await screen.findByLabelText(/d4/));
+      fireEvent.mouseEnter(await screen.findByLabelText(/d4/));
       
       const showExchange = await screen.findByText('Show the exchange');
       fireEvent.click(showExchange);
@@ -661,7 +661,7 @@ describe('Analysis Screen', () => {
 
       // Candidate move: e2e4
       fireEvent.click(screen.getByLabelText(/e2, white pawn/));
-      fireEvent.click(await screen.findByLabelText(/e4, empty/));
+      fireEvent.mouseEnter(await screen.findByLabelText(/e4, empty/));
       fireEvent.click(await screen.findByText('Show the exchange'));
 
       // Forward step 1 (d4xe3)
@@ -707,7 +707,7 @@ describe('Analysis Screen', () => {
       
       const e5Square = screen.getByLabelText(/e5/);
       fireEvent.click(e5Square);
-      fireEvent.click(await screen.findByLabelText(/d6/));
+      fireEvent.mouseEnter(await screen.findByLabelText(/d6/));
       
       fireEvent.click(await screen.findByText('Show the exchange'));
       fireEvent.click(await screen.findByText('Next'));
@@ -739,7 +739,7 @@ describe('Analysis Screen', () => {
       const { unmount } = render(<AnalysisScreen engineClient={client} initialFen="4k3/8/8/8/8/8/8/4K3 w - - 0 1" />);
       
       fireEvent.click(screen.getByLabelText(/e1/));
-      fireEvent.click(await screen.findByLabelText(/e2/));
+      fireEvent.mouseEnter(await screen.findByLabelText(/e2/));
       
       fireEvent.click(await screen.findByText('Advanced'));
       
@@ -757,7 +757,7 @@ describe('Analysis Screen', () => {
       render(<AnalysisScreen engineClient={client} initialFen="6k1/8/8/8/3p4/8/4P3/2B3K1 w - - 0 1" />);
       
       fireEvent.click(screen.getByLabelText(/e2, white pawn/));
-      fireEvent.click(await screen.findByLabelText(/e4, empty/));
+      fireEvent.mouseEnter(await screen.findByLabelText(/e4, empty/));
       
       // Initially e4 has "legal destination" in aria-label
       expect(screen.getByLabelText(/e4, empty, legal destination/)).toBeTruthy();
@@ -789,7 +789,7 @@ describe('Analysis Screen', () => {
       render(<AnalysisScreen engineClient={client} initialFen="6k1/8/8/8/3p4/8/4P3/2B3K1 w - - 0 1" />);
       
       fireEvent.click(screen.getByLabelText(/e2, white pawn/));
-      fireEvent.click(await screen.findByLabelText(/e4, empty/));
+      fireEvent.mouseEnter(await screen.findByLabelText(/e4, empty/));
       
       fireEvent.click(await screen.findByText('Show the exchange'));
       
@@ -798,7 +798,7 @@ describe('Analysis Screen', () => {
       
       // The Next button, the board grid, and the near-board message area should share the same parent container
       // The near-board message area is right next to the board, so let's find the board's parent container:
-      const leftPanel = board.parentElement;
+      const leftPanel = board.closest('.board-container'); // the board column (board, evaluation bar, controls)
       
       // Assert the Next button is inside leftPanel
       expect(leftPanel?.contains(nextBtn)).toBe(true);
@@ -914,41 +914,35 @@ describe('Analysis Screen', () => {
 });
 
 describe('Analysis — playing moves and games (5B.3)', () => {
-  it('FEN: play a move for each side, step back and forward', async () => {
+  it('FEN: tap a piece, then a square, to play it — for each side; step back and forward', async () => {
     const { container } = render(<AnalysisScreen engineClient={new DirectEngineClient()} initialFen={startpos} onNavigate={() => {}} />);
     fireEvent.click(container.querySelector('#sq-12')!); // e2
     await waitFor(() => expect(container.querySelector('#sq-28')?.getAttribute('aria-label')).toMatch(/legal destination/));
-    fireEvent.click(container.querySelector('#sq-28')!); // e4: inspect first
-    fireEvent.click(await screen.findByRole('button', { name: 'Play this move' }));
+    fireEvent.click(container.querySelector('#sq-28')!); // e4: played
     await waitFor(() => expect(screen.getByText('After 1. e4')).toBeTruthy());
     expect(container.querySelector('[aria-label="e4, white pawn"]')).toBeTruthy();
-    // Black's turn: Black can move too
-    fireEvent.click(container.querySelector('#sq-52')!); // e7
+    fireEvent.click(container.querySelector('#sq-52')!); // e7 (Black moves too)
     await waitFor(() => expect(container.querySelector('#sq-36')?.getAttribute('aria-label')).toMatch(/legal destination/));
     fireEvent.click(container.querySelector('#sq-36')!);
-    fireEvent.click(await screen.findByRole('button', { name: 'Play this move' }));
     await waitFor(() => expect(screen.getByText('After 1... e5')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Previous move' }));
     expect(screen.getByText('After 1. e4')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Go to start' }));
-    expect(screen.getByText('Start position')).toBeTruthy();
+    expect(screen.getByText('Start position', { selector: '.rv-an-where' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Go to end' }));
     expect(screen.getByText('After 1... e5')).toBeTruthy();
   });
 
-  it('PGN: a game opened from Play starts at its last move; a different move starts your line', async () => {
+  it('PGN: a game from Play opens at its last move; no square labels; a different move starts your line', async () => {
     const pgn = '[White "You"]\n[Black "Computer (level 2)"]\n[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1';
     const { container } = render(<AnalysisScreen engineClient={new DirectEngineClient()} initialPgn={pgn} onNavigate={() => {}} />);
     expect(await screen.findByText('Game · 4 moves · 0-1')).toBeTruthy();
     expect(screen.getByText('After 2... Qh4#')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /g4/ }));
-    expect(screen.getByText('After 2. g4')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /^1\. f3$/ }));
-    // Black tries d5 instead of e5
-    fireEvent.click(container.querySelector('#sq-51')!); // d7
-    await waitFor(() => expect(container.querySelector('#sq-35')?.getAttribute('aria-label')).toMatch(/legal destination/));
-    fireEvent.click(container.querySelector('#sq-35')!);
-    fireEvent.click(await screen.findByRole('button', { name: 'Play this move' }));
+    expect(screen.queryByText('Show moves for')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^1\. f3/ }));
+    fireEvent.click(container.querySelector('#sq-51')!); // d7: legal squares, no Safe/Even trade labels
+    await waitFor(() => expect(container.querySelector('#sq-35')?.getAttribute('aria-label')).toBe('d5, empty, legal destination'));
+    fireEvent.click(container.querySelector('#sq-35')!); // ...d5 instead of ...e5
     expect(await screen.findByRole('button', { name: 'Back to game line' })).toBeTruthy();
     expect(screen.getByText(/The game continued with e5/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Back to game line' }));
@@ -965,20 +959,15 @@ describe('Analysis — playing moves and games (5B.3)', () => {
 });
 
 describe('Analysis — hover previews (review fixes)', () => {
-  it('hover shows the result without Play this move; leaving clears it; a click pins it and offers Play this move', async () => {
+  it('FEN: hover previews the result, leaving clears it, a tap plays the move', async () => {
     const { container } = render(<AnalysisScreen engineClient={new DirectEngineClient()} initialFen={startpos} onNavigate={() => {}} />);
     fireEvent.click(container.querySelector('#sq-6')!); // g1 knight
     await waitFor(() => expect(container.querySelector('#sq-21')?.getAttribute('aria-label')).toMatch(/legal destination/));
     fireEvent.mouseEnter(container.querySelector('#sq-21')!); // f3
     expect(screen.getByText('Nothing attacks this square.')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Play this move' })).toBeNull();
     fireEvent.mouseLeave(container.querySelector('#sq-21')!);
     await waitFor(() => expect(screen.queryByText('Nothing attacks this square.')).toBeNull());
     fireEvent.click(container.querySelector('#sq-21')!);
-    fireEvent.mouseLeave(container.querySelector('#sq-21')!);
-    await new Promise(r => setTimeout(r, 300));
-    expect(screen.getByText('Nothing attacks this square.')).toBeTruthy(); // pinned stays
-    fireEvent.click(screen.getByRole('button', { name: 'Play this move' }));
     await waitFor(() => expect(screen.getByText('After 1. Nf3')).toBeTruthy());
   });
 });

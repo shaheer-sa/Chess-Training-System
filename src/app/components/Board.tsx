@@ -2,6 +2,7 @@ import React from 'react';
 import { Chess, fen as fenOps } from 'chessops';
 import { Piece } from './Piece.js';
 import { BADGE_INFO, Label } from '../shared/badgeInfo.js';
+import { prefersReducedMotion } from '../settings.js';
 
 /** What the board needs to draw a badge: the destination and the label (incl. the engine-check 'tactic'). */
 export type BoardMove = Pick<MoveClassification, 'move'> & { label: Label };
@@ -68,7 +69,7 @@ export const Board: React.FC<BoardProps> = ({
 
   React.useLayoutEffect(() => {
     if (animationKey !== undefined && animationKey !== lastAnimKey && animateMoves && animateMoves.length > 0) {
-      const isReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const isReducedMotion = prefersReducedMotion(); // site setting or system setting
       if (isReducedMotion) {
         setLastAnimKey(animationKey);
         setAnimOffsets({});
@@ -442,7 +443,7 @@ export const Board: React.FC<BoardProps> = ({
         );
       })()}
 
-      {readOnly && arrow && (() => {
+      {arrow && (() => {
         const fromFile = arrow.from.charCodeAt(0) - 97;
         const fromRank = arrow.from.charCodeAt(1) - 49;
         const toFile = arrow.to.charCodeAt(0) - 97;
@@ -456,11 +457,11 @@ export const Board: React.FC<BoardProps> = ({
         return (
           <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 20 }}>
             <defs>
-              <marker id="arrowhead" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
-                <polygon points="0 0, 4 2, 0 4" fill="var(--board-last)" />
+              <marker id="rv-arrowhead" markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto">
+                <polygon points="0 0, 3 1.5, 0 3" fill="rgba(240, 137, 74, 0.9)" />
               </marker>
             </defs>
-            <line x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke="var(--board-last)" strokeWidth="3" markerEnd="url(#arrowhead)" />
+            <line className="rv-fade-in-panel" x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke="rgba(240, 137, 74, 0.85)" strokeWidth="2.2%" strokeLinecap="round" markerEnd="url(#rv-arrowhead)" />
           </svg>
         );
       })()}
