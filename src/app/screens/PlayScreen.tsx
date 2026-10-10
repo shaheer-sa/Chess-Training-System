@@ -815,8 +815,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           </div>
           <p id="rv-training-help" style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             {settings.trainingMode
-              ? 'Training mode: you can analyze the position during the game.'
-              : 'Fair play: analysis opens when the game is over.'}
+              ? 'Training mode on: you can open the position in Analyze during the game.'
+              : 'Training mode off: Analyze opens when the game is over. Hints follow their own setting.'}
           </p>
         </div>
 

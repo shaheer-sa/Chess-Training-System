@@ -100,7 +100,9 @@ export const MoveCard: React.FC<{
   move: GameMove | null; label: string; review: MoveReview | undefined; pending: boolean;
   /** What the arrows on the board show (they are never the only way to tell). */
   note?: string;
-}> = ({ move, label, review, pending, note }) => {
+  /** The engine's better move, which can be shown on the position before the move. */
+  better?: { san: string; showing: boolean; toggle: () => void };
+}> = ({ move, label, review, pending, note, better }) => {
   if (!move) {
     return (
       <div className="rv-movecard">
@@ -122,6 +124,11 @@ export const MoveCard: React.FC<{
         <div className="rv-skeleton" style={{ height: 40 }} aria-label="Reviewing this move…" />
       ) : (
         <p className="rv-movecard-text" style={{ color: 'var(--text-muted)' }}>No review for this move.</p>
+      )}
+      {review && better && (
+        <div><button type="button" className="rv-btn rv-chiptoggle" aria-pressed={better.showing} onClick={better.toggle}>
+          {better.showing ? `Back to ${move.san}` : `Show ${better.san} on the board`}
+        </button></div>
       )}
       {review && note && <p className="rv-movecard-note">{note}</p>}
     </div>

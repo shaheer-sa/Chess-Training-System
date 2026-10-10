@@ -328,16 +328,35 @@ describe('6C: ratings on the board, arrows, reasons, training mode', () => {
     expect(container.querySelector('.rv-movebadge')!.textContent).toBe('✓');
   });
 
-  it('Analyze: a bad move shows its mark on the board, the better move and the reply as arrows, with words', async () => {
+  it('Analyze: after a bad move the reply is drawn on the board; the better move only on the position before it', async () => {
     const { container } = render(<AnalysisScreen engineClient={new DirectEngineClient()} initialPgn={SCHOLAR} onNavigate={() => {}} createReviewSearcher={fakeSearcher([])} />);
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull(), { timeout: 5000 });
     fireEvent.click(screen.getByRole('button', { name: 'Nf6' }));
     await waitFor(() => expect(container.querySelector('.rv-movebadge')?.textContent).toBe('??'));
-    const toggle = screen.getByRole('button', { name: 'Show best move' });
+    const toggle = screen.getByRole('button', { name: 'Show reply' });
     if (toggle.getAttribute('aria-pressed') !== 'true') fireEvent.click(toggle);
-    expect(container.querySelectorAll('.rv-arrow--best')).toHaveLength(1);
+    // On the board after 3...Nf6: only White's reply (Qxf7#) — never a move whose piece is no longer there.
+    expect(container.querySelectorAll('.rv-arrow--best')).toHaveLength(0);
     expect(container.querySelectorAll('.rv-arrow--threat')).toHaveLength(1);
-    expect(screen.getByText("Green arrow: g6, the better move. Red dashed arrow: White's best reply, Qxf7#.")).toBeTruthy();
+    expect(screen.getByText("Red dashed arrow: White's best reply, Qxf7#.")).toBeTruthy();
+    expect(container.querySelector('#sq-62')?.getAttribute('aria-label')).toBe('g8, empty'); // the knight left g8
+
+    // "Show g6 on the board": back to the position before 3...Nf6, with g7-g6 drawn where the pawn really is.
+    fireEvent.click(screen.getByRole('button', { name: 'Show g6 on the board' }));
+    expect(screen.getByText('Before 3... Nf6', { selector: '.rv-an-where' })).toBeTruthy();
+    expect(container.querySelector('#sq-62')?.getAttribute('aria-label')).toMatch(/^g8, black knight/);
+    expect(container.querySelector('#sq-54')?.getAttribute('aria-label')).toMatch(/^g7, black pawn/);
+    const best = container.querySelectorAll('.rv-arrow--best');
+    expect(best).toHaveLength(1);
+    expect(container.querySelectorAll('.rv-arrow--threat')).toHaveLength(0);
+    expect(container.querySelector('.rv-movebadge')).toBeNull();
+    expect(screen.getByText('Green arrow: g6, the better move, on the position before 3... Nf6.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Nf6' }));
+    expect(screen.getByText('After 3... Nf6', { selector: '.rv-an-where' })).toBeTruthy();
+    // Moving on leaves the preview.
+    fireEvent.click(screen.getByRole('button', { name: 'Show g6 on the board' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next move' }));
+    expect(screen.getByText('After 4. Qxf7#', { selector: '.rv-an-where' })).toBeTruthy();
   });
 
   it('Play: without training mode, "Analyze this position" waits for the end of the game', () => {
@@ -346,7 +365,7 @@ describe('6C: ratings on the board, arrows, reasons, training mode', () => {
     expect(screen.getByRole('button', { name: 'Analyze this position' })).toBeTruthy();
     rerender(<PlayScreen {...props} settings={{ ...DEFAULT_SETTINGS, trainingMode: false }} onChange={() => {}} />);
     expect(screen.queryByRole('button', { name: 'Analyze this position' })).toBeNull();
-    expect(screen.getByText('Fair play: analysis opens when the game is over.')).toBeTruthy();
+    expect(screen.getByText('Training mode off: Analyze opens when the game is over. Hints follow their own setting.')).toBeTruthy();
     expect(screen.getByRole('checkbox', { name: 'Training mode' })).toBeTruthy();
   });
 });

@@ -71,6 +71,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     if (source === 'pgn') setPgnLine(l); else setFenLine(l);
   };
   const [showBest, setShowBest] = useState(false);
+  /** The move whose better alternative is shown on the position before it (id = cursor + move). */
+  const [betterFor, setBetterFor] = useState<string | null>(null);
   const [evalBarOn, setEvalBarOn] = useState(() => readSettings().evalBar);
   useEffect(() => {
     const sync = () => setEvalBarOn(readSettings().evalBar);
@@ -414,9 +416,24 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   const review = useLineReview(engineClient, fens, path, currentFen || null, gameInfo, createReviewSearcher);
   const cursor = line?.cursor ?? 0;
   const currentEval = review.evals[cursor];
-  const barKnown = !!currentEval && (currentEval.lines.length > 0 || !!currentEval.terminal);
-  const barScore = barKnown ? whiteScore(currentFen, currentEval!) : null;
-  const barLabel = barKnown ? evalLabel(currentFen, currentEval!) : undefined;
+  // "Show the better move": the board goes back to the position before the move, with the engine's choice drawn
+  // there (a move from the earlier position can't be drawn on the board after the move: its piece has moved).
+  const moveId = cursor > 0 && path[cursor - 1] ? `${cursor}-${path[cursor - 1].uci}` : null;
+  const reviewed = cursor > 0 ? review.reviews[cursor - 1] : undefined;
+  const canShowBetter = !!reviewed && !reviewed.playedIsBest && !!reviewed.bestUci && !!reviewed.bestSan;
+  const previewing = canShowBetter && moveId !== null && betterFor === moveId;
+  const shownIdx = previewing ? cursor - 1 : cursor;
+  const shownFen = previewing ? fens[cursor - 1] : currentFen;
+  const shownEval = review.evals[shownIdx];
+  const barKnown = !!shownEval && (shownEval.lines.length > 0 || !!shownEval.terminal);
+  const barScore = barKnown ? whiteScore(shownFen, shownEval!) : null;
+  const barLabel = barKnown ? evalLabel(shownFen, shownEval!) : undefined;
+  const previewPos = useMemo(() => {
+    if (!previewing) return null;
+    const setup = fenOps.parseFen(shownFen);
+    const p = setup.isOk ? Chess.fromSetup(setup.unwrap()) : null;
+    return p && p.isOk ? p.unwrap() : null;
+  }, [previewing, shownFen]);
   const lastReview: MoveReview | undefined = cursor > 0 ? review.reviews[cursor - 1] : undefined;
   // The game summary covers the loaded game's moves (it stays put while you explore your own line).
   const summaryMoves = review.game ? (line?.game ?? []) : path;
@@ -430,26 +447,24 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   };
   const graphValues = review.evals.map((e, i) => (e && (e.lines.length > 0 || e.terminal) ? winPercent(whiteScore(fens[i], e)) : null));
   const bestNext = currentEval?.lines[0]?.uci;
-  // Arrows: after a move, the better move the mover had (if they missed it) and, after a bad move, the opponent's
-  // best reply; at the start of the line, the best move for the side to move.
+  // Arrows. On the board after a move: the opponent's best reply after a bad move (red, dashed). At the start of a
+  // line: the best move. The better move the mover had is drawn on the position before the move (see above).
   const toArrow = (u: string, kind: 'best' | 'threat'): BoardArrow => ({ from: u.slice(0, 2) as Square, to: u.slice(2, 4) as Square, kind });
   const arrowOptions: BoardArrow[] = cursor > 0
-    ? [
-      ...(lastReview && !lastReview.playedIsBest && lastReview.bestUci ? [toArrow(lastReview.bestUci, 'best')] : []),
-      ...(lastReview?.threat ? [toArrow(lastReview.threat.uci, 'threat')] : []),
-    ]
+    ? (lastReview?.threat ? [toArrow(lastReview.threat.uci, 'threat')] : [])
     : bestNext ? [toArrow(bestNext, 'best')] : [];
-  const arrows = showBest ? arrowOptions : [];
+  const arrows = previewing && reviewed?.bestUci ? [toArrow(reviewed.bestUci, 'best')] : showBest ? arrowOptions : [];
   const lastMover = cursor > 0 ? path[cursor - 1]?.color : undefined;
-  const arrowsNote = arrows.length === 0 ? '' : cursor === 0
-    ? `Green arrow: the best move here (${currentEval?.lines[0] ? sanOfUci(currentFen, currentEval.lines[0].uci) : ''}).`
-    : [
-      arrows.some(a => a.kind === 'best') && lastReview?.bestSan ? `Green arrow: ${lastReview.bestSan}, the better move.` : '',
-      arrows.some(a => a.kind === 'threat') && lastReview?.threat ? `Red dashed arrow: ${lastMover === 'white' ? 'Black' : 'White'}'s best reply, ${lastReview.threat.san}.` : '',
-    ].filter(Boolean).join(' ');
+  const playedLabel = cursor > 0 && path[cursor - 1] ? `${moveLabel(cursor - 1) || `${Math.floor((startPly + cursor - 1) / 2) + 1}...`} ${path[cursor - 1].san}` : '';
+  const arrowsNote = previewing && reviewed?.bestSan
+    ? `Green arrow: ${reviewed.bestSan}, the better move, on the position before ${playedLabel}.`
+    : arrows.length === 0 ? ''
+      : cursor === 0
+        ? `Green arrow: the best move here (${currentEval?.lines[0] ? sanOfUci(currentFen, currentEval.lines[0].uci) : ''}).`
+        : lastReview?.threat ? `Red dashed arrow: ${lastMover === 'white' ? 'Black' : 'White'}'s best reply, ${lastReview.threat.san}.` : '';
   // The move's rating on the square it landed on; Brilliant and Great moves get an effect.
   const lastMove = cursor > 0 ? path[cursor - 1] : undefined;
-  const moveBadge: MoveBadge | null = lastMove && lastReview ? {
+  const moveBadge: MoveBadge | null = lastMove && lastReview && !previewing ? {
     square: (lastMove.uci.charCodeAt(3) - 49) * 8 + (lastMove.uci.charCodeAt(2) - 97),
     glyph: RATING_INFO[lastReview.rating].glyph,
     label: RATING_INFO[lastReview.rating].text,
@@ -612,7 +627,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               <div className="rv-an-boardwrap">
               {review.done + review.missing < review.total && <div className="rv-progress" aria-hidden="true" />}
               <Board
-                position={position}
+                position={previewPos ?? position}
+                readOnly={previewing}
                 flipped={flipped}
                 onSquareClick={onSquareClick}
                 selectedSquare={selectedSquare}
@@ -633,7 +649,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 selectedDestInfo={selectedDestInfo}
                 focusedSquare={focusedSquare}
                 setFocusedSquare={setFocusedSquare}
-                lastMove={lastMoveObj}
+                lastMove={previewing ? undefined : lastMoveObj}
                 draggableSquares={movableSquares}
                 onPieceDrop={(from, to) => playHere(from, to, false)}
                 onPieceDragStart={(from) => { if (selectedSquare !== from) void onSquareClick(from); }}
@@ -662,14 +678,14 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 <button className="rv-btn" aria-label="Go to start" disabled={!line || line.cursor === 0} onClick={() => line && setLine(goTo(line, 0), { animate: false })}><NavIcon d="M18 18l-6-6 6-6M8 6v12" /></button>
                 <button className="rv-btn" aria-label="Previous move" disabled={!line || line.cursor === 0} onClick={() => step(-1)}><NavIcon d="M15 18l-6-6 6-6" /></button>
                 <span className="rv-an-where" aria-live="polite">
-                  {!line || line.cursor === 0 ? 'Start position' : `After ${moveLabel(line.cursor - 1) || `${Math.floor((startPly + line.cursor - 1) / 2) + 1}...`} ${path[line.cursor - 1].san}`}
+                  {!line || line.cursor === 0 ? 'Start position' : previewing ? `Before ${playedLabel}` : `After ${playedLabel}`}
                 </span>
                 <button className="rv-btn" aria-label="Next move" disabled={!line || line.cursor >= path.length} onClick={() => step(1)}><NavIcon d="M9 18l6-6-6-6" /></button>
                 <button className="rv-btn" aria-label="Go to end" disabled={!line || line.cursor >= path.length} onClick={() => line && setLine(goTo(line, path.length), { animate: false })}><NavIcon d="M6 18l6-6-6-6M16 6v12" /></button>
               </div>
               <div className="rv-an-tools">
                 <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={evalBarOn} onClick={toggleEvalBar}>Evaluation bar</button>
-                <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={showBest} onClick={() => setShowBest(v => !v)} disabled={arrowOptions.length === 0}>Show best move</button>
+                <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={showBest} onClick={() => setShowBest(v => !v)} disabled={arrowOptions.length === 0}>{cursor === 0 ? 'Show best move' : 'Show reply'}</button>
                 {exploring && line && <button type="button" className="rv-btn rv-btn--primary" onClick={() => setLine(backToGame(line), { animate: false })}>Back to game line</button>}
               </div>
               {source === 'pgn' && <EvalGraph values={graphValues} cursor={cursor} valueText={graphText} onJump={(i) => line && setLine(goTo(line, i), { animate: false })} />}
@@ -680,7 +696,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               <SummaryCard summary={summary} done={(review.game ?? review).done} total={(review.game ?? review).total} missing={(review.game ?? review).missing} onRetry={review.retry} whiteName={whiteName} blackName={blackName} />
             )}
             {path.length > 0 && (
-              <MoveCard move={cursor > 0 ? path[cursor - 1] : null} label={cursor > 0 ? (moveLabel(cursor - 1) || `${Math.floor((startPly + cursor - 1) / 2) + 1}...`) : ''} review={lastReview} pending={review.done + review.missing < review.total} note={arrowsNote} />
+              <MoveCard move={cursor > 0 ? path[cursor - 1] : null} label={cursor > 0 ? (moveLabel(cursor - 1) || `${Math.floor((startPly + cursor - 1) / 2) + 1}...`) : ''} review={lastReview} pending={review.done + review.missing < review.total} note={arrowsNote}
+                better={canShowBetter && reviewed?.bestSan ? { san: reviewed.bestSan, showing: previewing, toggle: () => setBetterFor(previewing ? null : moveId) } : undefined} />
             )}
             {source === 'fen' && <ResultPanel
               selectedDestInfo={selectedDestInfo}
