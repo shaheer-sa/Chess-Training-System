@@ -1,6 +1,6 @@
 /**
  * Finished game reviews, saved in the browser so reopening a game is instant (phase 6).
- * Keeps the most recent MAX_GAMES games; anything unreadable is treated as not cached.
+ * Keeps the most recent MAX_GAMES games; anything unreadable or incomplete is treated as not cached (and dropped).
  */
 import type { PositionEval } from './review.js';
 
@@ -28,7 +28,10 @@ const isEval = (e: unknown): e is PositionEval => {
   if (!e || typeof e !== 'object') return false;
   const { lines, terminal } = e as { lines?: unknown; terminal?: unknown };
   if (terminal !== undefined && terminal !== 'checkmate' && terminal !== 'draw') return false;
-  return Array.isArray(lines) && lines.every(l => !!l && typeof l === 'object' && typeof (l as { uci?: unknown }).uci === 'string'
+  if (!Array.isArray(lines)) return false;
+  // No engine line is only valid for a finished game; otherwise it is a failed search (saved by early 6B builds).
+  if (lines.length === 0 && terminal === undefined) return false;
+  return lines.every(l => !!l && typeof l === 'object' && typeof (l as { uci?: unknown }).uci === 'string'
     && isScore((l as { score?: unknown }).score) && Array.isArray((l as { pv?: unknown }).pv));
 };
 
@@ -37,7 +40,10 @@ export const loadReview = (store: KeyValueStore, key: string, positions: number)
     const raw = store.getItem(PREFIX + key);
     if (!raw) return null;
     const data: unknown = JSON.parse(raw);
-    if (!Array.isArray(data) || data.length !== positions || !data.every(isEval)) return null;
+    if (!Array.isArray(data) || data.length !== positions || !data.every(isEval)) {
+      store.removeItem(PREFIX + key);
+      return null;
+    }
     return data;
   } catch {
     return null;

@@ -6,7 +6,8 @@ import { render, screen, fireEvent, waitFor, cleanup, within, renderHook, act } 
 import React from 'react';
 import { AnalysisScreen } from '../../src/app/screens/AnalysisScreen.js';
 import { DirectEngineClient } from '../../src/app/engine/DirectEngineClient.js';
-import { formatEval, explainReview, reviewMove, PositionEval } from '../../src/app/analysis/review.js';
+import { formatEval, explainReview, reviewMove, PositionEval, REVIEW_DEPTH } from '../../src/app/analysis/review.js';
+import { reviewKey } from '../../src/app/analysis/reviewCache.js';
 import { fensOf, lineFromPgn } from '../../src/app/analysis/line.js';
 import { RatingChip, EvalBar, SummaryCard } from '../../src/app/components/ReviewViews.js';
 import { useLineReview, MAX_ATTEMPTS, type Searcher } from '../../src/app/analysis/useLineReview.js';
@@ -166,6 +167,22 @@ describe('Game review — failures, lifecycle, keyboard (review fixes)', () => {
     fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     await waitFor(() => expect(reviewKeys()).toHaveLength(1));
+  });
+
+  it('a review saved by an early build with a failed position is reviewed again, not trusted', async () => {
+    const r = lineFromPgn(SCHOLAR);
+    if (!r.ok) throw new Error(r.error);
+    const fens = fensOf(r.line);
+    const key = 'rookvex.review.v1:' + reviewKey(r.line.startFen, r.line.game.map(m => m.uci), REVIEW_DEPTH);
+    // Old format: every position "done", but position 2 was a failed search saved as no lines.
+    const legacy = fens.map((_, i) => (i === 7 ? { lines: [], terminal: 'checkmate' } : i === 2 ? { lines: [] } : { lines: [{ uci: 'a2a3', score: { cp: 0 }, pv: ['a2a3'] }] }));
+    localStorage.setItem(key, JSON.stringify(legacy));
+    const calls: string[] = [];
+    render(<AnalysisScreen engineClient={new DirectEngineClient()} initialPgn={SCHOLAR} onNavigate={() => {}} createReviewSearcher={fakeSearcher(calls)} />);
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(key) ?? '[]')[2]?.lines?.length).toBeGreaterThan(0), { timeout: 5000 });
+    expect(calls).toContain(fens[2]);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(within(screen.getByLabelText('Moves')).getAllByRole('img', { name: 'Blunder' })).toHaveLength(1);
   });
 
   it('works under React Strict Mode (effects run twice in development)', async () => {

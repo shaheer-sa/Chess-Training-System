@@ -479,10 +479,27 @@ describe('Analysis Screen', () => {
       const e4Square = await screen.findByLabelText(/e4, empty, legal destination/i);
       fireEvent.mouseEnter(e4Square);
       
+      // Legal-move dots appear before the labels arrive; the preview shows as soon as e4 is classified.
+      await waitFor(() => expect(container.querySelector('[style*="dashed"]')).toBeTruthy());
       const indicator = container.querySelector('[style*="dashed"]');
-      expect(indicator).toBeTruthy();
       expect(indicator?.getAttribute('style')).toMatch(/dashed/i);
       expect(indicator?.getAttribute('style')).not.toMatch(/solid (#fff|rgb\(255, 255, 255\))/i);
+    });
+
+    it('hovering a legal square before its label arrives still shows the preview once it does', async () => {
+      const client = new MockEngineClient();
+      let release: (() => void) | null = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client.classifyMovesFrom = () => new Promise(res => { release = () => res({ ok: true, value: [{ move: { from: 'e2', to: 'e4' }, label: 'safe' } as any] }); });
+      const { container } = render(<AnalysisScreen engineClient={client} initialFen={startpos} />);
+      fireEvent.click(screen.getByLabelText('e2, white pawn'));
+      const e4Square = await screen.findByLabelText(/e4, empty, legal destination/i); // dots first
+      fireEvent.mouseEnter(e4Square);
+      expect(container.querySelector('[style*="dashed"]')).toBeTruthy(); // the square is marked at once
+      await waitFor(() => expect(release).not.toBeNull());
+      await act(async () => { release!(); });
+      await waitFor(() => expect(screen.getByLabelText(/e4, empty, legal destination, Safe/i)).toBeTruthy());
+      expect(container.querySelector('[style*="dashed"]')).toBeTruthy();
     });
 
     it('R3: Esc fully cancels selection', async () => {

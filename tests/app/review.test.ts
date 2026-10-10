@@ -137,6 +137,14 @@ describe('review cache', () => {
     store.setItem('rookvex.review.v1:bad', '{"x":1}');
     expect(loadReview(store, 'bad', 2)).toBeNull();
   });
+  it('rejects a review saved with a failed search (no lines, not a finished game) and drops it', () => {
+    const store = memory();
+    store.setItem('rookvex.review.v1:old', JSON.stringify([{ lines: [line('e2e4', 30)] }, { lines: [] }]));
+    expect(loadReview(store, 'old', 2)).toBeNull();
+    expect(store.data.has('rookvex.review.v1:old')).toBe(false);
+    store.setItem('rookvex.review.v1:mate', JSON.stringify([{ lines: [line('e2e4', 30)] }, { lines: [], terminal: 'checkmate' }]));
+    expect(loadReview(store, 'mate', 2)).not.toBeNull(); // a finished game needs no lines
+  });
 });
 
 describe('sacrifice (for Brilliant)', () => {

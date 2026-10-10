@@ -340,7 +340,10 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   useEffect(() => cancelLeave, []);
   const onDestHover = (index: number) => {
     if (destinationSquare !== null) return;
-    if (moves.some(m => m.move.to === getSquareName(index))) {
+    // A legal square is previewed even before its label arrives (the dots show at once); the result fills in.
+    const legal = moves.some(m => m.move.to === getSquareName(index))
+      || (selectedSquare !== null && !!lineState && legalDestinations(lineState, selectedSquare).includes(index));
+    if (legal) {
       cancelLeave();
       if (index !== hoverDest) { setHoverDest(index); setExpandedLevel(1); setExchangeStep(0); }
     }
