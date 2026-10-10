@@ -1,4 +1,4 @@
-import type { EngineScores } from '../play/engineVerdict.js';
+import type { EngineScore, EngineScores } from '../play/engineVerdict.js';
 
 /**
  * Engine check (phase 5C): one Stockfish search per turn that scores EVERY legal move (MultiPV = number of moves).
@@ -8,8 +8,17 @@ import type { EngineScores } from '../play/engineVerdict.js';
  * of a stopped search arrive before its bestmove. While a stopped search is still draining (staleBestmoves > 0),
  * its info lines and its bestmove are ignored. Timeout or worker error → the worker is discarded.
  */
+/** One engine line: its first move, score (side to move) and the principal variation. */
+export interface PvLine {
+  uci: string;
+  score: EngineScore;
+  pv: string[];
+}
+
 export interface EngineCheckClient {
   check(fen: string, legalMoveCount: number): Promise<EngineScores>;
+  /** The top `multiPv` lines at `depth`, best first (used by game review). */
+  search(fen: string, multiPv: number, depth: number): Promise<PvLine[]>;
   cancel(): void;
   dispose(): void;
 }
@@ -21,7 +30,7 @@ const STARTUP_TIMEOUT_MS = 15000;
 interface Pending {
   id: number;
   lines: Map<number, string>;
-  resolve: (s: EngineScores) => void;
+  resolve: (lines: PvLine[]) => void;
   reject: (e: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 }
@@ -40,6 +49,19 @@ export const parseInfoLines = (lines: Iterable<string>): EngineScores => {
     if (!pv || !sc) continue;
     const move = pv.trim().split(/\s+/)[0];
     out[move] = sc[1] === 'cp' ? { cp: Number(sc[2]) } : { mate: Number(sc[2]) };
+  }
+  return out;
+};
+
+/** Parses the last info line of each multipv index into lines ordered best first. */
+export const parsePvLines = (byIndex: Map<number, string>): PvLine[] => {
+  const out: PvLine[] = [];
+  for (const [, l] of [...byIndex.entries()].sort((a, b) => a[0] - b[0])) {
+    const pv = l.split(' pv ')[1];
+    const sc = l.match(/ score (cp|mate) (-?\d+)/);
+    if (!pv || !sc) continue;
+    const moves = pv.trim().split(/\s+/);
+    out.push({ uci: moves[0], score: sc[1] === 'cp' ? { cp: Number(sc[2]) } : { mate: Number(sc[2]) }, pv: moves });
   }
   return out;
 };
@@ -101,9 +123,9 @@ export class EngineCheck implements EngineCheckClient {
     if (!p) return;
     this.pending = null;
     clearTimeout(p.timer);
-    const scores = parseInfoLines(p.lines.values());
-    if (Object.keys(scores).length === 0) p.reject(new Error('no scores'));
-    else p.resolve(scores);
+    const lines = parsePvLines(p.lines);
+    if (lines.length === 0) p.reject(new Error('no scores'));
+    else p.resolve(lines);
   }
 
   private failPending(err: Error): void {
@@ -124,6 +146,13 @@ export class EngineCheck implements EngineCheckClient {
   }
 
   async check(fen: string, legalMoveCount: number): Promise<EngineScores> {
+    const lines = await this.search(fen, legalMoveCount, CHECK_DEPTH);
+    const out: EngineScores = {};
+    for (const l of lines) out[l.uci] = l.score;
+    return out;
+  }
+
+  async search(fen: string, multiPv: number, depth: number): Promise<PvLine[]> {
     if (this.disposed) throw new Error('disposed');
     this.cancel();
     const id = this.requestId;
@@ -137,7 +166,7 @@ export class EngineCheck implements EngineCheckClient {
     if (this.disposed) throw new Error('disposed');
     if (id !== this.requestId || !this.worker) throw abortError();
     const worker = this.worker;
-    return new Promise<EngineScores>((resolve, reject) => {
+    return new Promise<PvLine[]>((resolve, reject) => {
       const timer = setTimeout(() => {
         if (this.pending?.id !== id) return;
         worker.postMessage('stop');
@@ -145,9 +174,9 @@ export class EngineCheck implements EngineCheckClient {
         this.discardWorker();
       }, CHECK_TIMEOUT_MS);
       this.pending = { id, lines: new Map(), resolve, reject, timer };
-      worker.postMessage(`setoption name MultiPV value ${Math.max(1, legalMoveCount)}`);
+      worker.postMessage(`setoption name MultiPV value ${Math.max(1, multiPv)}`);
       worker.postMessage(`position fen ${fen}`);
-      worker.postMessage(`go depth ${CHECK_DEPTH}`);
+      worker.postMessage(`go depth ${depth}`);
     });
   }
 

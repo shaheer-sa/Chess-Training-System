@@ -193,3 +193,28 @@ describe('decidePlayedVerdict (ordered verdict queue)', () => {
     expect(decidePlayedVerdict(verdict, colors, before, i)).toBe(expected);
   });
 });
+
+describe('EngineCheck.search (game review)', () => {
+  class FakeWorker2 {
+    posted: string[] = [];
+    private listeners: Record<string, ((e: MessageEvent) => void)[]> = {};
+    postMessage(msg: string): void { this.posted.push(msg); }
+    terminate(): void { /* noop */ }
+    addEventListener(type: string, fn: (e: MessageEvent) => void): void { (this.listeners[type] ??= []).push(fn); }
+    emit(line: string): void { for (const fn of this.listeners.message ?? []) fn({ data: line } as MessageEvent); }
+  }
+  it('returns the top lines best first with their moves', async () => {
+    const w = new FakeWorker2();
+    const ec = new EngineCheck(() => w as unknown as Worker);
+    const p = ec.search(START, 2, 14);
+    w.emit('uciok'); w.emit('readyok'); await new Promise(r => setTimeout(r, 0));
+    expect(w.posted.slice(-3)).toEqual(['setoption name MultiPV value 2', `position fen ${START}`, 'go depth 14']);
+    w.emit('info depth 14 multipv 2 score cp 20 pv d2d4 d7d5');
+    w.emit('info depth 14 multipv 1 score cp 35 pv e2e4 e7e5 g1f3');
+    w.emit('bestmove e2e4');
+    await expect(p).resolves.toEqual([
+      { uci: 'e2e4', score: { cp: 35 }, pv: ['e2e4', 'e7e5', 'g1f3'] },
+      { uci: 'd2d4', score: { cp: 20 }, pv: ['d2d4', 'd7d5'] },
+    ]);
+  });
+});
