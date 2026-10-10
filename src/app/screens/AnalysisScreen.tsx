@@ -68,11 +68,15 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     } else {
       setAnim(null);
     }
+    setBetterFor(null);
     if (source === 'pgn') setPgnLine(l); else setFenLine(l);
   };
   const [showBest, setShowBest] = useState(false);
-  /** The move whose better alternative is shown on the position before it (id = cursor + move). */
-  const [betterFor, setBetterFor] = useState<string | null>(null);
+  /**
+   * The move whose better alternative is shown on the position before it. Tied to the exact line object, so any
+   * navigation or new line (which always makes a new object) ends the preview and coming back never revives it.
+   */
+  const [betterFor, setBetterFor] = useState<{ line: LineState; id: string } | null>(null);
   const [evalBarOn, setEvalBarOn] = useState(() => readSettings().evalBar);
   useEffect(() => {
     const sync = () => setEvalBarOn(readSettings().evalBar);
@@ -421,7 +425,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   const moveId = cursor > 0 && path[cursor - 1] ? `${cursor}-${path[cursor - 1].uci}` : null;
   const reviewed = cursor > 0 ? review.reviews[cursor - 1] : undefined;
   const canShowBetter = !!reviewed && !reviewed.playedIsBest && !!reviewed.bestUci && !!reviewed.bestSan;
-  const previewing = canShowBetter && moveId !== null && betterFor === moveId;
+  const previewing = canShowBetter && moveId !== null && !!line && betterFor?.line === line && betterFor.id === moveId;
   const shownIdx = previewing ? cursor - 1 : cursor;
   const shownFen = previewing ? fens[cursor - 1] : currentFen;
   const shownEval = review.evals[shownIdx];
@@ -697,7 +701,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
             )}
             {path.length > 0 && (
               <MoveCard move={cursor > 0 ? path[cursor - 1] : null} label={cursor > 0 ? (moveLabel(cursor - 1) || `${Math.floor((startPly + cursor - 1) / 2) + 1}...`) : ''} review={lastReview} pending={review.done + review.missing < review.total} note={arrowsNote}
-                better={canShowBetter && reviewed?.bestSan ? { san: reviewed.bestSan, showing: previewing, toggle: () => setBetterFor(previewing ? null : moveId) } : undefined} />
+                better={canShowBetter && reviewed?.bestSan ? { san: reviewed.bestSan, showing: previewing, toggle: () => setBetterFor(previewing || !line || !moveId ? null : { line, id: moveId }) } : undefined} />
             )}
             {source === 'fen' && <ResultPanel
               selectedDestInfo={selectedDestInfo}

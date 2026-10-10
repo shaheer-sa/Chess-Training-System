@@ -353,10 +353,20 @@ describe('6C: ratings on the board, arrows, reasons, training mode', () => {
     expect(screen.getByText('Green arrow: g6, the better move, on the position before 3... Nf6.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Back to Nf6' }));
     expect(screen.getByText('After 3... Nf6', { selector: '.rv-an-where' })).toBeTruthy();
-    // Moving on leaves the preview.
+    // Moving on leaves the preview, and coming back shows the move played, not the old preview.
     fireEvent.click(screen.getByRole('button', { name: 'Show g6 on the board' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next move' }));
     expect(screen.getByText('After 4. Qxf7#', { selector: '.rv-an-where' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous move' }));
+    expect(screen.getByText('After 3... Nf6', { selector: '.rv-an-where' })).toBeTruthy();
+    expect(container.querySelector('#sq-62')?.getAttribute('aria-label')).toBe('g8, empty');
+    expect(screen.getByRole('button', { name: 'Show g6 on the board' }).getAttribute('aria-pressed')).toBe('false');
+    // Same through the move list and the keyboard: away and back again.
+    fireEvent.click(screen.getByRole('button', { name: 'Show g6 on the board' }));
+    fireEvent.click(screen.getByRole('button', { name: /^3\. Qh5/ }));
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(screen.getByText('After 3... Nf6', { selector: '.rv-an-where' })).toBeTruthy();
+    expect(container.querySelector('.rv-movebadge')?.textContent).toBe('??');
   });
 
   it('Play: without training mode, "Analyze this position" waits for the end of the game', () => {
