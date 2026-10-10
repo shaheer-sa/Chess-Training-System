@@ -18,12 +18,14 @@ export interface PvLine {
 export interface EngineCheckClient {
   check(fen: string, legalMoveCount: number): Promise<EngineScores>;
   /** The top `multiPv` lines at `depth`, best first (used by game review). */
-  search(fen: string, multiPv: number, depth: number): Promise<PvLine[]>;
+  search(fen: string, multiPv: number, depth: number, movetimeMs?: number): Promise<PvLine[]>;
   cancel(): void;
   dispose(): void;
 }
 
 export const CHECK_DEPTH = 11;
+/** Upper bound for the per-turn check, so hints never wait long on slow devices or sharp positions. */
+export const CHECK_MOVETIME_MS = 1200;
 const CHECK_TIMEOUT_MS = 15000;
 const STARTUP_TIMEOUT_MS = 15000;
 
@@ -146,13 +148,13 @@ export class EngineCheck implements EngineCheckClient {
   }
 
   async check(fen: string, legalMoveCount: number): Promise<EngineScores> {
-    const lines = await this.search(fen, legalMoveCount, CHECK_DEPTH);
+    const lines = await this.search(fen, legalMoveCount, CHECK_DEPTH, CHECK_MOVETIME_MS);
     const out: EngineScores = {};
     for (const l of lines) out[l.uci] = l.score;
     return out;
   }
 
-  async search(fen: string, multiPv: number, depth: number): Promise<PvLine[]> {
+  async search(fen: string, multiPv: number, depth: number, movetimeMs?: number): Promise<PvLine[]> {
     if (this.disposed) throw new Error('disposed');
     this.cancel();
     const id = this.requestId;
@@ -176,7 +178,7 @@ export class EngineCheck implements EngineCheckClient {
       this.pending = { id, lines: new Map(), resolve, reject, timer };
       worker.postMessage(`setoption name MultiPV value ${Math.max(1, multiPv)}`);
       worker.postMessage(`position fen ${fen}`);
-      worker.postMessage(`go depth ${depth}`);
+      worker.postMessage(movetimeMs ? `go depth ${depth} movetime ${movetimeMs}` : `go depth ${depth}`);
     });
   }
 

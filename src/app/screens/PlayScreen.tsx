@@ -836,7 +836,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 readOnly={readOnly}
                 lastMove={lastMoveObj}
                 checkSquare={checkSquare}
-                legalDestinations={!hintsOn && selectedSquare !== null ? legalDestinations(game, selectedSquare) : undefined}
+                legalDestinations={selectedSquare !== null ? legalDestinations(game, selectedSquare) : undefined}
                 onSquarePointerDown={handlePointerDown}
                 onSquarePointerUp={clearLongPress}
                 onSquarePointerCancel={clearLongPress}

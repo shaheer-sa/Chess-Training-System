@@ -375,3 +375,13 @@ html.rv-reduce-motion .rv-btn--primary::after{display:none}
   .rv-sheet--open .rv-sheet-panel{opacity:1}
   .rv-gear:hover svg,.rv-back:hover svg{transform:none}
 }
+
+/* ---- Scrollbars: thin and in the site's colours ---- */
+html{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent;overflow-x:hidden}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:8px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-faint)}
+html.rv-loading,html.rv-loading body{overflow:hidden}
+/* Dashboard: the readout keeps one height, so the hero (and its background) never shifts as examples change. */
+.rv-demo-readout{min-height:9.6em}

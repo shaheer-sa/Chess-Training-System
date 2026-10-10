@@ -89,7 +89,7 @@ describe('EngineCheck (fake worker)', () => {
     const ec = new EngineCheck(factory);
     const p = ec.check(START, 20);
     workers[0].ready(); await flush();
-    expect(workers[0].posted.slice(-3)).toEqual(['setoption name MultiPV value 20', `position fen ${START}`, 'go depth 11']);
+    expect(workers[0].posted.slice(-3)).toEqual(['setoption name MultiPV value 20', `position fen ${START}`, 'go depth 11 movetime 1200']);
     workers[0].emit('info depth 9 multipv 1 score cp 10 pv e2e4');
     workers[0].emit('info depth 10 multipv 1 score cp 40 pv e2e4');
     workers[0].emit('info depth 10 multipv 1 score cp 90 upperbound pv e2e4');

@@ -22,11 +22,12 @@ root.render(
 // Loading screen: on the first visit of a session it stays long enough to read the mark; later loads hide it
 // as soon as the app has started.
 const splash = document.getElementById('rv-splash');
+if (!splash) document.documentElement.classList.remove('rv-loading');
 if (splash) {
   let seen = false;
   try { seen = sessionStorage.getItem('rookvex.splash') === '1'; sessionStorage.setItem('rookvex.splash', '1'); } catch { /* storage blocked */ }
   window.setTimeout(() => {
     splash.classList.add('rv-splash--out');
-    window.setTimeout(() => splash.remove(), 420);
+    window.setTimeout(() => { splash.remove(); document.documentElement.classList.remove('rv-loading'); }, 420);
   }, seen || !siteSettings.loadingScreen ? 0 : 1100);
 }
