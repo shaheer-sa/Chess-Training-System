@@ -367,6 +367,18 @@ describe('6C: ratings on the board, arrows, reasons, training mode', () => {
     fireEvent.keyDown(window, { key: 'ArrowRight' });
     expect(screen.getByText('After 3... Nf6', { selector: '.rv-an-where' })).toBeTruthy();
     expect(container.querySelector('.rv-movebadge')?.textContent).toBe('??');
+
+    // Switching to a position (FEN) and back to the game does not bring the preview back either.
+    fireEvent.click(screen.getByRole('button', { name: 'Show g6 on the board' }));
+    expect(screen.getByText('Before 3... Nf6', { selector: '.rv-an-where' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Analyze from/ }));
+    fireEvent.click(screen.getByRole('option', { name: /FEN/ }));
+    await screen.findByText('Paste a position (FEN)');
+    fireEvent.click(screen.getByRole('button', { name: /^Analyze from/ }));
+    fireEvent.click(screen.getByRole('option', { name: /PGN/ }));
+    expect(await screen.findByText('After 3... Nf6', { selector: '.rv-an-where' })).toBeTruthy();
+    expect(container.querySelector('#sq-62')?.getAttribute('aria-label')).toBe('g8, empty');
+    expect(screen.getByRole('button', { name: 'Show g6 on the board' }).getAttribute('aria-pressed')).toBe('false');
   });
 
   it('Play: without training mode, "Analyze this position" waits for the end of the game', () => {

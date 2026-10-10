@@ -76,7 +76,9 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
    * The move whose better alternative is shown on the position before it. Tied to the exact line object, so any
    * navigation or new line (which always makes a new object) ends the preview and coming back never revives it.
    */
-  const [betterFor, setBetterFor] = useState<{ line: LineState; id: string } | null>(null);
+  const [betterFor, setBetterFor] = useState<{ line: LineState; id: string; source: AnalyzeSource } | null>(null);
+  /** Switching between a game and a position also ends the preview. */
+  const changeSource = (v: AnalyzeSource) => { setBetterFor(null); setSource(v); };
   const [evalBarOn, setEvalBarOn] = useState(() => readSettings().evalBar);
   useEffect(() => {
     const sync = () => setEvalBarOn(readSettings().evalBar);
@@ -425,7 +427,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   const moveId = cursor > 0 && path[cursor - 1] ? `${cursor}-${path[cursor - 1].uci}` : null;
   const reviewed = cursor > 0 ? review.reviews[cursor - 1] : undefined;
   const canShowBetter = !!reviewed && !reviewed.playedIsBest && !!reviewed.bestUci && !!reviewed.bestSan;
-  const previewing = canShowBetter && moveId !== null && !!line && betterFor?.line === line && betterFor.id === moveId;
+  const previewing = canShowBetter && moveId !== null && !!line && betterFor?.line === line && betterFor.id === moveId && betterFor.source === source;
   const shownIdx = previewing ? cursor - 1 : cursor;
   const shownFen = previewing ? fens[cursor - 1] : currentFen;
   const shownEval = review.evals[shownIdx];
@@ -503,7 +505,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
       </div>
 
       <div className="analysis-source" style={{ padding: '16px 24px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px', borderBottom: '1px solid var(--border)', maxWidth: '1320px', margin: '0 auto', width: '100%' }}>
-        <RvSelect label="Analyze from" value={source} options={SOURCES} onChange={(v) => { setSource(v); resetSelection(); }} />
+        <RvSelect label="Analyze from" value={source} options={SOURCES} onChange={(v) => { changeSource(v); resetSelection(); }} />
       </div>
 
       {source === 'pgn' && !pgnLine && (
@@ -515,7 +517,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
             {pgnError && <p role="alert" style={{ color: 'var(--accent-text)', margin: '8px 0 0' }}>{pgnError}</p>}
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '16px' }}>
               <button className="rv-btn rv-btn--primary" disabled={!pgnText.trim()} onClick={() => loadPgn(pgnText)}>Load game</button>
-              <button className="rv-btn" onClick={() => setSource('fen')}>Analyze one position (FEN)</button>
+              <button className="rv-btn" onClick={() => changeSource('fen')}>Analyze one position (FEN)</button>
             </div>
           </div>
         </div>
@@ -531,7 +533,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
             <p style={{ color: 'var(--text-2)', marginTop: 0 }}>Once accounts are ready, the games you play here are saved, and you can pick one to analyze.</p>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '16px' }}>
               <button className="rv-btn rv-btn--primary" onClick={() => onNavigate?.('play')}>Play a game</button>
-              <button className="rv-btn" onClick={() => setSource('fen')}>Analyze one position (FEN)</button>
+              <button className="rv-btn" onClick={() => changeSource('fen')}>Analyze one position (FEN)</button>
             </div>
           </div>
         </div>
@@ -701,7 +703,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
             )}
             {path.length > 0 && (
               <MoveCard move={cursor > 0 ? path[cursor - 1] : null} label={cursor > 0 ? (moveLabel(cursor - 1) || `${Math.floor((startPly + cursor - 1) / 2) + 1}...`) : ''} review={lastReview} pending={review.done + review.missing < review.total} note={arrowsNote}
-                better={canShowBetter && reviewed?.bestSan ? { san: reviewed.bestSan, showing: previewing, toggle: () => setBetterFor(previewing || !line || !moveId ? null : { line, id: moveId }) } : undefined} />
+                better={canShowBetter && reviewed?.bestSan ? { san: reviewed.bestSan, showing: previewing, toggle: () => setBetterFor(previewing || !line || !moveId ? null : { line, id: moveId, source }) } : undefined} />
             )}
             {source === 'fen' && <ResultPanel
               selectedDestInfo={selectedDestInfo}
