@@ -13,7 +13,7 @@ import { BotClient, StockfishBot } from '../bot/StockfishBot.js';
 import { botPromotion } from '../bot/uci.js';
 import { moveSound, playSound } from '../shared/sound.js';
 import type { MoveBadge } from '../components/Board.js';
-import { FOLLOW_UP_TEXT, FollowUp, followUp, materialFor, tacticStart } from '../play/tacticFollowUp.js';
+import { FOLLOW_UP_TEXT, FollowUp, TacticsDone, followUp, materialFor, pruneTacticsDone, tacticStart } from '../play/tacticFollowUp.js';
 import type { BotLevel } from '../bot/levels.js';
 import { LEVEL_ELO } from '../bot/levels.js';
 import { pgnFromGame } from '../analysis/line.js';
@@ -220,7 +220,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
 
   /** The latest note on a Tactic follow-up, and the Tactic moves already finished (complete or missed). */
   const [tacticNote, setTacticNote] = useState<{ kind: FollowUp; text: string; moveIndex: number; square: number } | null>(null);
-  const tacticDone = useRef(new Set<number>());
+  const tacticDone = useRef<TacticsDone>(new Map());
   // The note stays until the player's next move; the mark sits on the piece while it is the last move.
   const shownTacticNote = tacticNote && tacticNote.moveIndex < game.moves.length && game.moves.length - tacticNote.moveIndex <= 2 ? tacticNote : null;
   const tacticBadge: MoveBadge | null = shownTacticNote && shownTacticNote.moveIndex === game.moves.length - 1 ? {
@@ -233,6 +233,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     id: `tactic-${shownTacticNote.moveIndex}-${shownTacticNote.kind}`,
   } : null;
   // Sounds: every new move (the player's and the computer's), the end of the game, and Tactic follow-ups.
+  // The checkmate to celebrate: one played on this screen (a game that was already over when it opened is not).
+  const [celebrate, setCelebrate] = useState<string | null>(null);
   const soundLen = useRef(game.moves.length);
   useEffect(() => {
     const n = game.moves.length;
@@ -240,6 +242,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       const end = outcome(game);
       playSound(end?.reason === 'checkmate' ? 'mate' : moveSound(game.moves[n - 1].san));
       if (end && end.reason !== 'checkmate') playSound('end', 300);
+      if (end?.reason === 'checkmate') setCelebrate(`${game.startFen}|${n}`);
     }
     soundLen.current = n;
   }, [game]);
@@ -247,8 +250,6 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     if (tacticNote) playSound(tacticNote.kind === 'complete' ? 'brilliant' : tacticNote.kind === 'missed' ? 'blunder' : 'tactic', 220);
   }, [tacticNote]);
   const gameOutcome = outcome(game);
-  /** Moves already played when the screen opened: a game that was already over is not celebrated again. */
-  const movesAtOpen = useRef(game.moves.length);
   const readOnly = !!gameOutcome;
 
   // A "hint turn": hints are on and the side to move gets hints (both sides in two-player, only the human vs computer).
@@ -475,6 +476,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           // A follow-up to the player's own Tactic: say whether it is on track (never a new Tactic label).
           const start = tacticStart(moveColors, verdictsRef.current, moveIndex);
           if (scores && start !== null && !tacticDone.current.has(start)) {
+            // (a Tactic is finished once its follow-up completed or was missed; Undo of that move reopens it)
             let atStart = newGameSt;
             for (let k = newGameSt.moves.length; k > start; k--) atStart = undo(atStart);
             const mover = moveColors[moveIndex];
@@ -482,7 +484,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
             const mated = outcome(newGameSt)?.reason === 'checkmate';
             const result = followUp(scores[playedUci], ctx, gain, mated);
             if (result) {
-              if (result !== 'on-track') tacticDone.current.add(start);
+              if (result !== 'on-track') tacticDone.current.set(start, moveIndex);
               setTacticNote({ kind: result, text: FOLLOW_UP_TEXT[result](gain, mated), moveIndex, square: toIdx });
             }
           }
@@ -515,7 +517,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     setPromotionMove(null);
     setAnim(null);
     setTacticNote(n => (n && n.moveIndex < keep ? n : null));
-    for (const t of [...tacticDone.current]) if (t >= keep) tacticDone.current.delete(t);
+    tacticDone.current = pruneTacticsDone(tacticDone.current, keep);
     commitVerdicts(pruneVerdicts(verdictsRef.current, keep));
     setPendingVerdicts(prev => { const next: Record<number, number> = {}; for (const [k, t] of Object.entries(prev)) if (Number(k) < keep) next[Number(k)] = t; return next; });
     onChange(nextGame, settings);
@@ -537,6 +539,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     setPendingVerdicts({});
     setPromotionMove(null);
     setTacticNote(null);
+    setCelebrate(null);
     tacticDone.current.clear();
     resetSelection();
     setFlipped(nextSettings.mode === 'computer' && nextSettings.humanColor === 'black');
@@ -903,7 +906,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 lastMove={lastMoveObj}
                 checkSquare={checkSquare}
                 checkKey={game.moves.length}
-                mate={gameOutcome?.reason === 'checkmate' && game.moves.length > movesAtOpen.current ? { winner: gameOutcome.winner, id: `${game.startFen}|${game.moves.length}` } : null}
+                mate={gameOutcome?.reason === 'checkmate' && celebrate === `${game.startFen}|${game.moves.length}` ? { winner: gameOutcome.winner, id: celebrate } : null}
                 legalDestinations={selectedSquare !== null ? legalDestinations(game, selectedSquare) : undefined}
                 onSquarePointerDown={handlePointerDown}
                 onSquarePointerUp={clearLongPress}

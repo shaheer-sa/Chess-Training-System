@@ -49,3 +49,10 @@ export const FOLLOW_UP_TEXT: Record<FollowUp, (gain: number, checkmate?: boolean
   complete: (gain, checkmate) => (checkmate ? 'Tactic complete: checkmate!' : `Tactic complete: you won ${gainWords(gain)}!`),
   missed: () => 'Follow-up missed: the advantage from the tactic is gone.',
 };
+
+/** Finished Tactics: Tactic move index → the follow-up move that completed it or missed it. */
+export type TacticsDone = Map<number, number>;
+
+/** After Undo to `keep` moves: a Tactic whose finishing follow-up was undone is open again. */
+export const pruneTacticsDone = (done: TacticsDone, keep: number): TacticsDone =>
+  new Map([...done].filter(([start, finishedAt]) => start < keep && finishedAt < keep));

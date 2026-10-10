@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { followUp, tacticStart, materialFor, gainWords, FOLLOW_UP_TEXT } from '../../src/app/play/tacticFollowUp.js';
+import { followUp, tacticStart, materialFor, gainWords, FOLLOW_UP_TEXT, pruneTacticsDone, TacticsDone } from '../../src/app/play/tacticFollowUp.js';
 import { moveSound, playSound } from '../../src/app/shared/sound.js';
 import { loadSettings, DEFAULT_SETTINGS } from '../../src/app/settings.js';
 
@@ -35,6 +35,19 @@ describe('Tactic follow-up', () => {
     expect(gainWords(500)).toBe('a rook');
     expect(gainWords(900)).toBe('a queen');
     expect(FOLLOW_UP_TEXT.complete(300)).toBe('Tactic complete: you won a piece!');
+  });
+});
+
+describe('Tactic follow-up after Undo', () => {
+  it('undoing the move that finished a Tactic opens it again, so replaying it is reported again', () => {
+    // Tactic at move 4, completed by the follow-up at move 6.
+    let done: TacticsDone = new Map([[4, 6]]);
+    expect(done.has(4)).toBe(true); // no more notes for this Tactic
+    done = pruneTacticsDone(done, 6); // Undo back to 6 moves: move 6 (the follow-up) is gone
+    expect(done.has(4)).toBe(false); // the replayed follow-up gets its note again
+    done.set(4, 6); // replayed and completed again
+    expect(pruneTacticsDone(done, 7).get(4)).toBe(6); // undoing later moves keeps it finished
+    expect(pruneTacticsDone(done, 4).size).toBe(0); // undoing the Tactic itself drops it
   });
 });
 
