@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ScreenName } from '../App.js';
 import { EngineClient } from '../engine/EngineClient.js';
 import { Board } from '../components/Board.js';
@@ -73,6 +73,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
   const [active, setActive] = useState<DemoLabel>('safe');
   const [userPicked, setUserPicked] = useState(false);
   const [typed, setTyped] = useState(0);
+  const firstType = useRef(true);
   const reduced = useReducedMotion();
 
   useEffect(() => {
@@ -96,12 +97,17 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
     if (reduced) { setTyped(text.length); return; }
     setTyped(0);
     let n = 0;
-    const id = window.setInterval(() => {
-      n += 2;
-      setTyped(Math.min(n, text.length));
-      if (n >= text.length) window.clearInterval(id);
-    }, 22);
-    return () => window.clearInterval(id);
+    let id = 0;
+    // The first explanation waits for the headline; then each one types at a readable pace.
+    const start = window.setTimeout(() => {
+      id = window.setInterval(() => {
+        n += 1;
+        setTyped(Math.min(n, text.length));
+        if (n >= text.length) window.clearInterval(id);
+      }, 32);
+    }, firstType.current ? 2200 : 250);
+    firstType.current = false;
+    return () => { window.clearTimeout(start); window.clearInterval(id); };
   }, [text, reduced]);
 
   useEffect(() => {
@@ -109,7 +115,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
     const id = window.setTimeout(() => {
       const i = examples.findIndex(e => e.label === current?.label);
       setActive(examples[(i + 1) % examples.length].label);
-    }, 4200);
+    }, 6500);
     return () => window.clearTimeout(id);
   }, [current?.label, userPicked, examples.length, reduced]);
 
@@ -126,7 +132,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
 
         <div className="rv-hero-inner">
           <div className="rv-hero-copy">
-            <div className="rv-hero-tagline rv-in" style={{ ['--d' as string]: '150ms' }}>PLAY. ANALYZE. IMPROVE.</div>
+            <div className="rv-hero-tagline rv-in" style={{ ['--d' as string]: '250ms' }}>PLAY. ANALYZE. IMPROVE.</div>
             <h1 className="rv-hero-title">
               {HEADLINE.map((line, li) => (
                 <span key={li} className="rv-hero-line">
@@ -138,16 +144,16 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
                 </span>
               ))}
             </h1>
-            <p className="rv-hero-sub rv-in" style={{ ['--d' as string]: '750ms' }}>
+            <p className="rv-hero-sub rv-in" style={{ ['--d' as string]: '2300ms' }}>
               Pick a piece and every square it can reach is checked: who attacks it, who can really take back, and what the exchange costs you.
             </p>
-            <div className="rv-hero-actions rv-in" style={{ ['--d' as string]: '900ms' }}>
+            <div className="rv-hero-actions rv-in" style={{ ['--d' as string]: '2600ms' }}>
               <button className="rv-btn rv-btn--primary rv-btn--lg" onClick={() => onNavigate('analysis')}>Analyze your game</button>
               <button className="rv-btn rv-btn--ghost rv-btn--lg" onClick={() => onNavigate('play')}>Play a game</button>
             </div>
           </div>
 
-          <div className="rv-hero-demo rv-in" style={{ ['--d' as string]: '450ms' }}>
+          <div className="rv-hero-demo rv-in" style={{ ['--d' as string]: '1100ms' }}>
             {heroPos && (
               <div className="rv-demo-card">
                 <div className="rv-hero-board" aria-hidden="true">
@@ -207,17 +213,17 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
       </section>
 
       <section className="rv-home-cards">
-        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '1050ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('play'); }}>
+        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '2900ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('play'); }}>
           <span className="rv-card-icon"><CardIcon kind="play" /></span>
           <h2>Play</h2>
           <p>Play a friend on one device, or the computer at six levels. Every move you consider is checked.</p>
         </a>
-        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '1150ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('analysis'); }}>
+        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '3050ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('analysis'); }}>
           <span className="rv-card-icon"><CardIcon kind="analyze" /></span>
           <h2>Analyze your game</h2>
           <p>Paste a whole game (PGN) or one position (FEN), step through it, and try your own moves.</p>
         </a>
-        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '1250ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('help'); }}>
+        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '3200ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('help'); }}>
           <span className="rv-card-icon"><CardIcon kind="labels" /></span>
           <h2>How labels work</h2>
           <p>Safe, Even trade, Loses material, Unclear and Tactic: what each one means and where it comes from.</p>

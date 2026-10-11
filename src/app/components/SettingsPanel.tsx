@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SiteSettings } from '../settings.js';
+import { Segmented, Toggle } from './Controls.js';
 
 type Tab = 'settings' | 'about' | 'history' | 'license';
 const TABS: { id: Tab; label: string }[] = [
@@ -16,17 +17,6 @@ interface SettingsPanelProps {
   settings: SiteSettings;
   onChange: (s: SiteSettings) => void;
 }
-
-const Toggle: React.FC<{ label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }> = ({ label, hint, checked, onChange }) => (
-  <label className="rv-toggle">
-    <span className="rv-toggle-text">
-      <span className="rv-toggle-label">{label}</span>
-      <span className="rv-toggle-hint">{hint}</span>
-    </span>
-    <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-    <span className="rv-toggle-track" aria-hidden="true"><span className="rv-toggle-thumb" /></span>
-  </label>
-);
 
 /** Side panel opened from the header: site settings, about, game history, license. */
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose, settings, onChange }) => {
@@ -99,13 +89,22 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose, set
               <Toggle label="Loading screen" hint="Show the Rookvex mark when the site first opens." checked={settings.loadingScreen} onChange={(v) => set({ loadingScreen: v })} />
               <Toggle label="Evaluation bar" hint="Show the engine's evaluation beside the board in Analyze." checked={settings.evalBar} onChange={(v) => set({ evalBar: v })} />
               <Toggle label="Sounds" hint="Sounds for moves, checks, the end of a game and special moves." checked={settings.sound} onChange={(v) => set({ sound: v })} />
+              <Segmented label="Labels on the board" hint="Show labels on every square a piece can reach, or only on the square you point at (hover, focus or drag)."
+                value={settings.labelMode} onChange={(v) => set({ labelMode: v })}
+                options={[{ value: 'all', text: 'Every square' }, { value: 'hover', text: 'Only where I point' }]} />
               <p className="rv-sheet-note">Settings are saved in this browser.</p>
             </div>
           )}
           {tab === 'about' && (
             <div className="rv-sheet-prose">
               <p>Rookvex helps you see what happens before you move. Pick a piece and every square it can reach is checked: who attacks it, who can really take back, and what the exchange costs you.</p>
-              <p>A chess engine (Stockfish) also checks every position while you play, so a move that loses material in a way the square check can't see is flagged too.</p>
+              <h3>How it works</h3>
+              <p><strong>Square check.</strong> For every square your piece can reach, Rookvex lists the attackers and defenders, plays out the best sequence of captures on that square and works out what you win or lose. Pins, defenders that can't take back and a king that can't recapture are taken into account. That gives the label: Safe, Even trade, Loses material or Unclear.</p>
+              <p><strong>Engine check.</strong> A chess engine (Stockfish) also looks at the whole position once per turn, in Play and in Analyze a position. If a move looks fine on its square but loses elsewhere — a discovered attack, an open king, a mate threat — the label says so. If a move looks bad on its square but really wins, it becomes a Tactic. The engine never tells you the answer in advance.</p>
+              <p><strong>Game review.</strong> In Analyze, a whole game (PGN) is reviewed move by move: each move gets a rating from Brilliant to Blunder, an explanation of what changed, and arrows for the better move and the opponent's reply. Finished reviews are kept in your browser, so a game opens instantly the next time.</p>
+              <p><strong>Playing the computer.</strong> Six levels, from about 400 to about 2000 rating, measured by playing thousands of engine games. Lower levels make human-like mistakes on purpose; higher ones play stronger but limited moves.</p>
+              <h3>Your data</h3>
+              <p>Everything runs in your browser: the analysis, the engine and the computer opponent. Your settings, your current game and your game reviews are stored only in this browser. There is no account yet and nothing is sent to a server.</p>
               <h3>Built with</h3>
               <ul>
                 <li>chessops — chess rules and move generation</li>
@@ -113,7 +112,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose, set
                 <li>Lichess opening names (public domain) — opening moves in game review</li>
                 <li>React and Vite</li>
               </ul>
-              <p><a href={REPO} target="_blank" rel="noopener noreferrer">Source code on GitHub</a></p>
+              <p>Licence details are under License.</p>
             </div>
           )}
           {tab === 'history' && (
@@ -126,7 +125,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose, set
             <div className="rv-sheet-prose">
               <p>Rookvex is free software, licensed under the GNU General Public License, version 3 or later (GPL-3.0-or-later). You may use, study, share and change it under that license.</p>
               <p>It includes chessops (GPL-3.0) and Stockfish (GPL-3.0). The complete source code is available on <a href={REPO} target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
-              <p>This program comes with no warranty, to the extent permitted by law.</p>
+              <p>Opening names come from the Lichess opening list, which is in the public domain (CC0).</p>
+              <p>This program comes with no warranty, to the extent permitted by law. The full license text: <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU GPL version 3</a>.</p>
             </div>
           )}
         </div>

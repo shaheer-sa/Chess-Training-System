@@ -393,8 +393,13 @@ describe('6C: ratings on the board, arrows, reasons, training mode', () => {
     expect(screen.getByRole('button', { name: 'Analyze this position' })).toBeTruthy();
     rerender(<PlayScreen {...props} settings={{ ...DEFAULT_SETTINGS, trainingMode: false }} onChange={() => {}} />);
     expect(screen.queryByRole('button', { name: 'Analyze this position' })).toBeNull();
-    expect(screen.getByText('Training mode off: Analyze opens when the game is over. Hints follow their own setting.')).toBeTruthy();
-    expect(screen.getByRole('checkbox', { name: 'Training mode' })).toBeTruthy();
+    // The switches live in the Options menu, not on the page.
+    expect(screen.queryByRole('switch', { name: /Training mode/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Options' }));
+    expect(screen.getByRole('switch', { name: /Training mode/ })).toBeTruthy();
+    expect(screen.getByText('Off: Analyze opens when the game is over. Hints follow their own setting.')).toBeTruthy();
+    expect(screen.getByRole('switch', { name: /Show hints/ })).toBeTruthy();
+    expect(screen.getByRole('radiogroup', { name: 'Labels on the board' })).toBeTruthy();
   });
 });
 
@@ -452,5 +457,75 @@ describe('6D: arrows on every move, book moves, check and mate', () => {
     expect(screen.getByRole('status').textContent).toMatch(/Black wins!by checkmate/);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('status')).toBeNull();
+  });
+});
+
+describe('6E: engine check in Analyze a position', () => {
+  it('labels wait for the engine check, then show what it adds (Tactic on 5.Nxe5 in the Legal trap)', async () => {
+    const fen = 'rn1qkbnr/ppp2p1p/3p2p1/4p3/2B1P1b1/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 5';
+    let release: (() => void) | null = null;
+    const scores: Record<string, { cp: number }> = { a2a3: { cp: 0 }, a2a4: { cp: 0 }, b2b3: { cp: 0 }, h2h3: { cp: 0 }, d2d3: { cp: 10 }, f3e5: { cp: 420 }, f3h4: { cp: -50 } };
+    const checker = {
+      check: () => new Promise<typeof scores>(res => { release = () => res(scores); }),
+      dispose: () => undefined,
+    };
+    const { container } = render(<AnalysisScreen engineClient={new DirectEngineClient()} initialFen={fen} onNavigate={() => {}} createChecker={() => checker} />);
+    fireEvent.click(container.querySelector('#sq-21')!); // f3 knight
+    await waitFor(() => expect(container.querySelector('#sq-36')?.getAttribute('aria-label')).toMatch(/legal destination/));
+    await new Promise(r => setTimeout(r, 50));
+    expect(container.querySelector('#sq-36')?.getAttribute('aria-label')).toBe('e5, black pawn, legal destination'); // no label yet
+    await waitFor(() => expect(release).not.toBeNull());
+    await act(async () => { release!(); });
+    await waitFor(() => expect(container.querySelector('#sq-36')?.getAttribute('aria-label')).toBe('e5, black pawn, legal destination, Tactic'));
+    fireEvent.mouseEnter(container.querySelector('#sq-36')!);
+    expect(await screen.findByText('Engine check: strong only if you find the right follow-up — otherwise it can cost you.')).toBeTruthy();
+    expect(screen.getByText(/^Square check: /)).toBeTruthy();
+  });
+});
+
+describe('6E: labels on every square or only where you point', () => {
+  afterEach(() => { localStorage.clear(); });
+
+  it('the board shows the label only on the pointed square in "Only where I point" mode', () => {
+    const pos = Chess.default();
+    const moves = [{ move: { from: 'g1', to: 'f3' }, label: 'safe' }, { move: { from: 'g1', to: 'h3' }, label: 'loses_material' }] as never;
+    const props = { position: pos, flipped: false, selectedSquare: 6, moves, expandedLevel: 1, exchangeStep: 0, selectedDestInfo: null };
+    const { container, rerender } = render(<Board {...props} destinationSquare={null} />);
+    expect(container.querySelectorAll('.rv-badge')).toHaveLength(2);
+    rerender(<Board {...props} destinationSquare={null} labelMode="hover" />);
+    expect(container.querySelectorAll('.rv-badge')).toHaveLength(0);
+    expect(container.querySelector('#sq-21')?.getAttribute('aria-label')).toMatch(/Safe$/); // still read out
+    rerender(<Board {...props} destinationSquare={21} labelMode="hover" />);
+    expect(container.querySelectorAll('.rv-badge')).toHaveLength(1);
+    expect(container.querySelector('#sq-21 .rv-badge')).toBeTruthy();
+  });
+
+  it('the choice is a site setting, changed from the Options menu', async () => {
+    const { readSettings } = await import('../../src/app/settings.js');
+    render(<AnalysisScreen engineClient={new DirectEngineClient()} initialFen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" onNavigate={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Options' }));
+    const group = screen.getByRole('radiogroup', { name: 'Labels on the board' });
+    fireEvent.click(within(group).getByRole('radio', { name: 'Only where I point' }));
+    expect(readSettings().labelMode).toBe('hover');
+    expect(within(group).getByRole('radio', { name: 'Only where I point' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Options' }), { key: 'Escape' });
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+  });
+});
+
+describe('6E: help explains square labels vs move ratings', () => {
+  it('lists every rating with its mark and meaning', async () => {
+    const { Help } = await import('../../src/app/screens/Help.js');
+    render(<Help onNavigate={() => {}} />);
+    expect(screen.getByRole('heading', { name: 'Square labels and move ratings' })).toBeTruthy();
+    for (const word of ['Brilliant', 'Great', 'Best', 'Excellent', 'Good', 'Inaccuracy', 'Mistake', 'Blunder']) expect(screen.getAllByText(word).length).toBeGreaterThan(0);
+    expect(screen.getByText(/the opponent's best reply after a mistake/)).toBeTruthy();
+  });
+});
+
+describe('6E: arrows in Analyze a position', () => {
+  it('are off by default there (they would give away a Tactic or a mate), and can be turned on', () => {
+    render(<AnalysisScreen engineClient={new DirectEngineClient()} initialFen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" onNavigate={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Show arrows' }).getAttribute('aria-pressed')).toBe('false');
   });
 });

@@ -12,6 +12,9 @@ import { PlaySettings, isBotTurn, undoPlies } from '../play/playSettings.js';
 import { BotClient, StockfishBot } from '../bot/StockfishBot.js';
 import { botPromotion } from '../bot/uci.js';
 import { moveSound, playSound } from '../shared/sound.js';
+import { OptionsMenu, Segmented, Toggle } from '../components/Controls.js';
+import { useSiteSettings } from '../useSiteSettings.js';
+import { updateSettings } from '../settings.js';
 import type { MoveBadge } from '../components/Board.js';
 import { FOLLOW_UP_TEXT, FollowUp, TacticsDone, followUp, materialFor, pruneTacticsDone, tacticStart } from '../play/tacticFollowUp.js';
 import type { BotLevel } from '../bot/levels.js';
@@ -249,6 +252,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   useEffect(() => {
     if (tacticNote) playSound(tacticNote.kind === 'complete' ? 'brilliant' : tacticNote.kind === 'missed' ? 'blunder' : 'tactic', 220);
   }, [tacticNote]);
+  const site = useSiteSettings();
   const gameOutcome = outcome(game);
   const readOnly = !!gameOutcome;
 
@@ -856,14 +860,17 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
             )}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', minHeight: '44px' }}>
-              <input type="checkbox" checked={hintsOn} onChange={(e) => { onChange(game, { ...settings, hintsOn: e.target.checked }); resetSelection(); }} />
-              Show hints
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', minHeight: '44px' }}>
-              <input type="checkbox" checked={settings.trainingMode} aria-describedby="rv-training-help" onChange={(e) => onChange(game, { ...settings, trainingMode: e.target.checked })} />
-              Training mode
-            </label>
+            <OptionsMenu title="Options">
+              <Toggle label="Show hints" hint="Labels and explanations for the squares your piece can reach."
+                checked={hintsOn} onChange={(v) => { onChange(game, { ...settings, hintsOn: v }); resetSelection(); }} />
+              <Toggle label="Training mode" hint={settings.trainingMode
+                ? 'On: you can open the position in Analyze during the game.'
+                : 'Off: Analyze opens when the game is over. Hints follow their own setting.'}
+                checked={settings.trainingMode} onChange={(v) => onChange(game, { ...settings, trainingMode: v })} />
+              <Segmented label="Labels on the board" hint="On every square the piece can reach, or only on the square you point at."
+                value={site.labelMode} onChange={(v) => updateSettings({ labelMode: v })}
+                options={[{ value: 'all', text: 'Every square' }, { value: 'hover', text: 'Only where I point' }]} />
+            </OptionsMenu>
             <button className="rv-btn" onClick={handleUndo} disabled={undoPlies(game, settings) === 0}>Undo</button>
             <button className="rv-btn" onClick={() => setFlipped(!flipped)}>Flip board</button>
             <button className="rv-btn" onClick={handleNewGame}>New game</button>
@@ -871,11 +878,6 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               <button className="rv-btn" onClick={() => onNavigate?.('analysis', game.currentFen)}>Analyze this position</button>
             )}
           </div>
-          <p id="rv-training-help" style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {settings.trainingMode
-              ? 'Training mode on: you can open the position in Analyze during the game.'
-              : 'Training mode off: Analyze opens when the game is over. Hints follow their own setting.'}
-          </p>
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', width: '100%', maxWidth: '1000px' }}>
@@ -906,6 +908,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 lastMove={lastMoveObj}
                 checkSquare={checkSquare}
                 checkKey={game.moves.length}
+                labelMode={site.labelMode}
                 mate={gameOutcome?.reason === 'checkmate' && celebrate === `${game.startFen}|${game.moves.length}` ? { winner: gameOutcome.winner, id: celebrate } : null}
                 legalDestinations={selectedSquare !== null ? legalDestinations(game, selectedSquare) : undefined}
                 onSquarePointerDown={handlePointerDown}

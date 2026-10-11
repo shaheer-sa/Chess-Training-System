@@ -9,17 +9,22 @@ import { ResultPanel } from '../components/ResultPanel.js';
 import { getStepText } from '../shared/exchange.js';
 import { ExchangeControls } from '../shared/ExchangeControls.js';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
-import { explain } from '../explain/explain.js';
 
 import { Spinner } from '../components/Spinner.js';
+import { LabelIcon } from '../components/LabelIcon.js';
 import type { ScreenName } from '../App.js';
 import { RvSelect, RvOption } from '../components/RvSelect.js';
 import { LineState, newLine, pathOf, stateAt, playOnLine, goTo, backToGame, isExploring, lineFromPgn, fensOf } from '../analysis/line.js';
 import { legalDestinations, castlingRookMove } from '../play/game.js';
+import { EngineCheck, EngineCheckClient } from '../bot/EngineCheck.js';
+import { EngineScores, TurnContext, engineVerdict, turnContext } from '../play/engineVerdict.js';
+import { DisplayMove, displayText, toDisplay } from '../play/display.js';
 import { Searcher, useLineReview } from '../analysis/useLineReview.js';
 import { evalLabel, sanOfUci, summarize, whiteScore, winPercent, MoveReview } from '../analysis/review.js';
 import { EvalBar, EvalGraph, MoveCard, SummaryCard, RatingChip } from '../components/ReviewViews.js';
-import { readSettings, saveSettings, applySettings, SETTINGS_EVENT } from '../settings.js';
+import { readSettings, saveSettings, applySettings, updateSettings, SETTINGS_EVENT } from '../settings.js';
+import { OptionsMenu, Segmented } from '../components/Controls.js';
+import { useSiteSettings } from '../useSiteSettings.js';
 
 /** Where the analysis comes from. PGN is the default; PGN and My games arrive in later phases. */
 export type AnalyzeSource = 'pgn' | 'fen' | 'games';
@@ -37,9 +42,11 @@ interface AnalysisScreenProps {
   onNavigate?: (screen: ScreenName) => void;
   /** Engine used for the game review (tests pass a fake). */
   createReviewSearcher?: () => Searcher;
+  /** Engine check for "Analyze a position" (tests pass a fake). */
+  createChecker?: () => Pick<EngineCheckClient, 'check' | 'dispose'>;
 }
 
-export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, initialFen, initialPgn, onNavigate, createReviewSearcher }) => {
+export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, initialFen, initialPgn, onNavigate, createReviewSearcher, createChecker }) => {
   const [source, setSource] = useState<AnalyzeSource>(initialPgn ? 'pgn' : initialFen ? 'fen' : 'pgn');
   const initSetup = initialFen && !initialPgn ? fenOps.parseFen(initialFen) : null;
   const initPosRes = initSetup?.isOk ? Chess.fromSetup(initSetup.unwrap()) : null;
@@ -72,7 +79,12 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     setBetterFor(null);
     if (source === 'pgn') setPgnLine(l); else setFenLine(l);
   };
-  const [showBest, setShowBest] = useState(true);
+  // Arrows: on by default in a game review; off in Analyze a position, where they would give away the answer
+  // the square labels keep hidden (e.g. a Tactic or a mate the banner asks you to find).
+  const [arrowsBySource, setArrowsBySource] = useState<Record<AnalyzeSource, boolean>>({ pgn: true, fen: false, games: true });
+  const showBest = !!arrowsBySource[source];
+  const setShowBest = (f: (v: boolean) => boolean) => setArrowsBySource(m => ({ ...m, [source]: f(!!m[source]) }));
+  const site = useSiteSettings();
   /**
    * The move whose better alternative is shown on the position before it. Tied to the exact line object, so any
    * navigation or new line (which always makes a new object) ends the preview and coming back never revives it.
@@ -240,6 +252,39 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
     return fenOps.makeFen(setup);
   };
 
+  // Engine check (as in Play): once per position, before the labels show, so they never change after appearing.
+  const effFen = source === 'fen' && position ? getEffectiveFen() : null;
+  const [fenCheck, setFenCheck] = useState<{ fen: string; scores: EngineScores; ctx: TurnContext | null } | null>(null);
+  const [fenCheckFailed, setFenCheckFailed] = useState<string | null>(null);
+  const checkerRef = useRef<Pick<EngineCheckClient, 'check' | 'dispose'> | null>(null);
+  const checkAvailable = !!createChecker || typeof Worker !== 'undefined';
+  useEffect(() => {
+    if (!effFen || fenCheck?.fen === effFen || fenCheckFailed === effFen) return;
+    // Legal moves in the position itself (draw rules don't matter here: insufficient material still has moves).
+    const setup = fenOps.parseFen(effFen);
+    const pos = setup.isOk ? Chess.fromSetup(setup.unwrap()) : null;
+    let legalCount = 0;
+    if (pos?.isOk) for (const [, dests] of pos.unwrap().allDests()) legalCount += dests.size();
+    if (legalCount === 0) return;
+    if (!checkAvailable) { setFenCheckFailed(effFen); return; }
+    if (!checkerRef.current) checkerRef.current = createChecker ? createChecker() : new EngineCheck();
+    let live = true;
+    checkerRef.current.check(effFen, legalCount).then(
+      scores => { if (live) setFenCheck({ fen: effFen, scores, ctx: turnContext(effFen, scores) }); },
+      (err: unknown) => { if (live && (err as Error)?.name !== 'AbortError') setFenCheckFailed(effFen); },
+    );
+    return () => { live = false; };
+  }, [effFen]);
+  useEffect(() => () => { checkerRef.current?.dispose(); checkerRef.current = null; }, []);
+  const checkReady = !!effFen && fenCheck?.fen === effFen;
+  const checkFailed = !!effFen && fenCheckFailed === effFen;
+  const labelsReady = checkReady || checkFailed;
+  const fenMateIn = checkReady && fenCheck?.ctx ? fenCheck.ctx.mateIn : null;
+  const uciOfMove = (c: MoveClassification) => c.move.from + c.move.to + (c.move.promotion ? 'q' : '');
+  const displayMoves: DisplayMove[] = labelsReady
+    ? moves.map(c => toDisplay(c, checkReady && fenCheck ? engineVerdict(c, fenCheck.scores[uciOfMove(c)], fenCheck.ctx) : { kind: 'none' }, false))
+    : [];
+
   const onSquareClick = async (index: number) => {
     if (!position) return;
     const piece = position.board.get(index);
@@ -339,6 +384,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
 
   const shownDest = destinationSquare ?? hoverDest;
   const selectedDestInfo = (shownDest !== null ? moves.find(m => m.move.to === getSquareName(shownDest)) : null) || null;
+  const selectedDisplay = selectedDestInfo ? displayMoves.find(d => d.move.to === selectedDestInfo.move.to) ?? null : null;
+  const selectedText = selectedDisplay ? displayText(selectedDisplay, { hideMate: fenMateIn !== null }) : null;
   // An unpinned preview clears shortly after the pointer (or keyboard focus) leaves the square,
   // unless the pointer moves onto the result panel to read it.
   const leaveTimer = useRef<number | null>(null);
@@ -381,10 +428,11 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   let liveText = '';
   if (stepText) {
     liveText = stepText;
-  } else if (selectedDestInfo) {
-    const primary = explain(selectedDestInfo).primary;
-    const badgeText = BADGE_INFO[selectedDestInfo.label as keyof typeof BADGE_INFO].text;
-    liveText = `Result for ${selectedDestInfo.move.to}: ${badgeText}. ${primary}`;
+  } else if (selectedDestInfo && selectedDisplay && selectedText) {
+    const badgeText = BADGE_INFO[selectedDisplay.label as keyof typeof BADGE_INFO].text;
+    liveText = `Result for ${selectedDestInfo.move.to}: ${badgeText}. ${selectedText.primary}`;
+  } else if (selectedDestInfo && !labelsReady) {
+    liveText = 'Checking moves…';
   } else if (engineError) {
     liveText = "We couldn't analyze this move. Try another square.";
   } else if (resultMessage) {
@@ -664,6 +712,15 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 Showing {showMovesFor === 'white' ? "White's" : "Black's"} options as if it were {showMovesFor === 'white' ? "White's" : "Black's"} turn.
               </div>
             )}
+              {source === 'fen' && fenMateIn !== null && (
+                <div role="status" className="rv-rise" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', marginBottom: '12px', background: 'var(--panel)', border: '2px solid var(--accent)', borderRadius: '8px', color: 'var(--text)', fontWeight: 600 }}>
+                  <LabelIcon kind="tactic" size={18} />
+                  <span>Engine check: {position?.turn === 'white' ? 'White' : 'Black'} has a checkmate in {fenMateIn}. Can you find it?</span>
+                </div>
+              )}
+              {source === 'fen' && checkFailed && checkAvailable && (
+                <div role="status" style={{ padding: '8px 12px', marginBottom: '12px', fontSize: '0.9rem', color: 'var(--text-2)', background: 'var(--bg-sunken)', borderRadius: '6px' }}>Engine check unavailable — showing square-safety labels only.</div>
+              )}
               {expandedLevel >= 3 && exchangeStep > 0 && selectedDestInfo?.exchange && (
                 <div style={{ padding: '12px', textAlign: 'center', fontWeight: 600, color: 'var(--text-2)' }}>
                   Showing the exchange — step {exchangeStep} of {selectedDestInfo.exchange.bestLine.length}
@@ -680,7 +737,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 onSquareClick={onSquareClick}
                 selectedSquare={selectedSquare}
                 destinationSquare={source === 'fen' ? shownDest : null}
-                moves={source === 'fen' ? moves : []}
+                moves={source === 'fen' ? displayMoves : []}
                 legalDestinations={legalFrom}
                 arrows={arrows}
                 moveBadge={moveBadge}
@@ -698,6 +755,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 setFocusedSquare={setFocusedSquare}
                 lastMove={previewing ? undefined : lastMoveObj}
                 checkSquare={shownCheck ?? undefined}
+                labelMode={site.labelMode}
                 checkKey={`${shownIdx}-${previewing ? 'p' : ''}`}
                 mate={shownMate}
                 ghost={ghost}
@@ -737,6 +795,13 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               <div className="rv-an-tools">
                 <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={evalBarOn} onClick={toggleEvalBar}>Evaluation bar</button>
                 <button type="button" className="rv-btn rv-chiptoggle" aria-pressed={showBest} onClick={() => setShowBest(v => !v)} disabled={arrowOptions.length === 0}>Show arrows</button>
+                {source === 'fen' && (
+                  <OptionsMenu title="Options">
+                    <Segmented label="Labels on the board" hint="On every square the piece can reach, or only on the square you point at."
+                      value={site.labelMode} onChange={(v) => updateSettings({ labelMode: v })}
+                      options={[{ value: 'all', text: 'Every square' }, { value: 'hover', text: 'Only where I point' }]} />
+                  </OptionsMenu>
+                )}
                 {exploring && line && <button type="button" className="rv-btn rv-btn--primary" onClick={() => setLine(backToGame(line), { animate: false })}>Back to game line</button>}
               </div>
               {source === 'pgn' && <EvalGraph values={graphValues} cursor={cursor} valueText={graphText} onJump={(i) => line && setLine(goTo(line, i), { animate: false })} />}
@@ -751,13 +816,14 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                 better={canShowBetter && reviewed?.bestSan ? { san: reviewed.bestSan, showing: previewing, toggle: () => setBetterFor(previewing || !line || !moveId ? null : { line, id: moveId, source }) } : undefined} />
             )}
             {source === 'fen' && <ResultPanel
-              selectedDestInfo={selectedDestInfo}
+              selectedDestInfo={labelsReady ? selectedDestInfo : null}
+              display={selectedDisplay && selectedText ? { label: selectedDisplay.label, primary: selectedText.primary, squareCheck: selectedText.squareCheck } : undefined}
               expandedLevel={expandedLevel}
               setExpandedLevel={setLevel}
               exchangeStep={exchangeStep}
               setExchangeStep={setExchangeStep}
               stepText={stepText}
-              emptyText={selectedSquare === null ? undefined : !analyzing && moves.length === 0 ? 'This piece has no legal moves.' : 'Hover over a highlighted square (or long-press it on a phone) to see what happens there. Tap it to play the move.'}
+              emptyText={selectedSquare === null ? undefined : !analyzing && moves.length === 0 ? 'This piece has no legal moves.' : !labelsReady ? 'Checking moves…' : 'Hover over a highlighted square (or long-press it on a phone) to see what happens there. Tap it to play the move.'}
             />}
             <div className="rv-an-moves">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>

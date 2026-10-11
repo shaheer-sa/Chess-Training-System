@@ -2,6 +2,19 @@ import React from 'react';
 import { ScreenName } from '../App.js';
 import { BADGE_INFO } from '../shared/badgeInfo.js';
 import { LabelIcon } from '../components/LabelIcon.js';
+import { RatingChip } from '../components/ReviewViews.js';
+import { MoveRating, RATING_ORDER } from '../analysis/review.js';
+
+const RATING_MEANING: Record<MoveRating, string> = {
+  brilliant: 'A sacrifice that works: you give up a piece and it is (almost) the best move.',
+  great: 'The only good move in the position — every other move is clearly worse.',
+  best: "The engine's top choice, or a well-known opening move.",
+  excellent: 'Nearly as good as the best move.',
+  good: 'A sound move, a little weaker than the best.',
+  inaccuracy: 'Gives away some of your chances.',
+  mistake: 'Gives away a lot: the position gets clearly worse.',
+  blunder: 'Loses a lot — material, the game, or a won position.',
+};
 
 export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavigate }) => {
   return (
@@ -67,8 +80,35 @@ export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavi
       <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '8px', padding: '20px 24px', marginTop: '24px' }}>
         <h2 style={{ fontSize: '1.25rem', margin: '0 0 8px 0', color: 'var(--text)' }}>Where the labels come from</h2>
         <p style={{ margin: '0 0 8px 0', color: 'var(--text-2)' }}><strong>Square check</strong> — ROOKVEX counts who attacks and who defends the square you move to, and what the exchange costs. This is the explanation you see first.</p>
-        <p style={{ margin: '0 0 8px 0', color: 'var(--text-2)' }}><strong>Engine check</strong> — while you play, a chess engine looks at the whole position once per turn. If a move looks safe on its square but loses at least 2 pawns elsewhere (a discovered attack, an open king, a mate threat, a recapture that forks, a threat you left unanswered), the label becomes Loses material and the text says the engine found it. It never tells you the reply.</p>
+        <p style={{ margin: '0 0 8px 0', color: 'var(--text-2)' }}><strong>Engine check</strong> — in Play and in Analyze a position, a chess engine looks at the whole position once per turn. If a move looks safe on its square but loses at least 2 pawns elsewhere (a discovered attack, an open king, a mate threat, a recapture that forks, a threat you left unanswered), the label becomes Loses material and the text says the engine found it. It never tells you the reply.</p>
         <p style={{ margin: 0, color: 'var(--text-2)' }}><strong>Checkmate</strong> — when you can force checkmate in 5 moves or fewer, a banner above the board tells you how many moves. Finding them is up to you.</p>
+      </div>
+
+      <div className="rv-help-card">
+        <h2>Square labels and move ratings</h2>
+        <p>ROOKVEX uses two kinds of marks. They answer different questions, so a move can be <em>Safe</em> and still be an <em>Inaccuracy</em>.</p>
+        <div className="rv-help-two">
+          <div>
+            <h3>Square labels — before you move</h3>
+            <p>In Play and in Analyze a position, pick a piece: every square it can reach gets a label (Safe, Even trade, Loses material, Unclear, Tactic). They tell you what happens on that square — who can take back and what the exchange costs — plus anything the engine check finds elsewhere on the board.</p>
+          </div>
+          <div>
+            <h3>Move ratings — after the move</h3>
+            <p>In a game review, every move played is compared with the engine's best move, by how much it changes your winning chances. The mark sits on the piece that moved and in the move list.</p>
+          </div>
+        </div>
+        <ul className="rv-help-ratings">
+          {RATING_ORDER.map(r => (
+            <li key={r}>
+              <RatingChip rating={r} />
+              <span>{RATING_MEANING[r]}</span>
+            </li>
+          ))}
+        </ul>
+        <h3>Arrows in a game review</h3>
+        <p><strong>Green</strong> — the better move the player had (a faded piece marks where it stood if it moved away). <strong>Blue</strong> — the opponent's best reply. <strong>Red, dashed</strong> — the opponent's best reply after a mistake: the move that punishes it. The text under the move always says which move each arrow is, so you never need the colours alone.</p>
+        <h3>Opening moves</h3>
+        <p>Moves from well-known opening lines are rated Best and named ("Book move: French Defense"), because at review depth the engine can't tell sound opening moves apart.</p>
       </div>
 
       <div style={{ textAlign: 'center', marginTop: '16px' }}>

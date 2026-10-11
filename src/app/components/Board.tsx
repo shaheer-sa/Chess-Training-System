@@ -52,6 +52,8 @@ interface BoardProps {
   ghost?: { square: number; color: 'white' | 'black'; role: string } | null;
   /** Changes with every new check, so the king shakes again. */
   checkKey?: string | number;
+  /** Square labels on every legal square ('all') or only on the square pointed at ('hover': hover, focus, drag). */
+  labelMode?: 'all' | 'hover';
   /** Game over by checkmate: a celebration and who won. */
   mate?: { winner: 'white' | 'black'; id: string } | null;
   lastMove?: { from: number; to: number };
@@ -78,7 +80,7 @@ const getSquareName = (index: number) => {
 
 export const Board: React.FC<BoardProps> = ({
   position, flipped, onSquareClick, selectedSquare, destinationSquare, moves, expandedLevel, exchangeStep, selectedDestInfo,
-  focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow, arrows, moveBadge, ghost, checkKey, mate,
+  focusedSquare = 0, setFocusedSquare, readOnly = false, showBadgesOnReadOnly = false, arrow, arrows, moveBadge, ghost, checkKey, mate, labelMode = 'all',
   lastMove, checkSquare, legalDestinations,
   onSquarePointerDown, onSquarePointerUp, onSquarePointerCancel, onSquareMouseEnter, onSquareMouseLeave,
   animateMoves, animationKey, draggableSquares, onPieceDrop, onPieceDragStart, onDragOverSquare
@@ -399,7 +401,8 @@ export const Board: React.FC<BoardProps> = ({
         {legalDestinations?.includes(index) && !isDestination && piece && (
           <div className="rv-pop" style={{ position: 'absolute', width: '90%', height: '90%', border: '4px solid rgba(21, 23, 27, 0.42)', borderRadius: '50%', boxSizing: 'border-box', pointerEvents: 'none', zIndex: 2 }} />
         )}
-        {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && moveInfo && (
+        {(!readOnly || showBadgesOnReadOnly) && !isReplaying && isDestination && moveInfo
+          && (labelMode === 'all' || destinationSquare === index || (dragState?.isActive && dragState.hoverIndex === index)) && (
           <div className="rv-pop rv-badge" style={{
             ['--i' as string]: moves.indexOf(moveInfo),
             position: 'absolute', top: '-4px', right: '-4px', backgroundColor: BADGE_INFO[moveInfo.label as keyof typeof BADGE_INFO].color,

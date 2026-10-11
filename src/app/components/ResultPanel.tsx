@@ -1,6 +1,6 @@
 import React from 'react';
 import { MoveClassification } from '../../engine/types.js';
-import { BADGE_INFO, formatPawns } from '../shared/badgeInfo.js';
+import { BADGE_INFO, Label, formatPawns } from '../shared/badgeInfo.js';
 import { explain } from '../explain/explain.js';
 import { LabelIcon } from './LabelIcon.js';
 
@@ -13,10 +13,12 @@ interface ResultPanelProps {
   stepText: string;
   /** Text for the empty state (default: before any destination is chosen). */
   emptyText?: string;
+  /** The label and text after the engine check (when it adds something, both sources are named). */
+  display?: { label: Label; primary: string; squareCheck: string | null };
 }
 
 export const ResultPanel: React.FC<ResultPanelProps> = ({
-  selectedDestInfo, expandedLevel, setExpandedLevel, exchangeStep, stepText, emptyText
+  selectedDestInfo, expandedLevel, setExpandedLevel, exchangeStep, stepText, emptyText, display
 }) => {
   if (!selectedDestInfo) {
     return (
@@ -27,17 +29,19 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
   }
 
   const explanation = explain(selectedDestInfo);
+  const label = (display?.label ?? selectedDestInfo.label) as keyof typeof BADGE_INFO;
   const attackers = selectedDestInfo.destination?.geometricAttackers || [];
   const defenders = selectedDestInfo.destination?.geometricDefenders || [];
 
   return (
     <div style={{ flex: '1 1 300px', padding: '24px', background: 'var(--panel)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: BADGE_INFO[selectedDestInfo.label as keyof typeof BADGE_INFO].color, color: BADGE_INFO[selectedDestInfo.label as keyof typeof BADGE_INFO].textColor, padding: '8px 12px', borderRadius: '6px', fontWeight: 600, fontSize: '1.1rem', marginBottom: '16px' }}>
-          <LabelIcon kind={selectedDestInfo.label as keyof typeof BADGE_INFO} size={20} />
-          {BADGE_INFO[selectedDestInfo.label as keyof typeof BADGE_INFO].text}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: BADGE_INFO[label].color, color: BADGE_INFO[label].textColor, padding: '8px 12px', borderRadius: '6px', fontWeight: 600, fontSize: '1.1rem', marginBottom: '16px' }}>
+          <LabelIcon kind={label} size={20} />
+          {BADGE_INFO[label].text}
         </div>
-        <p style={{ fontSize: '1.1rem', color: 'var(--text)', lineHeight: 1.5, margin: '0 0 16px 0' }}><strong>{explanation.primary}</strong></p>
+        <p style={{ fontSize: '1.1rem', color: 'var(--text)', lineHeight: 1.5, margin: '0 0 16px 0' }}><strong>{display?.primary ?? explanation.primary}</strong></p>
+        {display?.squareCheck && <p style={{ color: 'var(--text-2)', lineHeight: 1.5, margin: '-8px 0 16px 0' }}>{display.squareCheck}</p>}
         
         {expandedLevel >= 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', background: 'var(--bg-sunken)', borderRadius: '6px', border: '1px solid var(--border)' }}>
