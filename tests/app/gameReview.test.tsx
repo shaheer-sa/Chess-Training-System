@@ -529,3 +529,32 @@ describe('6E: arrows in Analyze a position', () => {
     expect(screen.getByRole('button', { name: 'Show arrows' }).getAttribute('aria-pressed')).toBe('false');
   });
 });
+
+describe('6E review fixes', () => {
+  const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+  it("the mate banner names the side whose moves are shown (Show moves for: Black)", async () => {
+    const checker = {
+      check: async (fen: string): Promise<Record<string, { cp: number } | { mate: number }>> =>
+        (fen.split(' ')[1] === 'b' ? { e7e5: { mate: 1 }, d7d5: { cp: 0 } } : { e2e4: { cp: 20 }, d2d4: { cp: 20 } }),
+      dispose: () => undefined,
+    };
+    render(<AnalysisScreen engineClient={new DirectEngineClient()} initialFen={START} onNavigate={() => {}} createChecker={() => checker} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Black' }));
+    expect(await screen.findByText('Engine check: Black has a checkmate in 1. Can you find it?')).toBeTruthy();
+    expect(screen.queryByText(/White has a checkmate/)).toBeNull();
+  });
+
+  it('says when the engine check is unavailable (no Web Workers), and keeps the square labels', async () => {
+    const { container } = render(<AnalysisScreen engineClient={new DirectEngineClient()} initialFen={START} onNavigate={() => {}} />);
+    expect(await screen.findByText('Engine check unavailable — showing square-safety labels only.')).toBeTruthy();
+    fireEvent.click(container.querySelector('#sq-6')!); // g1 knight
+    await waitFor(() => expect(container.querySelector('#sq-21')?.getAttribute('aria-label')).toBe('f3, empty, legal destination, Safe'));
+  });
+
+  it('the two-way choice buttons are at least 44 px tall (touch target)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync('src/app/styles/global.css', 'utf8');
+    expect(css).toMatch(/\.rv-seg-opt\{[^}]*min-height:44px/);
+  });
+});

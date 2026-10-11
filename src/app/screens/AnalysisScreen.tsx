@@ -715,10 +715,10 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
               {source === 'fen' && fenMateIn !== null && (
                 <div role="status" className="rv-rise" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', marginBottom: '12px', background: 'var(--panel)', border: '2px solid var(--accent)', borderRadius: '8px', color: 'var(--text)', fontWeight: 600 }}>
                   <LabelIcon kind="tactic" size={18} />
-                  <span>Engine check: {position?.turn === 'white' ? 'White' : 'Black'} has a checkmate in {fenMateIn}. Can you find it?</span>
+                  <span>Engine check: {effFen?.split(' ')[1] === 'b' ? 'Black' : 'White'} has a checkmate in {fenMateIn}. Can you find it?</span>
                 </div>
               )}
-              {source === 'fen' && checkFailed && checkAvailable && (
+              {source === 'fen' && checkFailed && (
                 <div role="status" style={{ padding: '8px 12px', marginBottom: '12px', fontSize: '0.9rem', color: 'var(--text-2)', background: 'var(--bg-sunken)', borderRadius: '6px' }}>Engine check unavailable — showing square-safety labels only.</div>
               )}
               {expandedLevel >= 3 && exchangeStep > 0 && selectedDestInfo?.exchange && (

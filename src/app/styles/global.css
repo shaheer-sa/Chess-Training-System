@@ -546,7 +546,7 @@ html.rv-reduce-motion .rv-piece--mated{transform:rotate(78deg)}
 .rv-seg{position:relative;display:grid;grid-template-columns:repeat(var(--n),1fr);margin-top:6px;padding:3px;border-radius:999px;background:linear-gradient(180deg,#1f1915,#2a221d);border:1px solid var(--border-strong)}
 .rv-seg-thumb{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px) / var(--n));border-radius:999px;background:linear-gradient(135deg,#c2501d,#f0894a);box-shadow:0 2px 10px rgba(194,80,29,.45);
   transform:translateX(calc(var(--i) * 100%));transition:transform 240ms cubic-bezier(.2,.8,.2,1)}
-.rv-seg-opt{position:relative;z-index:1;min-height:36px;padding:6px 10px;border:0;border-radius:999px;background:transparent;color:var(--text-2);font:600 .85rem/1.2 'IBM Plex Sans',sans-serif;cursor:pointer;transition:color 160ms ease}
+.rv-seg-opt{position:relative;z-index:1;min-height:44px;padding:6px 10px;border:0;border-radius:999px;background:transparent;color:var(--text-2);font:600 .85rem/1.2 'IBM Plex Sans',sans-serif;cursor:pointer;transition:color 160ms ease}
 .rv-seg-opt[aria-checked="true"]{color:#fff}
 .rv-seg-opt:focus-visible{outline:3px solid var(--accent-text);outline-offset:1px}
 @media (prefers-reduced-motion: reduce){.rv-opts-panel,.rv-seg-thumb,.rv-opts-btn svg{animation:none;transition:none}}
