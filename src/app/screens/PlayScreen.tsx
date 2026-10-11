@@ -264,13 +264,14 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const [hint, setHint] = useState<{ fen: string; session: number; uci: string; san: string; text: string } | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
   const hintEngine = useRef<Pick<EngineCheckClient, 'check' | 'dispose'> | null>(null);
-  /** Changes whenever a hint in flight or on screen no longer applies (new game, mode or Training mode change, Undo). */
+  /** Changes whenever a hint in flight or on screen no longer applies (a move, new game, mode or Training mode change, Undo). */
   const hintToken = useRef(0);
   /** The game being played (a new game can start from the same position, so the position alone isn't enough). */
   const gameSession = useRef(0);
   useEffect(() => () => { hintEngine.current?.dispose(); hintEngine.current = null; }, []);
   const dropHint = () => { hintToken.current++; setHint(null); setHintLoading(false); };
-  useEffect(() => { dropHint(); }, [settings.mode, settings.trainingMode, settings.humanColor, game.startFen]);
+  // Any move (yours or the computer's) also ends a hint, including one still being worked out.
+  useEffect(() => { dropHint(); }, [settings.mode, settings.trainingMode, settings.humanColor, game.startFen, game.currentFen]);
   const hintEligible = settings.mode === 'computer' && settings.trainingMode;
   const hintAvailable = hintEligible && !outcome(game) && !isBotTurn(game, settings) && !computerThinking;
   const shownHint = hint && hintEligible && hint.fen === game.currentFen && hint.session === gameSession.current ? hint : null;
