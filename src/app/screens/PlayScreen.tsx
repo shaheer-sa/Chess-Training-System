@@ -36,6 +36,8 @@ interface PlayScreenProps {
   game: GameState;
   settings: PlaySettings;
   onChange: (g: GameState, settings: PlaySettings) => void;
+  /** Engine for the Hint (tests pass a fake). */
+  createChecker?: () => Pick<EngineCheckClient, 'check' | 'dispose'>;
 }
 
 import { parseSquare } from 'chessops';
@@ -61,7 +63,9 @@ const formatSquare = (index: number) => {
   return `${file}${rank}` as Square;
 };
 
-export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate, game, settings, onChange }) => {
+const LEVELS: BotLevel[] = [1, 2, 3, 4, 5, 6];
+
+export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate, game, settings, onChange, createChecker }) => {
   const hintsOn = settings.hintsOn;
   const [flipped, setFlipped] = useState(settings.mode === 'computer' && settings.humanColor === 'black');
 
@@ -257,37 +261,61 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   const site = useSiteSettings();
 
   // Hint (vs computer, Training mode): the engine's best move for the player, with a short reason.
-  const [hint, setHint] = useState<{ fen: string; uci: string; san: string; text: string } | null>(null);
+  const [hint, setHint] = useState<{ fen: string; session: number; uci: string; san: string; text: string } | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
-  const hintEngine = useRef<EngineCheck | null>(null);
+  const hintEngine = useRef<Pick<EngineCheckClient, 'check' | 'dispose'> | null>(null);
+  /** Changes whenever a hint in flight or on screen no longer applies (new game, mode or Training mode change, Undo). */
+  const hintToken = useRef(0);
+  /** The game being played (a new game can start from the same position, so the position alone isn't enough). */
+  const gameSession = useRef(0);
   useEffect(() => () => { hintEngine.current?.dispose(); hintEngine.current = null; }, []);
-  const hintAvailable = settings.mode === 'computer' && !outcome(game) && !isBotTurn(game, settings) && !computerThinking;
-  const shownHint = hint && hint.fen === game.currentFen ? hint : null;
+  const dropHint = () => { hintToken.current++; setHint(null); setHintLoading(false); };
+  useEffect(() => { dropHint(); }, [settings.mode, settings.trainingMode, settings.humanColor, game.startFen]);
+  const hintEligible = settings.mode === 'computer' && settings.trainingMode;
+  const hintAvailable = hintEligible && !outcome(game) && !isBotTurn(game, settings) && !computerThinking;
+  const shownHint = hint && hintEligible && hint.fen === game.currentFen && hint.session === gameSession.current ? hint : null;
   const showHint = async () => {
     if (shownHint) { setHint(null); return; }
     const fen = game.currentFen;
+    const token = ++hintToken.current;
+    const session = gameSession.current;
     setHintLoading(true);
     try {
       let scores = check && check.fen === fen ? check.scores : null;
       if (!scores) {
-        if (!hintEngine.current) hintEngine.current = new EngineCheck();
+        if (!hintEngine.current) hintEngine.current = createChecker ? createChecker() : new EngineCheck();
         scores = await hintEngine.current.check(fen, legalUciMoves(game).length);
       }
+      if (token !== hintToken.current) return;
       const ctx = turnContext(fen, scores);
       const best = Object.entries(scores).sort((a, b) => scoreValue(b[1]) - scoreValue(a[1]))[0];
-      if (!best || game.currentFen !== fen) return;
+      if (!best) return;
       const [uci] = best;
       const res = await engineClient.classifyMove(fen, { from: uci.slice(0, 2) as Square, to: uci.slice(2, 4) as Square, promotion: uci.length > 4 ? 'queen' : undefined });
-      if (game.currentFen !== fen) return;
+      if (token !== hintToken.current) return;
       const san = sanOfUci(fen, uci) ?? uci;
-      setHint({ fen, uci, san, text: hintText(uci, scores, res.ok ? res.value : null, ctx) });
+      setHint({ fen, session, uci, san, text: hintText(uci, scores, res.ok ? res.value : null, ctx) });
     } catch {
-      setHint({ fen, uci: '', san: 'Hint', text: 'The engine is not available right now.' });
+      if (token === hintToken.current) setHint({ fen, session, uci: '', san: 'Hint', text: 'The engine is not available right now.' });
     } finally {
-      setHintLoading(false);
+      if (token === hintToken.current) setHintLoading(false);
     }
   };
   const gameOutcome = outcome(game);
+  // Computer level: one tab stop; the arrow keys (and Home / End) move the selection, as in a native radio group.
+  const onLevelKey = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const i = LEVELS.indexOf(settings.level);
+    const next = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? LEVELS[(i + 1) % LEVELS.length]
+      : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? LEVELS[(i - 1 + LEVELS.length) % LEVELS.length]
+      : e.key === 'Home' ? LEVELS[0]
+      : e.key === 'End' ? LEVELS[LEVELS.length - 1]
+      : null;
+    if (next === null) return;
+    e.preventDefault();
+    onChange(game, { ...settings, level: next });
+    const group = e.currentTarget.parentElement;
+    group?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[LEVELS.indexOf(next)]?.focus();
+  };
   const readOnly = !!gameOutcome;
 
   // A "hint turn": hints are on and the side to move gets hints (both sides in two-player, only the human vs computer).
@@ -555,6 +583,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     setPromotionMove(null);
     setAnim(null);
     setTacticNote(n => (n && n.moveIndex < keep ? n : null));
+    dropHint();
     tacticDone.current = pruneTacticsDone(tacticDone.current, keep);
     commitVerdicts(pruneVerdicts(verdictsRef.current, keep));
     setPendingVerdicts(prev => { const next: Record<number, number> = {}; for (const [k, t] of Object.entries(prev)) if (Number(k) < keep) next[Number(k)] = t; return next; });
@@ -579,6 +608,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     setTacticNote(null);
     setCelebrate(null);
     tacticDone.current.clear();
+    gameSession.current++;
+    dropHint();
     resetSelection();
     setFlipped(nextSettings.mode === 'computer' && nextSettings.humanColor === 'black');
     onChange(newGame(), nextSettings);
@@ -998,10 +1029,12 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               <div className="rv-level-card">
                 <div className="rv-level-head"><h3>Computer level</h3><span>Ratings are estimates</span></div>
                 <div className="rv-level-grid" role="radiogroup" aria-label="Computer level">
-                  {([1, 2, 3, 4, 5, 6] as BotLevel[]).map(lvl => (
+                  {LEVELS.map(lvl => (
                     <button key={lvl} type="button" role="radio" aria-checked={settings.level === lvl}
+                      tabIndex={settings.level === lvl ? 0 : -1}
                       aria-label={`Level ${lvl}, about ${LEVEL_ELO[lvl]} rating (estimate)`}
-                      className="rv-level" onClick={() => onChange(game, { ...settings, level: lvl })}>
+                      className="rv-level" onClick={() => onChange(game, { ...settings, level: lvl })}
+                      onKeyDown={onLevelKey}>
                       <span className="rv-level-n">{lvl}</span>
                       <span className="rv-level-elo">≈{LEVEL_ELO[lvl]}</span>
                     </button>

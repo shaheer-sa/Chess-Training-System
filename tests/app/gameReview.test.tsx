@@ -11,7 +11,7 @@ import { Board } from '../../src/app/components/Board.js';
 import { PlayScreen } from '../../src/app/screens/PlayScreen.js';
 import { Chess, fen as fenOps } from 'chessops';
 import { newGame } from '../../src/app/play/game.js';
-import { DEFAULT_SETTINGS } from '../../src/app/play/playSettings.js';
+import { DEFAULT_SETTINGS, type PlaySettings } from '../../src/app/play/playSettings.js';
 import { reviewKey } from '../../src/app/analysis/reviewCache.js';
 import { fensOf, lineFromPgn } from '../../src/app/analysis/line.js';
 import { RatingChip, EvalBar, SummaryCard } from '../../src/app/components/ReviewViews.js';
@@ -620,6 +620,89 @@ describe('6F: Play layout, hint, eval bar, license, pieces', () => {
     expect(screen.getByRole('radiogroup', { name: 'Game' })).toBeTruthy();
     rerender(<PlayScreen {...base} settings={{ ...DEFAULT_SETTINGS, mode: 'computer', humanColor: 'white', trainingMode: false }} />);
     expect(screen.queryByRole('button', { name: /Hint/ })).toBeNull();
+  });
+
+  // A checker whose answers arrive only when the test says so (a slow engine).
+  const slowChecker = () => {
+    const pending: (() => void)[] = [];
+    let created = 0;
+    const make = () => {
+      created++;
+      return {
+        check: () => new Promise<Record<string, { cp: number }>>(res => { pending.push(() => res({ e2e4: { cp: 40 }, d2d4: { cp: 30 } })); }),
+        dispose: () => {},
+      };
+    };
+    return { make, answer: async () => { await act(async () => { pending.splice(0).forEach(f => f()); await new Promise(r => setTimeout(r, 0)); }); }, created: () => created };
+  };
+  const hintProps = (createChecker: () => never) => ({ engineClient: new DirectEngineClient(), onNavigate: () => {}, onChange: () => {}, createChecker });
+  const training = { ...DEFAULT_SETTINGS, mode: 'computer' as const, humanColor: 'white' as const, trainingMode: true, hintsOn: false };
+
+  it('Hint: a slow answer that arrives after Training mode is turned off (or the mode changes) is dropped', async () => {
+    for (const change of [{ trainingMode: false }, { mode: 'two-player' as const }]) {
+      const engine = slowChecker();
+      const game = newGame();
+      const props = hintProps(engine.make as never);
+      const { container, rerender, unmount } = render(<PlayScreen {...props} game={game} settings={training} />);
+      fireEvent.click(screen.getByRole('button', { name: /Hint/ }));
+      expect(screen.getByRole('button', { name: /Thinking/ })).toBeTruthy();
+      rerender(<PlayScreen {...props} game={game} settings={{ ...training, ...change }} />);
+      await engine.answer();
+      rerender(<PlayScreen {...props} game={game} settings={training} />); // back to vs Computer + Training mode
+      await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+      expect(container.querySelector('.rv-hint')).toBeNull();
+      expect(container.querySelector('.rv-arrow--best')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Hint' })).toBeTruthy(); // not stuck on "Thinking…"
+      unmount();
+    }
+  });
+
+  it('Hint: one shown at the start does not come back after Two players → vs Computer, or after New game', async () => {
+    const engine = slowChecker();
+    const game = newGame();
+    const props = hintProps(engine.make as never);
+    const { container, rerender } = render(<PlayScreen {...props} game={game} settings={training} />);
+    fireEvent.click(screen.getByRole('button', { name: /Hint/ }));
+    await engine.answer();
+    await waitFor(() => expect(container.querySelector('.rv-hint')?.textContent).toMatch(/e4/));
+    rerender(<PlayScreen {...props} game={game} settings={{ ...training, mode: 'two-player' }} />);
+    expect(container.querySelector('.rv-hint')).toBeNull();
+    rerender(<PlayScreen {...props} game={game} settings={training} />);
+    expect(container.querySelector('.rv-hint')).toBeNull(); // same position, but the hint was dropped
+    // Shown again, then a new game from the same position: gone.
+    fireEvent.click(screen.getByRole('button', { name: /Hint/ }));
+    await engine.answer();
+    await waitFor(() => expect(container.querySelector('.rv-hint')).toBeTruthy());
+    fireEvent.click(screen.getAllByRole('button', { name: 'New game' })[0]);
+    expect(container.querySelector('.rv-hint')).toBeNull();
+  });
+
+  it('Computer level: one tab stop, the arrow keys and Home / End change the level', async () => {
+    let settings: PlaySettings = { ...training, level: 3 };
+    const game = newGame();
+    const props = { engineClient: new DirectEngineClient(), onNavigate: () => {}, game };
+    const view = render(<PlayScreen {...props} settings={settings} onChange={(_g, s) => { settings = s; }} />);
+    const radios = () => within(screen.getByRole('radiogroup', { name: 'Computer level' })).getAllByRole('radio');
+    const press = (key: string) => {
+      fireEvent.keyDown(document.activeElement!, { key });
+      view.rerender(<PlayScreen {...props} settings={settings} onChange={(_g, s) => { settings = s; }} />);
+    };
+    expect(radios().map(r => r.tabIndex)).toEqual([-1, -1, 0, -1, -1, -1]);
+    radios()[2].focus();
+    press('ArrowRight');
+    expect(settings.level).toBe(4);
+    expect(document.activeElement).toBe(radios()[3]);
+    expect(radios()[3].getAttribute('aria-checked')).toBe('true');
+    expect(radios().map(r => r.tabIndex)).toEqual([-1, -1, -1, 0, -1, -1]);
+    press('ArrowUp');
+    expect(settings.level).toBe(3);
+    press('End');
+    expect(settings.level).toBe(6);
+    press('ArrowDown'); // wraps around
+    expect(settings.level).toBe(1);
+    expect(document.activeElement).toBe(radios()[0]);
+    press('Home');
+    expect(settings.level).toBe(1);
   });
 
   it('the hint explains the best move', async () => {
