@@ -3,6 +3,7 @@
  * https://github.com/lichess-org/chess-openings — clone it and run
  *   npx tsx scripts/build-opening-book.ts <path to chess-openings>
  * Every position reached by a named line becomes a book position; positions where a line ends keep its name.
+ * scripts/opening-supplement.tsv adds popular main lines that the list stops short of.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,6 +30,27 @@ for (const f of ['a', 'b', 'c', 'd', 'e']) {
       key = bookKey(makeFen(pos.toSetup()));
       if (!book.has(key)) book.set(key, -1);
     }
+    let idx = names.indexOf(name);
+    if (idx < 0) idx = names.push(name) - 1;
+    book.set(key, idx);
+  }
+}
+// Our own supplement: popular main lines the list stops short of (London System, Giuoco Pianissimo, …).
+// New positions are added; a name is set only where no Lichess line already names the position.
+const extra = readFileSync(new URL('./opening-supplement.tsv', import.meta.url), 'utf8').trim().split('\n').slice(1);
+for (const row of extra) {
+  const [name, pgn] = row.split('\t');
+  const pos = Chess.default();
+  let key = '';
+  for (const tok of pgn.split(/\s+/)) {
+    if (/^\d+\.+$/.test(tok) || tok === '') continue;
+    const mv = parseSan(pos, tok);
+    if (!mv) throw new Error(`bad move ${tok} in ${name}`);
+    pos.play(mv);
+    key = bookKey(makeFen(pos.toSetup()));
+    if (!book.has(key)) book.set(key, -1);
+  }
+  if ((book.get(key) ?? -1) < 0) {
     let idx = names.indexOf(name);
     if (idx < 0) idx = names.push(name) - 1;
     book.set(key, idx);

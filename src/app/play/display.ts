@@ -17,8 +17,10 @@ export interface DisplayMove {
 
 /** suppressTactic: the player is in the middle of a tactic they started — don't point at the follow-up. */
 export const toDisplay = (base: MoveClassification, verdict: Verdict, suppressTactic: boolean): DisplayMove => {
+  // The square looks fine but the engine found a strong reply: Unclear (look deeper). Allowing a forced mate is
+  // never unclear: that stays Loses material.
   if (verdict.kind === 'danger') {
-    return { move: base.move, label: 'loses_material', base, engine: 'danger', mateAgainst: verdict.mateAgainst };
+    return { move: base.move, label: verdict.mateAgainst ? 'loses_material' : 'unclear', base, engine: 'danger', mateAgainst: verdict.mateAgainst };
   }
   if (verdict.kind === 'tactic' && !suppressTactic) {
     return { move: base.move, label: 'tactic', base, engine: 'tactic', mateAgainst: false };

@@ -7,7 +7,9 @@ export const RATING_INFO: Record<MoveRating, { text: string; glyph: string; colo
   best: { text: 'Best', glyph: '★', color: '#33691e', textColor: '#ffffff' },
   excellent: { text: 'Excellent', glyph: '✓✓', color: '#9ccc65', textColor: '#15171b' },
   good: { text: 'Good', glyph: '✓', color: '#c5d6b8', textColor: '#15171b' },
+  book: { text: 'Book', glyph: '', color: '#8d6e63', textColor: '#ffffff' },
   inaccuracy: { text: 'Inaccuracy', glyph: '?!', color: '#f6c445', textColor: '#15171b' },
   mistake: { text: 'Mistake', glyph: '?', color: '#ef6c00', textColor: '#15171b' },
+  miss: { text: 'Miss', glyph: '✕', color: '#ad1457', textColor: '#ffffff' },
   blunder: { text: 'Blunder', glyph: '??', color: '#c62828', textColor: '#ffffff' },
 };

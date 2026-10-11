@@ -48,6 +48,10 @@ describe('move ratings (ADR-005 thresholds)', () => {
     ['loses 7 %', { playedWin: 53 }, 'inaccuracy'],
     ['loses 15 %', { playedWin: 45 }, 'mistake'],
     ['loses 30 %', { playedWin: 30 }, 'blunder'],
+    ['Miss: a clearly winning move passed up, still equal after', { bestWin: 80, playedWin: 55, secondWin: 50 }, 'miss'],
+    ['not a Miss when the position is lost after it', { bestWin: 80, playedWin: 30, secondWin: 50 }, 'blunder'],
+    ['not a Miss without a winning chance', { bestWin: 65, playedWin: 50, secondWin: 50 }, 'mistake'],
+    ['Miss: a forced mate passed up, even when still winning', { bestWin: 100, playedWin: 94, secondWin: 94, missedMate: true }, 'miss'],
   ];
   it.each(rows)('%s', (_n, patch, expected) => {
     expect(rateMove({ ...base, ...patch })).toBe(expected);

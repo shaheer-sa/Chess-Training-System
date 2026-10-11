@@ -12,21 +12,22 @@ export const Toggle: React.FC<{ label: string; hint: string; checked: boolean; o
   </label>
 );
 
-/** Two or three choices side by side (a radio group); the selected one slides into place. */
-export function Segmented<T extends string>({ label, hint, value, options, onChange }: {
-  label: string; hint?: string; value: T; options: { value: T; text: string }[]; onChange: (v: T) => void;
+/** Two or three choices side by side (a radio group); the selected one slides into place. `small`: a compact label (toolbars). */
+export function Segmented<T extends string>({ label, hint, value, options, onChange, small, disabledReason }: {
+  label: string; hint?: string; value: T; options: { value: T; text: string; title?: string }[]; onChange: (v: T) => void;
+  small?: boolean; disabledReason?: string;
 }) {
   const id = useId();
   const index = Math.max(0, options.findIndex(o => o.value === value));
   return (
-    <div className="rv-seg-wrap">
-      <span id={`${id}-l`} className="rv-toggle-label">{label}</span>
+    <div className={`rv-choice-wrap${small ? ' rv-choice-wrap--small' : ''}`}>
+      <span id={`${id}-l`} className={small ? 'rv-choice-label' : 'rv-toggle-label'}>{label}</span>
       {hint && <span className="rv-toggle-hint">{hint}</span>}
-      <div className="rv-seg" role="radiogroup" aria-labelledby={`${id}-l`} style={{ ['--n' as string]: options.length, ['--i' as string]: index }}>
-        <span className="rv-seg-thumb" aria-hidden="true" />
+      <div className="rv-choice" role="radiogroup" aria-labelledby={`${id}-l`} title={disabledReason} style={{ ['--n' as string]: options.length, ['--i' as string]: index }}>
+        <span className="rv-choice-thumb" aria-hidden="true" />
         {options.map(o => (
-          <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className="rv-seg-opt"
-            onClick={() => onChange(o.value)}
+          <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className="rv-choice-opt" title={o.title}
+            onClick={() => { if (o.value !== value) onChange(o.value); }}
             onKeyDown={(e) => {
               if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
               e.preventDefault();

@@ -105,7 +105,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
         setTyped(Math.min(n, text.length));
         if (n >= text.length) window.clearInterval(id);
       }, 32);
-    }, firstType.current ? 2200 : 250);
+    }, firstType.current ? 2600 : 250);
     firstType.current = false;
     return () => { window.clearTimeout(start); window.clearInterval(id); };
   }, [text, reduced]);
@@ -144,10 +144,10 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
                 </span>
               ))}
             </h1>
-            <p className="rv-hero-sub rv-in" style={{ ['--d' as string]: '2300ms' }}>
+            <p className="rv-hero-sub rv-in" style={{ ['--d' as string]: '1800ms' }}>
               Pick a piece and every square it can reach is checked: who attacks it, who can really take back, and what the exchange costs you.
             </p>
-            <div className="rv-hero-actions rv-in" style={{ ['--d' as string]: '2600ms' }}>
+            <div className="rv-hero-actions rv-in" style={{ ['--d' as string]: '2500ms' }}>
               <button className="rv-btn rv-btn--primary rv-btn--lg" onClick={() => onNavigate('analysis')}>Analyze your game</button>
               <button className="rv-btn rv-btn--ghost rv-btn--lg" onClick={() => onNavigate('play')}>Play a game</button>
             </div>
@@ -213,17 +213,17 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, engineClient }) => {
       </section>
 
       <section className="rv-home-cards">
-        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '2900ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('play'); }}>
+        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '3000ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('play'); }}>
           <span className="rv-card-icon"><CardIcon kind="play" /></span>
           <h2>Play</h2>
           <p>Play a friend on one device, or the computer at six levels. Every move you consider is checked.</p>
         </a>
-        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '3050ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('analysis'); }}>
+        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '3150ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('analysis'); }}>
           <span className="rv-card-icon"><CardIcon kind="analyze" /></span>
           <h2>Analyze your game</h2>
           <p>Paste a whole game (PGN) or one position (FEN), step through it, and try your own moves.</p>
         </a>
-        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '3200ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('help'); }}>
+        <a className="rv-card rv-card--spot rv-in" style={{ ['--d' as string]: '3300ms' }} href="/" onMouseMove={trackPointer} onClick={(e) => { e.preventDefault(); onNavigate('help'); }}>
           <span className="rv-card-icon"><CardIcon kind="labels" /></span>
           <h2>How labels work</h2>
           <p>Safe, Even trade, Loses material, Unclear and Tactic: what each one means and where it comes from.</p>

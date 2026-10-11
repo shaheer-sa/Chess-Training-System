@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SiteSettings } from '../settings.js';
 import { Segmented, Toggle } from './Controls.js';
+import { Piece } from './Piece.js';
+import { PIECE_SETS } from '../settings.js';
 
 type Tab = 'settings' | 'about' | 'history' | 'license';
 const TABS: { id: Tab; label: string }[] = [
@@ -91,7 +93,22 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose, set
               <Toggle label="Sounds" hint="Sounds for moves, checks, the end of a game and special moves." checked={settings.sound} onChange={(v) => set({ sound: v })} />
               <Segmented label="Labels on the board" hint="Show labels on every square a piece can reach, or only on the square you point at (hover, focus or drag)."
                 value={settings.labelMode} onChange={(v) => set({ labelMode: v })}
-                options={[{ value: 'all', text: 'Every square' }, { value: 'hover', text: 'Only where I point' }]} />
+                options={[{ value: 'all', text: 'All squares', title: 'Labels on every square the piece can reach' }, { value: 'hover', text: 'Hovered square', title: 'A label only on the square you point at (hover, focus or drag)' }]} />
+              <div className="rv-pieces">
+                <span className="rv-toggle-label" id="rv-pieces-label">Pieces</span>
+                <span className="rv-toggle-hint">The design of the chess pieces.</span>
+                <div className="rv-pieces-grid" role="radiogroup" aria-labelledby="rv-pieces-label">
+                  {PIECE_SETS.map(p => (
+                    <button key={p.id} type="button" role="radio" aria-checked={settings.pieceSet === p.id} className="rv-pieces-opt" onClick={() => set({ pieceSet: p.id })}>
+                      <span className="rv-pieces-preview" aria-hidden="true">
+                        <Piece color="w" type="N" set={p.id} style={{ width: '50%', height: '100%' }} />
+                        <Piece color="b" type="Q" set={p.id} style={{ width: '50%', height: '100%' }} />
+                      </span>
+                      <span>{p.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
               <p className="rv-sheet-note">Settings are saved in this browser.</p>
             </div>
           )}
@@ -121,16 +138,37 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose, set
               <p>For now, when a game ends, use Analyze this game to review it.</p>
             </div>
           )}
-          {tab === 'license' && (
-            <div className="rv-sheet-prose">
-              <p>Rookvex is free software, licensed under the GNU General Public License, version 3 or later (GPL-3.0-or-later). You may use, study, share and change it under that license.</p>
-              <p>It includes chessops (GPL-3.0) and Stockfish (GPL-3.0). The complete source code is available on <a href={REPO} target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
-              <p>Opening names come from the Lichess opening list, which is in the public domain (CC0).</p>
-              <p>This program comes with no warranty, to the extent permitted by law. The full license text: <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener noreferrer">GNU GPL version 3</a>.</p>
-            </div>
-          )}
+          {tab === 'license' && <LicenseTab />}
         </div>
       </div>
+    </div>
+  );
+};
+
+/** License: the notice, the full GPL text and the third-party notices (the long texts load when the tab opens). */
+const LicenseTab: React.FC = () => {
+  const [texts, setTexts] = useState<{ gpl: string; notices: { title: string; text: string }[] } | null>(null);
+  useEffect(() => {
+    let live = true;
+    Promise.all([import('../../../LICENSE?raw'), import('../legal/notices.js')])
+      .then(([gpl, n]) => { if (live) setTexts({ gpl: gpl.default, notices: n.NOTICES }); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  return (
+    <div className="rv-sheet-prose">
+      <p>Rookvex is free software, licensed under the GNU General Public License, version 3 or later (GPL-3.0-or-later). You may use, study, share and change it under that license.</p>
+      <p>It includes chessops (GPL-3.0) and Stockfish (GPL-3.0). The complete source code is available on <a href={REPO} target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+      <p>This program comes with no warranty, to the extent permitted by law.</p>
+      <h3>Third-party notices</h3>
+      {texts ? texts.notices.map(n => (
+        <details key={n.title} className="rv-legal">
+          <summary>{n.title}</summary>
+          <pre>{n.text}</pre>
+        </details>
+      )) : <p>Loading…</p>}
+      <h3>GNU General Public License, version 3</h3>
+      {texts ? <pre className="rv-legal-full" tabIndex={0} aria-label="GNU General Public License version 3, full text">{texts.gpl}</pre> : <p>Loading…</p>}
     </div>
   );
 };

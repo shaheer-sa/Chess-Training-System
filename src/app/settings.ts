@@ -1,3 +1,14 @@
+/** Piece designs (all GPL-compatible; credits in Settings › License). */
+export const PIECE_SETS = [
+  { id: 'cburnett', name: 'Classic', credit: 'Colin M. L. Burnett (GPLv2+)' },
+  { id: 'merida', name: 'Merida', credit: 'Armando Hernandez Marroquin (GPLv2+)' },
+  { id: 'fantasy', name: 'Fantasy', credit: 'Maurizio Monge (MIT)' },
+  { id: 'spatial', name: 'Spatial', credit: 'Maurizio Monge (MIT)' },
+  { id: 'celtic', name: 'Celtic', credit: 'Maurizio Monge (MIT)' },
+  { id: 'chessnut', name: 'Chessnut', credit: 'Alexis Luengas (Apache 2.0)' },
+] as const;
+export type PieceSet = typeof PIECE_SETS[number]['id'];
+
 /** Site preferences (per browser). Applied as classes on <html> so CSS can follow them. */
 export interface SiteSettings {
   /** Fewer animations: no movement, fades and loading indicators stay. */
@@ -12,10 +23,12 @@ export interface SiteSettings {
   sound: boolean;
   /** Square labels on every legal square, or only on the square being pointed at (hover, focus, drag). */
   labelMode: 'all' | 'hover';
+  /** The design of the pieces. */
+  pieceSet: PieceSet;
 }
 
 export const SETTINGS_KEY = 'rookvex.settings.v1';
-export const DEFAULT_SETTINGS: SiteSettings = { reduceMotion: false, coordinates: true, loadingScreen: true, evalBar: true, sound: true, labelMode: 'all' };
+export const DEFAULT_SETTINGS: SiteSettings = { reduceMotion: false, coordinates: true, loadingScreen: true, evalBar: true, sound: true, labelMode: 'all', pieceSet: 'cburnett' };
 
 export const loadSettings = (raw: string | null): SiteSettings => {
   try {
@@ -26,6 +39,7 @@ export const loadSettings = (raw: string | null): SiteSettings => {
     return {
       reduceMotion: b('reduceMotion'), coordinates: b('coordinates'), loadingScreen: b('loadingScreen'), evalBar: b('evalBar'), sound: b('sound'),
       labelMode: d.labelMode === 'hover' ? 'hover' : 'all',
+      pieceSet: PIECE_SETS.some(p => p.id === d.pieceSet) ? (d.pieceSet as PieceSet) : 'cburnett',
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

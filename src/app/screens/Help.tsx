@@ -8,11 +8,13 @@ import { MoveRating, RATING_ORDER } from '../analysis/review.js';
 const RATING_MEANING: Record<MoveRating, string> = {
   brilliant: 'A sacrifice that works: you give up a piece and it is (almost) the best move.',
   great: 'The only good move in the position — every other move is clearly worse.',
-  best: "The engine's top choice, or a well-known opening move.",
+  best: "The engine's top choice.",
   excellent: 'Nearly as good as the best move.',
   good: 'A sound move, a little weaker than the best.',
+  book: 'A well-known opening move (named after the opening).',
   inaccuracy: 'Gives away some of your chances.',
   mistake: 'Gives away a lot: the position gets clearly worse.',
+  miss: 'A winning chance passed up — a checkmate or a move that wins material — while the position stays playable.',
   blunder: 'Loses a lot — material, the game, or a won position.',
 };
 
@@ -62,7 +64,7 @@ export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavi
             </span>
             <div>
               <strong style={{ fontSize: '1.1rem', color: 'var(--text)' }}>Unclear</strong>
-              <div style={{ color: 'var(--text-muted)' }}>The position is too complex for simple material counting.</div>
+              <div style={{ color: 'var(--text-muted)' }}>Not clear-cut. The square looks fine, but the engine check found a strong reply for your opponent somewhere else — or the move leads to stalemate. Look deeper before you play it.</div>
             </div>
           </li>
           <li style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -80,7 +82,7 @@ export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavi
       <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '8px', padding: '20px 24px', marginTop: '24px' }}>
         <h2 style={{ fontSize: '1.25rem', margin: '0 0 8px 0', color: 'var(--text)' }}>Where the labels come from</h2>
         <p style={{ margin: '0 0 8px 0', color: 'var(--text-2)' }}><strong>Square check</strong> — ROOKVEX counts who attacks and who defends the square you move to, and what the exchange costs. This is the explanation you see first.</p>
-        <p style={{ margin: '0 0 8px 0', color: 'var(--text-2)' }}><strong>Engine check</strong> — in Play and in Analyze a position, a chess engine looks at the whole position once per turn. If a move looks safe on its square but loses at least 2 pawns elsewhere (a discovered attack, an open king, a mate threat, a recapture that forks, a threat you left unanswered), the label becomes Loses material and the text says the engine found it. It never tells you the reply.</p>
+        <p style={{ margin: '0 0 8px 0', color: 'var(--text-2)' }}><strong>Engine check</strong> — in Play and in Analyze a position, a chess engine looks at the whole position once per turn. If a move looks safe on its square but loses at least 2 pawns elsewhere (a discovered attack, an open king, a mate threat, a recapture that forks, a threat you left unanswered), the label becomes Unclear — or Loses material if it lets your opponent force checkmate — and the text says the engine found it. It never tells you the reply.</p>
         <p style={{ margin: 0, color: 'var(--text-2)' }}><strong>Checkmate</strong> — when you can force checkmate in 5 moves or fewer, a banner above the board tells you how many moves. Finding them is up to you.</p>
       </div>
 
@@ -108,7 +110,7 @@ export const Help: React.FC<{ onNavigate: (s: ScreenName) => void }> = ({ onNavi
         <h3>Arrows in a game review</h3>
         <p><strong>Green</strong> — the better move the player had (a faded piece marks where it stood if it moved away). <strong>Blue</strong> — the opponent's best reply. <strong>Red, dashed</strong> — the opponent's best reply after a mistake: the move that punishes it. The text under the move always says which move each arrow is, so you never need the colours alone.</p>
         <h3>Opening moves</h3>
-        <p>Moves from well-known opening lines are rated Best and named ("Book move: French Defense"), because at review depth the engine can't tell sound opening moves apart.</p>
+        <p>Moves from well-known opening lines are marked Book and named ("Book move: French Defense"), because at review depth the engine can't tell sound opening moves apart.</p>
       </div>
 
       <div style={{ textAlign: 'center', marginTop: '16px' }}>

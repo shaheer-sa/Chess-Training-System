@@ -1,16 +1,14 @@
 import React from 'react';
-import wK from '../assets/pieces/cburnett/white-king.svg';
-import wQ from '../assets/pieces/cburnett/white-queen.svg';
-import wR from '../assets/pieces/cburnett/white-rook.svg';
-import wB from '../assets/pieces/cburnett/white-bishop.svg';
-import wN from '../assets/pieces/cburnett/white-knight.svg';
-import wP from '../assets/pieces/cburnett/white-pawn.svg';
-import bK from '../assets/pieces/cburnett/black-king.svg';
-import bQ from '../assets/pieces/cburnett/black-queen.svg';
-import bR from '../assets/pieces/cburnett/black-rook.svg';
-import bB from '../assets/pieces/cburnett/black-bishop.svg';
-import bN from '../assets/pieces/cburnett/black-knight.svg';
-import bP from '../assets/pieces/cburnett/black-pawn.svg';
+import { useSiteSettings } from '../useSiteSettings.js';
+import { PieceSet } from '../settings.js';
+
+/** Every piece set's images (URLs), by path: ../assets/pieces/<set>/<white|black>-<role>.svg */
+const FILES = import.meta.glob('../assets/pieces/*/*.svg', { eager: true, import: 'default' }) as Record<string, string>;
+const ROLE: Record<string, string> = { K: 'king', Q: 'queen', R: 'rook', B: 'bishop', N: 'knight', P: 'pawn' };
+
+export const pieceUrl = (set: PieceSet, color: 'w' | 'b', type: string): string | undefined =>
+  FILES[`../assets/pieces/${set}/${color === 'w' ? 'white' : 'black'}-${ROLE[type]}.svg`]
+  ?? FILES[`../assets/pieces/cburnett/${color === 'w' ? 'white' : 'black'}-${ROLE[type]}.svg`];
 
 type PieceType = 'K' | 'Q' | 'R' | 'B' | 'N' | 'P';
 type PieceColor = 'w' | 'b';
@@ -21,13 +19,9 @@ interface PieceProps {
   style?: React.CSSProperties;
 }
 
-const SVGS: Record<string, string> = {
-  wK, wQ, wR, wB, wN, wP,
-  bK, bQ, bR, bB, bN, bP
-};
-
-export const Piece: React.FC<PieceProps> = ({ color, type, style }) => {
-  const src = SVGS[`${color}${type}`];
+export const Piece: React.FC<PieceProps & { set?: PieceSet }> = ({ color, type, style, set }) => {
+  const site = useSiteSettings();
+  const src = pieceUrl(set ?? site.pieceSet, color, type);
   if (!src) return null;
 
   return (

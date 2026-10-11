@@ -18,9 +18,9 @@ import type { PvLine } from '../bot/EngineCheck.js';
 import type { GameMove } from '../play/game.js';
 import type { MoveClassification } from '../../engine/types.js';
 
-export type MoveRating = 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'inaccuracy' | 'mistake' | 'blunder';
+export type MoveRating = 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'book' | 'inaccuracy' | 'mistake' | 'miss' | 'blunder';
 
-export const RATING_ORDER: MoveRating[] = ['brilliant', 'great', 'best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder'];
+export const RATING_ORDER: MoveRating[] = ['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'miss', 'blunder'];
 
 export const REVIEW_DEPTH = 14;
 export const REVIEW_MULTIPV = 2;
@@ -71,6 +71,8 @@ export interface RatingInput {
   sacrifice: boolean;
   /** A capture, a reply to check, or checkmate: the only move, but not a hard one to find. */
   obvious: boolean;
+  /** The best move forces checkmate, and the move played does not. */
+  missedMate?: boolean;
 }
 
 /**
@@ -85,12 +87,19 @@ export const rateMove = (m: RatingInput): MoveRating => {
   if (loss < BRILLIANT_MAX_LOSS && m.sacrifice && m.playedWin >= 40 && (m.bestWin < 97 || onlyMove)) return 'brilliant';
   if (m.playedIsBest && !m.obvious && onlyMove) return 'great';
   if (m.playedIsBest) return 'best';
+  // Miss: a winning chance (a forced mate, or a clearly winning move) passed up, while the position stays playable.
+  if ((m.missedMate && loss >= 5) || (loss >= 10 && m.bestWin >= MISS_BEST_WIN && m.playedWin >= MISS_STILL_OK)) return 'miss';
   if (loss < 2) return 'excellent';
   if (loss < 5) return 'good';
   if (loss < 10) return 'inaccuracy';
   if (loss < 20) return 'mistake';
   return 'blunder';
 };
+
+/** Miss: the best move had at least this much winning chance… */
+export const MISS_BEST_WIN = 70;
+/** …and after the move played the mover still has at least this much (otherwise it is a Mistake / Blunder). */
+export const MISS_STILL_OK = 40;
 
 /** What the opponent can do after a bad move: their best reply, and what it wins along the engine line. */
 export interface Threat {
@@ -125,15 +134,17 @@ export interface MoveReview {
   threat: Threat | null;
   /** Opening theory: the move keeps the game in the opening book (the opening's name when known). */
   book?: { name: string | null };
+  /** For a Miss: what the best move would have won (its line, the material or the mate). */
+  opportunity?: Threat | null;
 }
 
 /**
- * A move that keeps the game in the opening book is Best: at review depth the engine can't tell sound opening
+ * A move that keeps the game in the opening book is a Book move: at review depth the engine can't tell sound opening
  * moves apart (1.e4 vs 1.d4). Only moves that the engine thinks lose < 5 % count; dubious book lines keep their rating.
  */
 export const withBook = (r: MoveReview, name: string | null): MoveReview =>
   r.rating === 'best' || r.rating === 'excellent' || r.rating === 'good'
-    ? { ...r, rating: 'best', accuracy: 100, book: { name } }
+    ? { ...r, rating: 'book', accuracy: 100, book: { name } }
     : r;
 
 const negate = (s: EngineScore): EngineScore => ('mate' in s ? { mate: -s.mate || 0 } : { cp: -s.cp || 0 });
@@ -217,9 +228,11 @@ export const reviewMove = (
   const playedIsBest = !!best && best.uci === mv.uci;
   const second = before.lines[1];
   const obvious = mv.san.includes('x') || mv.san.includes('#') || (!!prev && /[+#]$/.test(prev.san));
+  const playedMates = after.terminal === 'checkmate' || ('mate' in playedScore && playedScore.mate > 0);
+  const missedMate = !!bestScore && 'mate' in bestScore && bestScore.mate > 0 && !playedMates;
   const rating = rateMove({
     bestWin, playedWin, secondWin: second ? winPercent(second.score) : null,
-    playedIsBest, sacrifice, obvious,
+    playedIsBest, sacrifice, obvious, missedMate,
   });
   const winBefore = playedIsBest ? playedWin : Math.max(bestWin, playedWin);
   const posBefore = parsePos(fenBefore);
@@ -230,7 +243,10 @@ export const reviewMove = (
     posBefore.play(normalizeMove(posBefore, from));
     threat = threatOf(fenOps.makeFen(posBefore.toSetup()), after.lines[0], mv.color);
   }
+  // For a Miss, what the best move would have achieved: its line from the position before, seen from the opponent.
+  const opportunity = rating === 'miss' && best ? threatOf(fenBefore, best, mv.color === 'white' ? 'black' : 'white') : null;
   return {
+    opportunity,
     rating, winBefore, winAfter: playedWin, accuracy: moveAccuracy(winBefore, playedWin),
     bestUci: best?.uci ?? null, bestSan: best ? sanOfUci(fenBefore, best.uci) : null, bestLine: best?.pv ?? [],
     bestScore, playedScore, playedIsBest, movedRole, threat,
@@ -299,6 +315,17 @@ export const explainReview = (r: MoveReview, mv: GameMove): string => {
     case 'inaccuracy': return bad('Inaccuracy');
     case 'mistake': return bad('Mistake');
     case 'blunder': return bad('Blunder');
+    case 'book': return 'Book move.';
+    case 'miss': {
+      const o = r.opportunity;
+      const best = r.bestSan ?? 'The best move';
+      const evalText = r.bestScore ? ` (${formatEval(toWhite(r.bestScore, mv.color))})` : '';
+      const mover = mv.color;
+      const line = o ? o.line.map((san, i) => moveText(san, i % 2 === 0 ? mover : mover === 'white' ? 'black' : 'white')).join(' ') : '';
+      if (o?.mateIn) return `Miss. You had a checkmate in ${o.mateIn}, starting with ${moveText(o.san, mover)}.`;
+      if (o?.wins) return `Miss. ${best} was winning ${o.wins.replace(/^your /, 'the ')}${o.line.length > 1 ? ` (${line})` : ''}. The chance is gone.`;
+      return `Miss. ${best}${evalText} was clearly winning; the chance is gone.`;
+    }
   }
 };
 
@@ -308,7 +335,7 @@ export interface ReviewSummary {
 }
 
 const zeroCounts = (): Record<MoveRating, number> =>
-  ({ brilliant: 0, great: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 });
+  ({ brilliant: 0, great: 0, best: 0, excellent: 0, good: 0, book: 0, inaccuracy: 0, mistake: 0, miss: 0, blunder: 0 });
 
 export const summarize = (moves: GameMove[], reviews: MoveReview[]): ReviewSummary => {
   const acc = { white: [] as number[], black: [] as number[] };

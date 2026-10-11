@@ -66,7 +66,7 @@ describe('review views', () => {
   });
 
   it('the summary shows progress until the review is done', () => {
-    const counts = { brilliant: 0, great: 0, best: 2, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 1 };
+    const counts = { brilliant: 0, great: 0, best: 2, excellent: 0, good: 0, book: 0, inaccuracy: 0, mistake: 0, miss: 0, blunder: 1 };
     const summary = { accuracy: { white: 91.6, black: null }, counts: { white: counts, black: { ...counts, best: 0, blunder: 0 } } };
     const noop = () => undefined;
     const { rerender } = render(<SummaryCard summary={summary} done={3} total={8} missing={0} onRetry={noop} whiteName="You" blackName="Computer" />);
@@ -425,7 +425,7 @@ describe('6D: arrows on every move, book moves, check and mate', () => {
     expect(screen.getByText("Green arrow: Ra8+, the better move for White (the faded piece shows where it stood). Blue arrow: Black's best reply, Kd7.")).toBeTruthy();
   });
 
-  it('opening theory is Best, with the opening named', async () => {
+  it('opening theory is a Book move, with the opening named', async () => {
     const r = await import('../../src/app/analysis/openingBook.js').then(m => m.loadOpeningBook());
     const line = lineFromPgn('1. e4 e6 2. Nc3 *');
     if (!line.ok) throw new Error(line.error);
@@ -437,7 +437,8 @@ describe('6D: arrows on every move, book moves, check and mate', () => {
     const after: PositionEval = { lines: [{ uci: 'd7d5', score: { cp: -30 }, pv: ['d7d5'] }] };
     const { withBook } = await import('../../src/app/analysis/review.js');
     const rv = withBook(reviewMove(fens[2], line.line.game[2], line.line.game[1], before, after, false), r.name(fens[3]));
-    expect(rv.rating).toBe('best');
+    expect(rv.rating).toBe('book');
+    expect(rv.accuracy).toBe(100);
     expect(explainReview(rv, line.line.game[2])).toBe("Book move: French Defense: Queen's Knight.");
     // A bad move stays bad even in a book line.
     const bad = reviewMove(fens[2], line.line.game[2], line.line.game[1], { lines: [{ uci: 'd2d4', score: { cp: 200 }, pv: ['d2d4'] }] }, { lines: [{ uci: 'd7d5', score: { cp: 150 }, pv: ['d7d5'] }] }, false);
@@ -505,9 +506,9 @@ describe('6E: labels on every square or only where you point', () => {
     render(<AnalysisScreen engineClient={new DirectEngineClient()} initialFen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" onNavigate={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Options' }));
     const group = screen.getByRole('radiogroup', { name: 'Labels on the board' });
-    fireEvent.click(within(group).getByRole('radio', { name: 'Only where I point' }));
+    fireEvent.click(within(group).getByRole('radio', { name: 'Hovered square' }));
     expect(readSettings().labelMode).toBe('hover');
-    expect(within(group).getByRole('radio', { name: 'Only where I point' }).getAttribute('aria-checked')).toBe('true');
+    expect(within(group).getByRole('radio', { name: 'Hovered square' }).getAttribute('aria-checked')).toBe('true');
     fireEvent.keyDown(screen.getByRole('button', { name: 'Options' }), { key: 'Escape' });
     expect(screen.queryByRole('radiogroup')).toBeNull();
   });
@@ -555,6 +556,90 @@ describe('6E review fixes', () => {
   it('the two-way choice buttons are at least 44 px tall (touch target)', async () => {
     const { readFileSync } = await import('node:fs');
     const css = readFileSync('src/app/styles/global.css', 'utf8');
-    expect(css).toMatch(/\.rv-seg-opt\{[^}]*min-height:44px/);
+    expect(css).toMatch(/\.rv-choice-opt\{[^}]*min-height:44px/);
+  });
+});
+
+describe('6F: Miss, Book, Unclear', () => {
+  it('a forced mate passed up is a Miss, and says which mate was there', () => {
+    const fen = '6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1';
+    const mv = { uci: 'h2h3', san: 'h3', color: 'white' as const, role: 'pawn' as const };
+    const before: PositionEval = { lines: [{ uci: 'd1d8', score: { mate: 1 }, pv: ['d1d8'] }, { uci: 'h2h3', score: { cp: 450 }, pv: ['h2h3'] }] };
+    const after: PositionEval = { lines: [{ uci: 'g8f8', score: { cp: -450 }, pv: ['g8f8'] }] };
+    const rv = reviewMove(fen, mv as never, undefined, before, after, false);
+    expect(rv.rating).toBe('miss');
+    expect(explainReview(rv, mv as never)).toBe('Miss. You had a checkmate in 1, starting with Rd8#.');
+  });
+
+  it('the opening book covers the main lines of the common openings', async () => {
+    const b = await import('../../src/app/analysis/openingBook.js').then(m => m.loadOpeningBook());
+    const lines = [
+      '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3',
+      '1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. Be3 e5 7. Nb3 Be6 8. f3 Be7',
+      '1. d4 d5 2. Bf4 Nf6 3. e3 e6 4. Nf3 c5 5. c3 Nc6 6. Nbd2 Bd6',
+      '1. d4 Nf6 2. c4 g6 3. Nc3 Bg7 4. e4 d6 5. Nf3 O-O 6. Be2 e5 7. O-O Nc6',
+      '1. e4 c6 2. d4 d5 3. Nc3 dxe4 4. Nxe4 Bf5 5. Ng3 Bg6 6. h4 h6',
+      '1. e4 d5 2. exd5 Qxd5 3. Nc3 Qa5 4. d4 Nf6 5. Nf3 c6 6. Bc4 Bf5',
+    ];
+    for (const pgn of lines) {
+      const r = lineFromPgn(pgn + ' *');
+      if (!r.ok) throw new Error(r.error);
+      expect(fensOf(r.line).slice(1).every(f => b.has(f))).toBe(true);
+    }
+  });
+
+  it('a square that looks safe but loses to an engine-found reply is Unclear (a forced mate stays Loses material)', async () => {
+    const { toDisplay } = await import('../../src/app/play/display.js');
+    const base = { move: { from: 'e2', to: 'e4' }, label: 'safe', netMaterial: 0, reasons: [] } as never;
+    expect(toDisplay(base, { kind: 'danger', mateAgainst: false }, false).label).toBe('unclear');
+    expect(toDisplay(base, { kind: 'danger', mateAgainst: true }, false).label).toBe('loses_material');
+  });
+});
+
+describe('6F: Play layout, hint, eval bar, license, pieces', () => {
+  afterEach(() => { localStorage.clear(); });
+
+  it('the evaluation bar keeps the last value while the next position is evaluated', () => {
+    const { rerender } = render(<EvalBar score={{ cp: 230 }} flipped={false} />);
+    expect(screen.getByText('+2.3', { selector: '.rv-evalbar-label' })).toBeTruthy();
+    rerender(<EvalBar score={null} flipped={false} />);
+    expect(screen.getByText('+2.3', { selector: '.rv-evalbar-label' })).toBeTruthy(); // not 0.0, not "…"
+    expect(screen.getByRole('img', { name: 'Evaluating the new position…' })).toBeTruthy();
+  });
+
+  it('Play: Undo sits under the board; Hint only against the computer in Training mode; level picker on the side', async () => {
+    const { PlayScreen } = await import('../../src/app/screens/PlayScreen.js');
+    const base = { engineClient: new DirectEngineClient(), game: newGame(), onNavigate: () => {}, onChange: () => {} };
+    const { container, rerender } = render(<PlayScreen {...base} settings={{ ...DEFAULT_SETTINGS, mode: 'two-player' }} />);
+    expect(container.querySelector('.rv-board-actions')?.textContent).toMatch(/Undo/);
+    expect(screen.queryByRole('button', { name: /Hint/ })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Computer level' })).toBeNull();
+    rerender(<PlayScreen {...base} settings={{ ...DEFAULT_SETTINGS, mode: 'computer', humanColor: 'white', trainingMode: true }} />);
+    expect(screen.getByRole('button', { name: /Hint/ })).toBeTruthy();
+    expect(within(screen.getByRole('radiogroup', { name: 'Computer level' })).getAllByRole('radio')).toHaveLength(6);
+    expect(screen.getByRole('radiogroup', { name: 'Game' })).toBeTruthy();
+    rerender(<PlayScreen {...base} settings={{ ...DEFAULT_SETTINGS, mode: 'computer', humanColor: 'white', trainingMode: false }} />);
+    expect(screen.queryByRole('button', { name: /Hint/ })).toBeNull();
+  });
+
+  it('the hint explains the best move', async () => {
+    const { hintText } = await import('../../src/app/play/hint.js');
+    expect(hintText('d1h5', { d1h5: { mate: 2 }, a2a3: { cp: 0 } }, null, null)).toBe('It starts a forced checkmate in 2.');
+    expect(hintText('d1d8', { d1d8: { mate: 1 } }, null, null)).toBe('It is checkmate.');
+    expect(hintText('e2e4', { e2e4: { cp: 40 }, d2d4: { cp: 35 } }, null, null)).toBe("The engine's top move here. Engine: +0.4 for you.");
+    expect(hintText('f3e5', { f3e5: { cp: 400 }, a2a3: { cp: 0 } }, null, null)).toBe("The engine's top move here. It's the only good move — everything else is clearly worse. Engine: +4.0 for you.");
+  });
+
+  it('Settings › License shows the full GPL text and the third-party notices; Pieces can be changed', async () => {
+    const { SettingsPanel } = await import('../../src/app/components/SettingsPanel.js');
+    const { DEFAULT_SETTINGS: S } = await import('../../src/app/settings.js');
+    let saved = S;
+    render(<SettingsPanel open={true} onClose={() => {}} settings={S} onChange={(s) => { saved = s; }} />);
+    const pieces = screen.getByRole('radiogroup', { name: 'Pieces' });
+    fireEvent.click(within(pieces).getByRole('radio', { name: 'Merida' }));
+    expect(saved.pieceSet).toBe('merida');
+    fireEvent.click(screen.getByRole('tab', { name: 'License' }));
+    expect(await screen.findByText(/TERMS AND CONDITIONS/)).toBeTruthy();
+    expect(screen.getByText(/Maurizio Monge \(MIT\)/)).toBeTruthy();
   });
 });

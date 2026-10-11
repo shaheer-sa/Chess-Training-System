@@ -21,7 +21,7 @@ import { EngineScores, TurnContext, engineVerdict, turnContext } from '../play/e
 import { DisplayMove, displayText, toDisplay } from '../play/display.js';
 import { Searcher, useLineReview } from '../analysis/useLineReview.js';
 import { evalLabel, sanOfUci, summarize, whiteScore, winPercent, MoveReview } from '../analysis/review.js';
-import { EvalBar, EvalGraph, MoveCard, SummaryCard, RatingChip } from '../components/ReviewViews.js';
+import { EvalBar, EvalGraph, MoveCard, SummaryCard, RatingChip, RatingGlyph } from '../components/ReviewViews.js';
 import { readSettings, saveSettings, applySettings, updateSettings, SETTINGS_EVENT } from '../settings.js';
 import { OptionsMenu, Segmented } from '../components/Controls.js';
 import { useSiteSettings } from '../useSiteSettings.js';
@@ -561,7 +561,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
   const lastMove = cursor > 0 ? path[cursor - 1] : undefined;
   const moveBadge: MoveBadge | null = lastMove && lastReview && !previewing ? {
     square: (lastMove.uci.charCodeAt(3) - 49) * 8 + (lastMove.uci.charCodeAt(2) - 97),
-    glyph: RATING_INFO[lastReview.rating].glyph,
+    glyph: <RatingGlyph rating={lastReview.rating} />,
     label: RATING_INFO[lastReview.rating].text,
     color: RATING_INFO[lastReview.rating].color,
     textColor: RATING_INFO[lastReview.rating].textColor,
@@ -799,7 +799,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ engineClient, in
                   <OptionsMenu title="Options">
                     <Segmented label="Labels on the board" hint="On every square the piece can reach, or only on the square you point at."
                       value={site.labelMode} onChange={(v) => updateSettings({ labelMode: v })}
-                      options={[{ value: 'all', text: 'Every square' }, { value: 'hover', text: 'Only where I point' }]} />
+                      options={[{ value: 'all', text: 'All squares', title: 'Labels on every square the piece can reach' }, { value: 'hover', text: 'Hovered square', title: 'A label only on the square you point at (hover, focus or drag)' }]} />
                   </OptionsMenu>
                 )}
                 {exploring && line && <button type="button" className="rv-btn rv-btn--primary" onClick={() => setLine(backToGame(line), { animate: false })}>Back to game line</button>}

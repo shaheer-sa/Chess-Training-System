@@ -4,12 +4,23 @@ import type { GameMove } from '../play/game.js';
 import { MoveReview, MoveRating, RATING_ORDER, ReviewSummary, explainReview, formatEval, winPercent } from '../analysis/review.js';
 import { RATING_INFO } from '../shared/ratingInfo.js';
 
+/** A small open book (the mark for opening-book moves). */
+const BookIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+    <path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5z" /><path d="M12 6.5v13" />
+  </svg>
+);
+
+/** The mark of a rating: the annotation glyph, or an icon (Book). */
+export const RatingGlyph: React.FC<{ rating: MoveRating }> = ({ rating }) =>
+  rating === 'book' ? <BookIcon /> : <>{RATING_INFO[rating].glyph}</>;
+
 /** Rating chip: mark + name, never colour alone. */
 export const RatingChip: React.FC<{ rating: MoveRating; compact?: boolean }> = ({ rating, compact }) => {
   const r = RATING_INFO[rating];
   return (
     <span className={`rv-rating${compact ? ' rv-rating--compact' : ''}`} style={{ background: r.color, color: r.textColor }} {...(compact ? { role: 'img', 'aria-label': r.text, title: r.text } : {})}>
-      <span aria-hidden={compact ? undefined : true} className="rv-rating-glyph">{r.glyph}</span>
+      <span aria-hidden={compact ? undefined : true} className="rv-rating-glyph"><RatingGlyph rating={rating} /></span>
       {!compact && <span>{r.text}</span>}
     </span>
   );
@@ -31,13 +42,19 @@ export const evalWords = (score: EngineScore, label: string): string => {
 
 /** Evaluation bar: White's share of the winning chances. Vertical beside the board; horizontal on phones. Hover or focus it for the score in words. */
 export const EvalBar: React.FC<{ score: EngineScore | null; flipped: boolean; label?: string }> = ({ score, flipped, label: given }) => {
-  const white = score ? winPercent(score) : 50;
-  const label = score ? given ?? formatEval(score) : '…';
+  // While the next position is being evaluated, keep showing the last evaluation (no jump to 0.0 and back).
+  const last = React.useRef<{ score: EngineScore; label: string } | null>(null);
+  if (score) last.current = { score, label: given ?? formatEval(score) };
+  const shown = score ? { score, label: given ?? formatEval(score) } : last.current;
+  const pending = !score;
+  const white = shown ? winPercent(shown.score) : 50;
+  const label = shown ? shown.label : '…';
   const whiteAhead = white >= 50;
-  const words = score ? evalWords(score, label) : 'The engine is still evaluating this position';
+  const words = shown ? evalWords(shown.score, label) : 'The engine is still evaluating this position';
   return (
     <div className="rv-evalbar-wrap">
-      <div tabIndex={0} className={`rv-evalbar${flipped ? ' rv-evalbar--flipped' : ''}${score ? '' : ' rv-evalbar--loading'}`} role="img" aria-label={score ? `Evaluation ${label} (from White's side). ${words}.` : 'Evaluating…'}>
+      <div tabIndex={0} className={`rv-evalbar${flipped ? ' rv-evalbar--flipped' : ''}${shown ? '' : ' rv-evalbar--loading'}${pending && shown ? ' rv-evalbar--pending' : ''}`} role="img"
+        aria-label={!shown ? 'Evaluating…' : pending ? 'Evaluating the new position…' : `Evaluation ${label} (from White's side). ${words}.`}>
         <div className="rv-evalbar-white" style={{ ['--w' as string]: `${white}%` }} />
         <span className={`rv-evalbar-label ${whiteAhead ? 'rv-evalbar-label--white' : 'rv-evalbar-label--black'}`} aria-hidden="true">{label}</span>
       </div>

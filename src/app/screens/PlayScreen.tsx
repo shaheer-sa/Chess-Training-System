@@ -12,6 +12,8 @@ import { PlaySettings, isBotTurn, undoPlies } from '../play/playSettings.js';
 import { BotClient, StockfishBot } from '../bot/StockfishBot.js';
 import { botPromotion } from '../bot/uci.js';
 import { moveSound, playSound } from '../shared/sound.js';
+import { hintText } from '../play/hint.js';
+import { sanOfUci } from '../analysis/review.js';
 import { OptionsMenu, Segmented, Toggle } from '../components/Controls.js';
 import { useSiteSettings } from '../useSiteSettings.js';
 import { updateSettings } from '../settings.js';
@@ -21,7 +23,7 @@ import type { BotLevel } from '../bot/levels.js';
 import { LEVEL_ELO } from '../bot/levels.js';
 import { pgnFromGame } from '../analysis/line.js';
 import { EngineCheck, EngineCheckClient } from '../bot/EngineCheck.js';
-import { EngineScores, TurnContext, turnContext, engineVerdict } from '../play/engineVerdict.js';
+import { EngineScores, TurnContext, turnContext, engineVerdict, scoreValue } from '../play/engineVerdict.js';
 import { DisplayMove, toDisplay, displayText, hintSan } from '../play/display.js';
 import { PlayedVerdict, PlayedVerdicts, VERDICTS_KEY, loadVerdicts, serializeVerdicts, pruneVerdicts, tacticInProgress, fromPlayed, decidePlayedVerdict } from '../play/playedVerdicts.js';
 import { legalUciMoves } from '../play/game.js';
@@ -253,6 +255,38 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
     if (tacticNote) playSound(tacticNote.kind === 'complete' ? 'brilliant' : tacticNote.kind === 'missed' ? 'blunder' : 'tactic', 220);
   }, [tacticNote]);
   const site = useSiteSettings();
+
+  // Hint (vs computer, Training mode): the engine's best move for the player, with a short reason.
+  const [hint, setHint] = useState<{ fen: string; uci: string; san: string; text: string } | null>(null);
+  const [hintLoading, setHintLoading] = useState(false);
+  const hintEngine = useRef<EngineCheck | null>(null);
+  useEffect(() => () => { hintEngine.current?.dispose(); hintEngine.current = null; }, []);
+  const hintAvailable = settings.mode === 'computer' && !outcome(game) && !isBotTurn(game, settings) && !computerThinking;
+  const shownHint = hint && hint.fen === game.currentFen ? hint : null;
+  const showHint = async () => {
+    if (shownHint) { setHint(null); return; }
+    const fen = game.currentFen;
+    setHintLoading(true);
+    try {
+      let scores = check && check.fen === fen ? check.scores : null;
+      if (!scores) {
+        if (!hintEngine.current) hintEngine.current = new EngineCheck();
+        scores = await hintEngine.current.check(fen, legalUciMoves(game).length);
+      }
+      const ctx = turnContext(fen, scores);
+      const best = Object.entries(scores).sort((a, b) => scoreValue(b[1]) - scoreValue(a[1]))[0];
+      if (!best || game.currentFen !== fen) return;
+      const [uci] = best;
+      const res = await engineClient.classifyMove(fen, { from: uci.slice(0, 2) as Square, to: uci.slice(2, 4) as Square, promotion: uci.length > 4 ? 'queen' : undefined });
+      if (game.currentFen !== fen) return;
+      const san = sanOfUci(fen, uci) ?? uci;
+      setHint({ fen, uci, san, text: hintText(uci, scores, res.ok ? res.value : null, ctx) });
+    } catch {
+      setHint({ fen, uci: '', san: 'Hint', text: 'The engine is not available right now.' });
+    } finally {
+      setHintLoading(false);
+    }
+  };
   const gameOutcome = outcome(game);
   const readOnly = !!gameOutcome;
 
@@ -815,7 +849,11 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
   } : undefined;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div className="rv-play" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="rv-hero-bg rv-page-bg" aria-hidden="true">
+        <div className="rv-hero-floor" />
+        <div className="rv-page-glow" />
+      </div>
 
       
       <div className="mode-bar" style={{ background: 'var(--panel)', color: 'var(--text-muted)', padding: '10px 24px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', fontSize: '0.85rem', borderBottom: '1px solid var(--border)' }}>
@@ -826,37 +864,15 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
       <div className="play-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px' }}>
         
         {/* Top Controls */}
-        <div className="play-controls" style={{ width: '100%', maxWidth: '1000px', display: 'flex', flexWrap: 'wrap', gap: '12px 16px', marginBottom: '16px', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-            <div className="rv-seg" style={{ alignSelf: 'flex-start' }}>
-              <button aria-pressed={settings.mode === 'two-player'} onClick={() => { if (settings.mode !== 'two-player') { startNewGame({ ...settings, mode: 'two-player' }); } }}>Two players</button>
-              <button aria-pressed={settings.mode === 'computer'} onClick={() => { if (settings.mode !== 'computer') { startNewGame({ ...settings, mode: 'computer' }); } }}>vs Computer</button>
-            </div>
-            
+        <div className="play-controls" style={{ width: '100%', maxWidth: '1000px', display: 'flex', flexWrap: 'wrap', gap: '12px 16px', marginBottom: '16px', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end' }}>
+            <Segmented small label="Game" value={settings.mode}
+              options={[{ value: 'two-player', text: 'Two players' }, { value: 'computer', text: 'vs Computer' }]}
+              onChange={(v) => { startNewGame({ ...settings, mode: v }); }} />
             {settings.mode === 'computer' && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>You play:</span>
-                  <div className="rv-seg">
-                    <button aria-pressed={settings.humanColor === 'white'} onClick={() => { if (settings.humanColor !== 'white') { startNewGame({ ...settings, humanColor: 'white' }); } }}>White</button>
-                    <button aria-pressed={settings.humanColor === 'black'} onClick={() => { if (settings.humanColor !== 'black') { startNewGame({ ...settings, humanColor: 'black' }); } }}>Black</button>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '12px' }}>Level:</span>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div className="rv-seg rv-seg--levels">
-                      {([1, 2, 3, 4, 5, 6] as BotLevel[]).map(lvl => (
-                        <button key={lvl} aria-label={`Level ${lvl}, about ${LEVEL_ELO[lvl]} rating (estimate)`} aria-pressed={settings.level === lvl} onClick={() => onChange(game, { ...settings, level: lvl })} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4px 8px', gap: '2px', lineHeight: 1.1 }}>
-                          <span style={{ fontWeight: 'bold' }}>{lvl}</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>≈{LEVEL_ELO[lvl]}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ratings are estimates.</div>
-                  </div>
-                </div>
-              </div>
+              <Segmented small label="You play" value={settings.humanColor}
+                options={[{ value: 'white', text: 'White' }, { value: 'black', text: 'Black' }]}
+                onChange={(v) => { startNewGame({ ...settings, humanColor: v }); }} />
             )}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
@@ -869,9 +885,8 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 checked={settings.trainingMode} onChange={(v) => onChange(game, { ...settings, trainingMode: v })} />
               <Segmented label="Labels on the board" hint="On every square the piece can reach, or only on the square you point at."
                 value={site.labelMode} onChange={(v) => updateSettings({ labelMode: v })}
-                options={[{ value: 'all', text: 'Every square' }, { value: 'hover', text: 'Only where I point' }]} />
+                options={[{ value: 'all', text: 'All squares', title: 'Labels on every square the piece can reach' }, { value: 'hover', text: 'Hovered square', title: 'A label only on the square you point at (hover, focus or drag)' }]} />
             </OptionsMenu>
-            <button className="rv-btn" onClick={handleUndo} disabled={undoPlies(game, settings) === 0}>Undo</button>
             <button className="rv-btn" onClick={() => setFlipped(!flipped)}>Flip board</button>
             <button className="rv-btn" onClick={handleNewGame}>New game</button>
             {(settings.trainingMode || gameOutcome) && (
@@ -921,6 +936,7 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
                 onPieceDragStart={handlePieceDragStart}
                 onDragOverSquare={handleDragOverSquare}
                 moveBadge={tacticBadge}
+                arrows={shownHint && shownHint.uci ? [{ from: shownHint.uci.slice(0, 2) as Square, to: shownHint.uci.slice(2, 4) as Square, kind: 'best' }] : undefined}
                 animateMoves={anim?.moves}
                 animationKey={anim?.key}
               />
@@ -951,6 +967,26 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
               {renderCaptured(flipped ? 'black' : 'white')}
             </div>
             
+            {/* Under the board: Undo, and a Hint against the computer (Training mode) */}
+            <div className="rv-board-actions">
+              <button className="rv-btn" onClick={handleUndo} disabled={undoPlies(game, settings) === 0}>
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14L4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 010 11H11" /></svg>
+                Undo
+              </button>
+              {settings.mode === 'computer' && settings.trainingMode && (
+                <button className="rv-btn rv-btn--hint" onClick={showHint} disabled={!hintAvailable || hintLoading} aria-pressed={!!shownHint}>
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z" /></svg>
+                  {hintLoading ? 'Thinking…' : 'Hint'}
+                </button>
+              )}
+            </div>
+            {shownHint && (
+              <div className="rv-hint" role="status">
+                <strong className="mono">{shownHint.san}</strong>
+                <span>{shownHint.text}</span>
+              </div>
+            )}
+
             {/* Status Line */}
             <div aria-live="polite" style={{ marginTop: '16px', padding: '12px', background: 'var(--bg-sunken)', borderRadius: '6px', textAlign: 'center', fontWeight: 'bold' }}>
               {currentStatusText}
@@ -958,6 +994,21 @@ export const PlayScreen: React.FC<PlayScreenProps> = ({ engineClient, onNavigate
           </div>
           
           <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
+            {settings.mode === 'computer' && (
+              <div className="rv-level-card">
+                <div className="rv-level-head"><h3>Computer level</h3><span>Ratings are estimates</span></div>
+                <div className="rv-level-grid" role="radiogroup" aria-label="Computer level">
+                  {([1, 2, 3, 4, 5, 6] as BotLevel[]).map(lvl => (
+                    <button key={lvl} type="button" role="radio" aria-checked={settings.level === lvl}
+                      aria-label={`Level ${lvl}, about ${LEVEL_ELO[lvl]} rating (estimate)`}
+                      className="rv-level" onClick={() => onChange(game, { ...settings, level: lvl })}>
+                      <span className="rv-level-n">{lvl}</span>
+                      <span className="rv-level-elo">≈{LEVEL_ELO[lvl]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {shownTacticNote && (
               <div key={shownTacticNote.moveIndex} role="status" className={`rv-tactic-note rv-tactic-note--${shownTacticNote.kind}`}>
                 <span className="rv-tactic-note-icon" aria-hidden="true">{shownTacticNote.kind === 'missed' ? '✗' : shownTacticNote.kind === 'complete' ? '★' : '✓'}</span>

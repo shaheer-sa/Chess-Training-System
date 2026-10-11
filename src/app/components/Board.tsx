@@ -20,7 +20,7 @@ export interface BoardArrow {
 /** The rating mark shown on the square a move landed on, with an effect for special moves. */
 export interface MoveBadge {
   square: number;
-  glyph: string;
+  glyph: React.ReactNode;
   label: string;
   color: string;
   textColor: string;
